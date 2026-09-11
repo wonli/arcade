@@ -9,6 +9,7 @@ import (
 	"github.com/wonli/aqi/ws"
 
 	"github.com/wonli/arcade/arcade"
+	"github.com/wonli/arcade/internal/frontend"
 	arcadeserver "github.com/wonli/arcade/server"
 )
 
@@ -28,6 +29,8 @@ func main() {
 
 	router := ws.NewRouter().Use(middlewares.Recovery())
 	arcadeserver.NewActions(arcade.NewService()).Register(router)
+
+	frontend.Register(engine)
 
 	app.WithHttpServer(engine)
 	app.Start()
