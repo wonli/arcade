@@ -14,9 +14,9 @@ func testEngine() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	registerFS(engine, fstest.MapFS{
-		"index.html":     &fstest.MapFile{Data: []byte(`<!doctype html><main>home</main>`)},
-		"200.html":       &fstest.MapFile{Data: []byte(`<!doctype html><main>room fallback</main>`)},
-		"assets/app.js":  &fstest.MapFile{Data: []byte(`console.log("arcade")`)},
+		"index.html":    &fstest.MapFile{Data: []byte(`<!doctype html><main>home</main>`)},
+		"200.html":      &fstest.MapFile{Data: []byte(`<!doctype html><main>room fallback</main>`)},
+		"assets/app.js": &fstest.MapFile{Data: []byte(`console.log("arcade")`)},
 	})
 	return engine
 }
@@ -60,6 +60,20 @@ func TestRegisterUsesSvelteKitFallbackForRoomRoute(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "room fallback") {
 		t.Fatalf("room route did not serve 200.html: %q", recorder.Body.String())
+	}
+}
+
+func TestRegisterUsesSvelteKitFallbackForDungeonRoute(t *testing.T) {
+	engine := testEngine()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/dungeon", nil)
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if !strings.Contains(recorder.Body.String(), "room fallback") {
+		t.Fatalf("dungeon route did not serve 200.html: %q", recorder.Body.String())
 	}
 }
 
