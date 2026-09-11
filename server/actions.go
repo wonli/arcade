@@ -165,10 +165,14 @@ func (a *Actions) move(c *ws.Context) {
 }
 
 func currentPlayer(c *ws.Context) (game.PlayerID, bool) {
-	if c == nil || c.Client == nil || c.Client.User == nil {
+	if c == nil || c.Client == nil {
 		return "", false
 	}
-	uid := c.Client.User.Suid
+	user, _, loggedIn := c.Client.LoginState()
+	if !loggedIn || user == nil {
+		return "", false
+	}
+	uid := user.Suid
 	if !strings.HasPrefix(uid, "arcade:") {
 		return "", false
 	}
