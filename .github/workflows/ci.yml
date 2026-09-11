@@ -19,21 +19,13 @@ jobs:
           go-version: '1.27.x'
           cache: false
 
-      - name: Resolve Go modules
-        run: go mod tidy
-
-      - name: Test Go
-        run: go test ./...
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install web dependencies
-        working-directory: web
-        run: npm install
+      - name: Test project
+        run: make test
 
-      - name: Build web
-        working-directory: web
-        run: npm run build
+      - name: Build project
+        run: make build
