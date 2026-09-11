@@ -4,14 +4,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/wonli/arcade/game"
 	"github.com/wonli/arcade/game/gomoku"
 	"github.com/wonli/arcade/room"
 )
 
-type Service struct { rooms *room.Manager }
-func NewService() *Service { return &Service{rooms: room.NewManager()} }
+type Service struct {
+	rooms *room.Manager
+
+	snakeMu   sync.Mutex
+	snakes    map[string]*snakeRuntime
+	snakeTick time.Duration
+}
+
+func NewService() *Service {
+	return &Service{
+		rooms:     room.NewManager(),
+		snakes:    make(map[string]*snakeRuntime),
+		snakeTick: 100 * time.Millisecond,
+	}
+}
 
 func (s *Service) Create(gameName string, bounds ...int) (*room.Room, error) {
 	minPlayers, maxPlayers, err := roomBounds(bounds)
