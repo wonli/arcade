@@ -3,6 +3,8 @@ import { chmodSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, mk
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { describeDungeonAsset } from '../web/src/lib/games/dungeon/assets.js'
+
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const root = resolve(scriptDir, '..')
 const archive = join(root, 'assets', 'DebtsInTheDepthsAssets.zip')
@@ -30,14 +32,6 @@ function pngSize(file) {
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
 }
 
-function frameCount(path, width, height) {
-  const actor = /character|creature|wizard|dragon|slime|skeleton|goblin|bat|monster|enemy|rat/i.test(path)
-  if (!actor || width % 4 !== 0) return 1
-  const frameWidth = width / 4
-  if (frameWidth < 4 || frameWidth > height * 1.5) return 1
-  return 4
-}
-
 function walk(dir) {
   const files = []
   for (const name of readdirSync(dir)) {
@@ -52,14 +46,12 @@ function walk(dir) {
     const path = '/assets/debts/' + relative(output, full).split('\\').join('/')
     const size = pngSize(full)
     if (!size) continue
-    const frames = frameCount(path, size.width, size.height)
+    const layout = describeDungeonAsset(path, size.width, size.height)
     files.push({
       path,
       width: size.width,
       height: size.height,
-      frames,
-      frameWidth: Math.floor(size.width / frames),
-      frameHeight: size.height,
+      ...layout,
     })
   }
   return files
