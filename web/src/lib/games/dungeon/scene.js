@@ -269,7 +269,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     makeActor(x, y, kind) {
       if (kind === 'player' && assets.player?.source === 'rpg-main-character' && this.textures.exists('dungeon-player-down-idle')) {
         const visual = this.add.sprite(x, y, 'dungeon-player-down-idle', 0)
-        visual.setScale(0.5)
+        visual.setScale(1)
         visual.setData('usesTexture', true)
         return visual
       }
