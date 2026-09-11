@@ -1,21 +1,23 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 
-const wsProxy = {
-  '/ws': {
-    target: 'ws://localhost:8080',
-    ws: true,
-  },
-}
-
 export default defineConfig({
   plugins: [svelte()],
+  build: {
+    outDir: '../internal/frontend/dist',
+    emptyOutDir: true,
+  },
   server: {
     port: 5173,
-    proxy: wsProxy,
-  },
-  preview: {
-    port: 4173,
-    proxy: wsProxy,
+    strictPort: true,
+    proxy: {
+      '/ws': {
+        target: 'ws://localhost:8080',
+        ws: true,
+      },
+      '/health': {
+        target: 'http://localhost:8080',
+      },
+    },
   },
 })
