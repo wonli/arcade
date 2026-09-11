@@ -16,6 +16,22 @@ export function nearestTarget(player, enemies) {
   return best
 }
 
+export function secondaryTarget(primary, enemies, maxDistance = 150) {
+  let best = null
+  let bestDistance = maxDistance * maxDistance
+  for (const enemy of enemies) {
+    if (!enemy || enemy === primary || enemy.id === primary?.id || enemy.hp <= 0) continue
+    const dx = enemy.x - primary.x
+    const dy = enemy.y - primary.y
+    const distance = dx * dx + dy * dy
+    if (distance <= bestDistance) {
+      best = enemy
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
 export function rollDamage(player, random = Math.random) {
   const critical = random() < (player.critChance ?? 0)
   const multiplier = critical ? (player.critMultiplier ?? 2) : 1
@@ -30,6 +46,32 @@ export function modifiedDamage(player, enemy, baseDamage) {
   if (hpRatio < 0.4) damage *= 1 + (effects.lowHealthDamage ?? 0)
   if (enemyRatio < 0.3) damage *= 1 + (effects.executioner ?? 0)
   return Math.max(1, Math.round(damage))
+}
+
+export function attackInterval(player, now = 0, baseInterval = 430) {
+  const effects = player?.effects ?? {}
+  let haste = effects.attackSpeed ?? 0
+  const maxHp = player?.maxHp ?? 0
+  const hpRatio = maxHp > 0 ? Math.max(0, Math.min(1, (player.hp ?? maxHp) / maxHp)) : 1
+  if ((effects.berserker ?? 0) > 0) haste += effects.berserker * (1 - hpRatio)
+  if ((player?.hasteUntil ?? 0) > now) haste += effects.hurtHaste ?? 0
+  return Math.max(160, Math.round(baseInterval / (1 + Math.max(0, haste))))
+}
+
+export function skillProfile(player, baseRadius = 130, baseCooldown = 4200) {
+  const effects = player?.effects ?? {}
+  return {
+    radius: Math.round(baseRadius * (1 + (effects.skillRadius ?? 0))),
+    cooldown: Math.max(1200, Math.round(baseCooldown * (1 - Math.min(0.65, effects.skillHaste ?? 0)))),
+  }
+}
+
+export function healFromHit(player, damage, critical, { direct = true } = {}) {
+  if (!direct) return 0
+  const effects = player?.effects ?? {}
+  const lifeSteal = Math.max(0, Math.round(damage * (effects.lifeSteal ?? 0)))
+  const criticalHeal = critical ? Math.max(0, Math.round(effects.criticalHeal ?? 0)) : 0
+  return lifeSteal + criticalHeal
 }
 
 const EQUIPMENT_TABLES = {
