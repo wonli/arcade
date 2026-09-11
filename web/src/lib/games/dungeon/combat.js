@@ -125,6 +125,7 @@ export function applyPickup(player, item) {
       ...player,
       damage: (player.damage ?? 0) + (item.damage ?? 0),
       weapon: item.type,
+      weaponRarity: item.rarity ?? player.weaponRarity ?? null,
     }
   }
   if (item.type === 'consumable.health_potion') {
