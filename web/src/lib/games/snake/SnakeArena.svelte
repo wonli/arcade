@@ -6,7 +6,7 @@
   export let identity
   export let socket
 
-  let state = null
+  let state = room?.state ?? null
   let error = ''
   let copied = false
   let unsubscribe = () => {}
