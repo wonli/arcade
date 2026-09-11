@@ -34,8 +34,9 @@ func registerFS(engine *gin.Engine, root fs.FS) {
 		}
 
 		name := strings.TrimPrefix(path.Clean(c.Request.URL.Path), "/")
-		if name == "." || name == "" {
-			name = "index.html"
+		if name == "." || name == "" || name == "index.html" {
+			serveIndex(c, root)
+			return
 		}
 
 		if info, err := fs.Stat(root, name); err == nil && !info.IsDir() {
@@ -50,13 +51,22 @@ func registerFS(engine *gin.Engine, root fs.FS) {
 			return
 		}
 
-		if _, err := fs.Stat(root, "index.html"); err != nil {
-			c.String(http.StatusServiceUnavailable, "frontend is not built")
-			return
-		}
-
-		serveFile(fileServer, c, "index.html")
+		serveIndex(c, root)
 	})
+}
+
+func serveIndex(c *gin.Context, root fs.FS) {
+	data, err := fs.ReadFile(root, "index.html")
+	if err != nil {
+		c.String(http.StatusServiceUnavailable, "frontend is not built")
+		return
+	}
+
+	if c.Request.Method == http.MethodHead {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", nil)
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 }
 
 func serveFile(server http.Handler, c *gin.Context, name string) {
