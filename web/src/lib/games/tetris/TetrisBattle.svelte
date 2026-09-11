@@ -50,23 +50,24 @@
     if (name === 'lose') { tone(300, 0.1, 0.03); tone(190, 0.18, 0.035, 0.08) }
   }
 
-  function ready() { return room?.players?.length === 2 }
-  function opponentName() { return room?.players?.find((player) => player.id !== identity.playerId)?.name ?? 'Waiting...' }
+  function ready() { return room?.players?.length >= 1 }
+  function hasOpponent() { return room?.players?.length >= 2 }
+  function opponentName() { return room?.players?.find((player) => player.id !== identity.sessionId)?.name ?? 'Solo mode' }
 
   function apply(resultValue, localSound = true) {
     state = resultValue.state
     for (const event of resultValue.events) {
       if (localSound && ['move', 'rotate', 'lock', 'clear', 'garbage'].includes(event.type)) play(event.type)
-      if (event.type === 'clear' && event.attack > 0) {
+      if (event.type === 'clear' && event.attack > 0 && hasOpponent()) {
         play('attack')
         socket.request('tetris.attack', { roomId: roomCode, lines: event.attack }).catch(() => {})
       }
     }
     if (state.status === 'gameover' && !gameOverSent) {
       gameOverSent = true
-      result = 'You lose'
+      result = 'Game over'
       play('lose')
-      socket.request('tetris.gameover', { roomId: roomCode }).catch(() => {})
+      if (hasOpponent()) socket.request('tetris.gameover', { roomId: roomCode }).catch(() => {})
     }
   }
 
@@ -81,7 +82,10 @@
   }
 
   function reset() { state = createGame(); opponent = null; result = ''; gameOverSent = false }
-  function restart() { socket.request('tetris.restart', { roomId: roomCode }).catch(() => {}) }
+  function restart() {
+    if (hasOpponent()) socket.request('tetris.restart', { roomId: roomCode }).catch(() => {})
+    reset()
+  }
 
   async function sync() {
     if (!ready()) return
@@ -92,7 +96,7 @@
     const topic = `room:${roomCode.toUpperCase()}`
     unsubscribe = socket.subscribe(topic, (message) => {
       const payload = message.data?.message
-      if (!payload?.type || payload.playerId === identity.playerId) return
+      if (!payload?.type || payload.playerId === identity.sessionId) return
       if (payload.type === 'tetris.state') opponent = payload
       else if (payload.type === 'tetris.attack') { apply(addGarbage(state, payload.lines), false); play('garbage') }
       else if (payload.type === 'tetris.gameover') { if (state.status === 'playing') { result = 'You win'; play('win') } }
@@ -108,7 +112,7 @@
 <div class="battle-shell">
   <section class="battle-main">
     <div class="battle-title">
-      <div><span>TETRIS BATTLE</span><h1>{result || (ready() ? 'Battle live' : 'Waiting for opponent')}</h1></div>
+      <div><span>TETRIS BATTLE</span><h1>{result || (hasOpponent() ? 'Battle live' : 'Solo practice')}</h1></div>
       <div class="stats"><strong>{state.score}</strong><span>SCORE</span><strong>{state.lines}</strong><span>LINES</span></div>
     </div>
 
