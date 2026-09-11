@@ -11,7 +11,14 @@ import {
   bossProfile,
   bossReward,
   applyPickup,
+  modifiedDamage,
 } from './combat.js'
+import { AFFIXES, affixSlots } from './affixes.js'
+
+const sequence = (values) => {
+  let index = 0
+  return () => values[index++ % values.length]
+}
 
 test('nearestTarget ignores dead enemies and picks the closest living target', () => {
   const player = { x: 0, y: 0 }
@@ -34,10 +41,21 @@ test('rollDrop keeps the legacy single-roll behavior', () => {
   assert.equal(rollDrop(7, () => 0.9), null)
 })
 
-test('equipment rarity improves on deeper floors and damage follows rarity', () => {
-  assert.deepEqual(rollEquipment(1, () => 0.02), { type: 'weapon.dungeon_blade', rarity: 'common', damage: 2 })
-  assert.equal(rollEquipment(1, () => 0.17)?.rarity, 'uncommon')
-  assert.equal(rollEquipment(5, () => 0.17)?.rarity, 'rare')
+test('generated equipment carries the rarity slot count and deeper floors can roll builds', () => {
+  const common = rollEquipment(1, () => 0.02)
+  assert.equal(common.rarity, 'common')
+  assert.equal(common.damage, 2)
+  assert.deepEqual(common.affixes, [])
+
+  const uncommon = rollEquipment(1, sequence([0.17, 0.1, 0.3]))
+  assert.equal(uncommon.rarity, 'uncommon')
+  assert.equal(uncommon.affixes.length, affixSlots('uncommon'))
+  assert.equal(uncommon.affixes.some((entry) => AFFIXES[entry.id].category === 'build'), false)
+
+  const epic = rollEquipment(5, sequence([0.23, 0.98, 0.5, 0.97, 0.4, 0.96, 0.3]))
+  assert.equal(epic.rarity, 'epic')
+  assert.equal(epic.affixes.length, affixSlots('epic'))
+  assert.ok(epic.affixes.some((entry) => AFFIXES[entry.id].category === 'build'))
   assert.equal(rollEquipment(5, () => 0.99), null)
 })
 
@@ -78,18 +96,42 @@ test('floor five boss is materially stronger and has a second phase', () => {
   assert.ok(boss.shockwaveCooldown > 0)
 })
 
-test('boss reward is always rare or epic', () => {
-  assert.equal(bossReward(() => 0.1).rarity, 'rare')
-  assert.equal(bossReward(() => 0.95).rarity, 'epic')
-  assert.ok(bossReward(() => 0.95).damage >= bossReward(() => 0.1).damage)
+test('boss reward is rare or epic and always carries a build affix', () => {
+  const rare = bossReward(sequence([0.1, 0.1, 0.4, 0.2, 0.6, 0.3]), 5)
+  const epic = bossReward(sequence([0.95, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4]), 5)
+  assert.equal(rare.rarity, 'rare')
+  assert.equal(epic.rarity, 'epic')
+  assert.ok(rare.affixes.some((entry) => AFFIXES[entry.id].category === 'build'))
+  assert.ok(epic.affixes.some((entry) => AFFIXES[entry.id].category === 'build'))
+  assert.equal(rare.affixes.length, 2)
+  assert.equal(epic.affixes.length, 3)
 })
 
-test('picking up generated equipment immediately increases damage and preserves rarity', () => {
-  const player = { damage: 10, weapon: null, weaponRarity: null }
-  const next = applyPickup(player, { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 7 })
-  assert.equal(next.damage, 17)
-  assert.equal(next.weapon, 'weapon.dungeon_blade')
-  assert.equal(next.weaponRarity, 'rare')
+test('weapon pickups replace equipment-derived power instead of stacking old weapons', () => {
+  const baseStats = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const player = { ...baseStats, hp: 100, baseStats, weapon: null, weaponRarity: null }
+  const first = applyPickup(player, {
+    type: 'weapon.dungeon_blade', rarity: 'rare', damage: 12,
+    affixes: [{ id: 'power', tier: 2, value: 0.2 }, { id: 'critical', tier: 2, value: 0.05 }],
+  }, baseStats)
+  const replacement = applyPickup(first, {
+    type: 'weapon.dungeon_blade', rarity: 'uncommon', damage: 4,
+    affixes: [{ id: 'movement_speed', tier: 1, value: 0.08 }],
+  }, baseStats)
+  assert.ok(first.damage > replacement.damage)
+  assert.equal(replacement.damage, 14)
+  assert.equal(replacement.critChance, 0.18)
+  assert.equal(replacement.weaponRarity, 'uncommon')
+  assert.equal(replacement.weaponAffixes.length, 1)
+})
+
+test('target-aware modifiers reward low-health and executioner builds', () => {
+  const base = modifiedDamage({ hp: 100, maxHp: 100, effects: {} }, { hp: 100, maxHp: 100 }, 20)
+  const lowHealth = modifiedDamage({ hp: 35, maxHp: 100, effects: { lowHealthDamage: 0.25 } }, { hp: 100, maxHp: 100 }, 20)
+  const execute = modifiedDamage({ hp: 100, maxHp: 100, effects: { executioner: 0.5 } }, { hp: 20, maxHp: 100 }, 20)
+  assert.equal(base, 20)
+  assert.equal(lowHealth, 25)
+  assert.equal(execute, 30)
 })
 
 test('picking up a health potion heals without exceeding max hp', () => {
