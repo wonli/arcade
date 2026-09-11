@@ -55,7 +55,6 @@ type Game struct {
 	state   State
 	pending map[game.PlayerID]Direction
 	random  func(int) int
-	players int
 }
 
 type spawn struct {
@@ -81,7 +80,6 @@ func New(players []Player, random func(int) int) *Game {
 	g := &Game{
 		pending: make(map[game.PlayerID]Direction),
 		random:  random,
-		players: len(players),
 		state: State{
 			Width:  Width,
 			Height: Height,
@@ -199,6 +197,7 @@ func (g *Game) Tick() State {
 		if !snake.Alive { continue }
 		if dead[i] {
 			snake.Alive = false
+			snake.Body = nil
 			continue
 		}
 		body := make([]Point, 0, len(snake.Body)+1)
@@ -233,26 +232,12 @@ func (g *Game) Finished() bool {
 }
 
 func (g *Game) finishIfNeeded() {
-	alive := 0
-	var winner game.PlayerID
 	for _, snake := range g.state.Snakes {
 		if snake.Alive {
-			alive++
-			winner = snake.PlayerID
+			return
 		}
 	}
-	if g.players == 1 {
-		if alive == 0 {
-			g.state.Status = game.StatusFinished
-		}
-		return
-	}
-	if g.players > 1 && alive <= 1 {
-		g.state.Status = game.StatusFinished
-		if alive == 1 {
-			g.state.Winner = winner
-		}
-	}
+	g.state.Status = game.StatusFinished
 }
 
 func (g *Game) spawnFood() Point {
