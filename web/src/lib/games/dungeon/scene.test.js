@@ -1,38 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { chooseDungeonAssets } from './scene.js'
+import { chooseDungeonAssets, directionFromInput } from './scene.js'
 
 const manifest = {
   assets: [
-    { path: '/assets/debts/Characters/Wizard.png', width: 182, height: 18, frames: 4, frameWidth: 26, frameHeight: 18 },
-    { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16 },
-    { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16 },
-    { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16 },
-    { path: '/assets/debts/Items/Sword.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16 },
+    { path: '/assets/rpg/main.png', width: 512, height: 512, frames: 1, frameWidth: 512, frameHeight: 512, source: 'rpg-main-character' },
+    { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Items/Sword.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
   ],
 }
 
-test('chooses the normalized wizard animation instead of rendering the full strip', () => {
+test('prefers the new RPG main character while keeping old dungeon assets', () => {
   const assets = chooseDungeonAssets(manifest)
-
-  assert.equal(assets.player.path, '/assets/debts/Characters/Wizard.png')
-  assert.equal(assets.player.frames, 4)
-  assert.equal(assets.player.frameWidth, 26)
-  assert.equal(assets.player.frameHeight, 18)
+  assert.equal(assets.player.source, 'rpg-main-character')
+  assert.equal(assets.enemy.source, 'debts')
+  assert.equal(assets.floor.source, 'debts')
+  assert.equal(assets.wall.source, 'debts')
+  assert.equal(assets.weapon.source, 'debts')
 })
 
-test('chooses dungeon presentation assets without changing enemy framing', () => {
-  const assets = chooseDungeonAssets(manifest)
-
-  assert.equal(assets.enemy.path, '/assets/debts/Creatures/Slime.png')
-  assert.equal(assets.enemy.frames, 4)
-  assert.equal(assets.floor.path, '/assets/debts/Tiles/BrickFloor.png')
-  assert.equal(assets.wall.path, '/assets/debts/Tiles/StoneWall.png')
-  assert.equal(assets.weapon.path, '/assets/debts/Items/Sword.png')
-})
-
-test('keeps the wizard frame aspect ratio instead of forcing square dimensions', () => {
-  const assets = chooseDungeonAssets(manifest)
-  assert.equal(assets.player.frameWidth / assets.player.frameHeight, 26 / 18)
+test('resolves movement into four player directions', () => {
+  assert.equal(directionFromInput(0, -1, 'down'), 'up')
+  assert.equal(directionFromInput(0, 1, 'up'), 'down')
+  assert.equal(directionFromInput(-1, 0, 'down'), 'left')
+  assert.equal(directionFromInput(1, 0, 'left'), 'right')
+  assert.equal(directionFromInput(0, 0, 'right'), 'right')
 })
