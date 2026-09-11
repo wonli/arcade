@@ -17,11 +17,16 @@ test('rollDamage uses crit multiplier deterministically', () => {
   assert.deepEqual(rollDamage({ damage: 12, critChance: 0.2, critMultiplier: 2 }, () => 0.9), { damage: 12, critical: false })
 })
 
-test('rollDrop can create a semantic sword upgrade', () => {
+test('rollDrop creates equipment, healing, or nothing from one roll', () => {
   assert.deepEqual(rollDrop(7, () => 0.02), {
     type: 'weapon.rust_sword',
     rarity: 'uncommon',
     damage: 3,
+  })
+  assert.deepEqual(rollDrop(7, () => 0.22), {
+    type: 'consumable.health_potion',
+    rarity: 'common',
+    heal: 28,
   })
   assert.equal(rollDrop(7, () => 0.9), null)
 })
@@ -31,4 +36,9 @@ test('picking up a weapon immediately increases damage', () => {
   const next = applyPickup(player, { type: 'weapon.rust_sword', rarity: 'uncommon', damage: 3 })
   assert.equal(next.damage, 13)
   assert.equal(next.weapon, 'weapon.rust_sword')
+})
+
+test('picking up a health potion heals without exceeding max hp', () => {
+  assert.equal(applyPickup({ hp: 40, maxHp: 100 }, { type: 'consumable.health_potion', heal: 28 }).hp, 68)
+  assert.equal(applyPickup({ hp: 90, maxHp: 100 }, { type: 'consumable.health_potion', heal: 28 }).hp, 100)
 })
