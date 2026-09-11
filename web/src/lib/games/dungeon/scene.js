@@ -3,20 +3,39 @@ import { applyPickup, nearestTarget, rollDamage, rollDrop } from './combat.js'
 const WIDTH = 960
 const HEIGHT = 600
 const ENEMY_COUNT = 20
+const TILE = 48
 
-function chooseAsset(paths, patterns) {
+function normalizeAssets(manifest = {}) {
+  if (Array.isArray(manifest.assets)) return manifest.assets
+  if (Array.isArray(manifest.png)) {
+    return manifest.png.map((path) => ({
+      path,
+      width: 0,
+      height: 0,
+      frames: 1,
+      frameWidth: 0,
+      frameHeight: 0,
+    }))
+  }
+  return []
+}
+
+function chooseAsset(assets, patterns, predicate = () => true) {
   for (const pattern of patterns) {
-    const found = paths.find((path) => pattern.test(path))
+    const found = assets.find((asset) => predicate(asset) && pattern.test(asset.path))
     if (found) return found
   }
   return null
 }
 
 export function chooseDungeonAssets(manifest = {}) {
-  const png = Array.isArray(manifest.png) ? manifest.png : []
+  const assets = normalizeAssets(manifest)
   return {
-    player: chooseAsset(png, [/wizard/i, /hero/i, /player/i, /knight/i]),
-    enemy: chooseAsset(png, [/slime/i, /blob/i, /skeleton/i, /skull/i, /goblin/i, /bat/i, /rat/i, /creature/i]),
+    player: chooseAsset(assets, [/wizard/i, /hero/i, /player/i, /knight/i, /character/i]),
+    enemy: chooseAsset(assets, [/slime/i, /blob/i, /skeleton/i, /skull/i, /goblin/i, /bat/i, /rat/i, /creature/i, /monster/i]),
+    floor: chooseAsset(assets, [/floor/i, /ground/i, /brick/i, /stone/i, /tile/i], (asset) => asset.frames === 1),
+    wall: chooseAsset(assets, [/wall/i, /brick/i, /stone/i, /brimstone/i], (asset) => asset.frames === 1),
+    weapon: chooseAsset(assets, [/sword/i, /blade/i, /weapon/i, /axe/i, /staff/i, /bow/i, /item/i]),
   }
 }
 
@@ -46,8 +65,24 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     preload() {
-      if (assets.player) this.load.image('dungeon-player', assets.player)
-      if (assets.enemy) this.load.image('dungeon-enemy', assets.enemy)
+      this.loadAsset('dungeon-player', assets.player)
+      this.loadAsset('dungeon-enemy', assets.enemy)
+      this.loadAsset('dungeon-floor', assets.floor)
+      this.loadAsset('dungeon-wall', assets.wall)
+      this.loadAsset('dungeon-weapon', assets.weapon)
+    }
+
+    loadAsset(key, asset) {
+      if (!asset?.path) return
+      if (asset.frames > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) {
+        this.load.spritesheet(key, asset.path, {
+          frameWidth: asset.frameWidth,
+          frameHeight: asset.frameHeight,
+          endFrame: asset.frames - 1,
+        })
+        return
+      }
+      this.load.image(key, asset.path)
     }
 
     create() {
@@ -61,32 +96,106 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     drawArena() {
-      const graphics = this.add.graphics()
-      graphics.fillStyle(0x111319, 1)
+      const graphics = this.add.graphics().setDepth(0)
+      graphics.fillStyle(0x080a0d, 1)
       graphics.fillRect(0, 0, WIDTH, HEIGHT)
-      graphics.lineStyle(1, 0x242a31, 0.7)
-      for (let x = 24; x < WIDTH; x += 48) graphics.lineBetween(x, 0, x, HEIGHT)
-      for (let y = 24; y < HEIGHT; y += 48) graphics.lineBetween(0, y, WIDTH, y)
-      graphics.lineStyle(4, 0x313944, 1)
-      graphics.strokeRect(10, 10, WIDTH - 20, HEIGHT - 20)
 
-      for (const [x, y] of [[90, 70], [WIDTH - 90, 70], [90, HEIGHT - 70], [WIDTH - 90, HEIGHT - 70]]) {
-        const glow = this.add.circle(x, y, 34, 0xff9b42, 0.08)
-        this.tweens.add({ targets: glow, alpha: 0.18, scale: 1.25, duration: 900, yoyo: true, repeat: -1 })
-        this.add.circle(x, y, 5, 0xffb35c, 1)
+      const left = TILE
+      const top = TILE
+      const right = WIDTH - TILE
+      const bottom = HEIGHT - TILE
+
+      for (let y = top; y < bottom; y += TILE) {
+        for (let x = left; x < right; x += TILE) {
+          if (this.textures.exists('dungeon-floor')) {
+            this.addMapTile(x + TILE / 2, y + TILE / 2, 'dungeon-floor', assets.floor, TILE, 1)
+          } else {
+            const shade = ((x / TILE + y / TILE) % 2 === 0) ? 0x171a20 : 0x14171c
+            graphics.fillStyle(shade, 1)
+            graphics.fillRect(x, y, TILE, TILE)
+            graphics.lineStyle(1, 0x232832, 0.55)
+            graphics.strokeRect(x, y, TILE, TILE)
+            if ((x + y) % 144 === 0) {
+              graphics.lineStyle(1, 0x2e343d, 0.45)
+              graphics.lineBetween(x + 11, y + 17, x + 23, y + 27)
+              graphics.lineBetween(x + 23, y + 27, x + 34, y + 21)
+            }
+          }
+        }
       }
+
+      for (let x = left; x < right; x += TILE) {
+        this.addWallTile(x + TILE / 2, top / 2)
+        this.addWallTile(x + TILE / 2, HEIGHT - top / 2)
+      }
+      for (let y = top; y < bottom; y += TILE) {
+        this.addWallTile(left / 2, y + TILE / 2)
+        this.addWallTile(WIDTH - left / 2, y + TILE / 2)
+      }
+
+      this.drawPillar(144, 144)
+      this.drawPillar(WIDTH - 144, 144)
+      this.drawPillar(144, HEIGHT - 144)
+      this.drawPillar(WIDTH - 144, HEIGHT - 144)
+
+      for (const [x, y] of [[96, 72], [WIDTH - 96, 72], [96, HEIGHT - 72], [WIDTH - 96, HEIGHT - 72]]) {
+        const glow = this.add.circle(x, y, 34, 0xff8a3d, 0.07).setDepth(4)
+        this.tweens.add({ targets: glow, alpha: 0.19, scale: 1.22, duration: 850, yoyo: true, repeat: -1 })
+        this.add.rectangle(x, y, 5, 12, 0xffb45e, 1).setDepth(5)
+      }
+    }
+
+    addMapTile(x, y, key, asset, targetHeight, depth) {
+      const image = this.add.image(x, y, key, 0).setDepth(depth)
+      const sourceHeight = asset?.frameHeight || asset?.height || image.height || targetHeight
+      image.setScale(targetHeight / sourceHeight)
+      return image
+    }
+
+    addWallTile(x, y) {
+      if (this.textures.exists('dungeon-wall')) {
+        const tile = this.addMapTile(x, y, 'dungeon-wall', assets.wall, TILE, 3)
+        tile.setTint(0x9ca4ad)
+        return
+      }
+      this.add.rectangle(x, y, TILE - 2, TILE - 2, 0x272d36, 1).setStrokeStyle(2, 0x3d4652, 1).setDepth(3)
+      this.add.rectangle(x, y - 5, TILE - 10, 7, 0x343c47, 0.7).setDepth(4)
+    }
+
+    drawPillar(x, y) {
+      this.add.rectangle(x + 5, y + 8, 38, 38, 0x050607, 0.42).setDepth(5)
+      this.add.rectangle(x, y, 36, 36, 0x242a32, 1).setStrokeStyle(3, 0x414b58, 1).setDepth(6)
+      this.add.rectangle(x, y - 12, 26, 5, 0x596573, 0.55).setDepth(7)
+    }
+
+    ensureWalkAnimation(key, asset, animationKey, frameRate) {
+      if (!asset || asset.frames <= 1 || this.anims.exists(animationKey)) return
+      this.anims.create({
+        key: animationKey,
+        frames: this.anims.generateFrameNumbers(key, { start: 0, end: asset.frames - 1 }),
+        frameRate,
+        repeat: -1,
+      })
     }
 
     makeActor(x, y, kind) {
       const key = kind === 'player' ? 'dungeon-player' : 'dungeon-enemy'
+      const asset = kind === 'player' ? assets.player : assets.enemy
       if (this.textures.exists(key)) {
-        const image = this.add.image(x, y, key)
-        const source = this.textures.get(key).getSourceImage()
-        const side = Math.min(source.width, source.height)
-        if (source.width > side || source.height > side) image.setCrop(0, 0, side, side)
-        image.setDisplaySize(kind === 'player' ? 48 : 42, kind === 'player' ? 48 : 42)
-        image.setData('usesTexture', true)
-        return image
+        const animated = asset?.frames > 1
+        const visual = animated ? this.add.sprite(x, y, key, 0) : this.add.image(x, y, key)
+        const frameHeight = asset?.frameHeight || asset?.height || visual.height || 16
+        const targetHeight = kind === 'player' ? 52 : 42
+        const scale = Math.max(1, Math.round(targetHeight / frameHeight))
+        visual.setScale(scale)
+        visual.setData('usesTexture', true)
+
+        if (animated) {
+          const animationKey = kind === 'player' ? 'dungeon-player-walk' : 'dungeon-enemy-walk'
+          this.ensureWalkAnimation(key, asset, animationKey, kind === 'player' ? 8 : 6)
+          visual.play(animationKey)
+        }
+        return visual
       }
 
       const color = kind === 'player' ? 0xc1ff56 : 0x8d63ff
@@ -98,7 +207,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
 
     spawnEnemy(index = 0) {
       const edge = index % 4
-      const padding = 46
+      const padding = 72
       let x = padding + Math.random() * (WIDTH - padding * 2)
       let y = padding + Math.random() * (HEIGHT - padding * 2)
       if (edge === 0) y = padding
@@ -143,9 +252,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         const length = Math.hypot(dx, dy) || 1
         this.playerState.x += (dx / length) * this.playerState.speed * dt
         this.playerState.y += (dy / length) * this.playerState.speed * dt
+        if (this.player.setFlipX && dx !== 0) this.player.setFlipX(dx < 0)
       }
-      this.playerState.x = Phaser.Math.Clamp(this.playerState.x, 30, WIDTH - 30)
-      this.playerState.y = Phaser.Math.Clamp(this.playerState.y, 30, HEIGHT - 30)
+      this.playerState.x = Phaser.Math.Clamp(this.playerState.x, TILE + 18, WIDTH - TILE - 18)
+      this.playerState.y = Phaser.Math.Clamp(this.playerState.y, TILE + 18, HEIGHT - TILE - 18)
       this.player.setPosition(this.playerState.x, this.playerState.y)
     }
 
@@ -158,6 +268,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         enemy.x += (dx / distance) * enemy.speed * dt
         enemy.y += (dy / distance) * enemy.speed * dt
         enemy.visual.setPosition(enemy.x, enemy.y)
+        if (enemy.visual.setFlipX && Math.abs(dx) > 1) enemy.visual.setFlipX(dx < 0)
 
         if (time < enemy.hitUntil) {
           if (enemy.visual.setTintFill) enemy.visual.setTintFill(0xffffff)
@@ -182,7 +293,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       const distance = Math.hypot(target.x - this.playerState.x, target.y - this.playerState.y)
       if (distance > 165) return
       this.lastAttackAt = time
-      this.slash(target, false)
+      this.slash(target)
     }
 
     trySkill(time) {
@@ -276,10 +387,20 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     spawnDrop(x, y, item) {
-      const glow = this.add.rectangle(x, y - 22, 3, 54, 0x70ff9f, 0.3).setDepth(6)
-      const visual = this.add.rectangle(x, y, 14, 24, 0x70ff9f, 1).setAngle(45).setDepth(15)
-      this.tweens.add({ targets: visual, y: y - 5, duration: 480, yoyo: true, repeat: -1 })
-      this.tweens.add({ targets: glow, alpha: 0.6, duration: 650, yoyo: true, repeat: -1 })
+      const glow = this.add.rectangle(x, y - 24, 3, 64, 0x70ff9f, 0.26).setDepth(6)
+      let visual
+      if (this.textures.exists('dungeon-weapon')) {
+        visual = this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15)
+        const frameHeight = assets.weapon?.frameHeight || assets.weapon?.height || visual.height || 16
+        visual.setScale(Math.max(1, Math.round(30 / frameHeight)))
+      } else {
+        const blade = this.add.rectangle(0, -5, 5, 25, 0xdce7ed, 1)
+        const guard = this.add.rectangle(0, 8, 16, 4, 0x70ff9f, 1)
+        const grip = this.add.rectangle(0, 16, 4, 12, 0x8b6846, 1)
+        visual = this.add.container(x, y, [blade, guard, grip]).setAngle(42).setDepth(15)
+      }
+      this.tweens.add({ targets: visual, y: y - 6, duration: 480, yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.62, duration: 650, yoyo: true, repeat: -1 })
       this.drops.push({ x, y, item, visual, glow })
       onEvent({ type: 'drop', item })
     }
