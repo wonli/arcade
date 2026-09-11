@@ -53,6 +53,7 @@ deps: setup
 frontend:
 	cd $(WEB_DIR) && $(NPM) install
 	cd $(WEB_DIR) && $(NPM) run build
+	@touch $(EMBED_DIR)/.gitkeep
 
 # Optional frontend-only workflow. The default project workflow does not need Vite.
 web-dev:
@@ -85,3 +86,4 @@ clean:
 	rm -rf $(BUILD_PATH)
 	mkdir -p $(EMBED_DIR)
 	find $(EMBED_DIR) -mindepth 1 -maxdepth 1 ! -name '.gitkeep' -exec rm -rf {} +
+	@touch $(EMBED_DIR)/.gitkeep
