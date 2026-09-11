@@ -5,10 +5,10 @@
 
   const messages = {
     'zh-CN': {
-      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Debts in the Depths · CC0', pickup: '捡到生锈长剑，伤害提升。', drop: '装备掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。'
+      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '捡到生锈长剑，伤害提升。', pickupPotion: '喝下生命药水，恢复 {heal} 点生命。', dropWeapon: '装备掉落！', dropPotion: '生命药水掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。'
     },
     en: {
-      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space active skill', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Debts in the Depths · CC0', pickup: 'Rust Sword equipped. Damage increased.', drop: 'Equipment dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.'
+      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space active skill', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: 'Rust Sword equipped. Damage increased.', pickupPotion: 'Health potion restored {heal} HP.', dropWeapon: 'Equipment dropped!', dropPotion: 'Health potion dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.'
     }
   }
 
@@ -32,8 +32,9 @@
   }
 
   function onEvent(event) {
-    if (event.type === 'pickup') eventText = t('pickup')
-    if (event.type === 'drop') eventText = t('drop')
+    const potion = event.item?.type === 'consumable.health_potion'
+    if (event.type === 'pickup') eventText = potion ? t('pickupPotion', { heal: event.healed ?? 0 }) : t('pickupWeapon')
+    if (event.type === 'drop') eventText = potion ? t('dropPotion') : t('dropWeapon')
     if (event.type === 'gameover') eventText = t('gameover')
     if (event.type === 'skill') eventText = t('skill', { hits: event.hits })
   }
