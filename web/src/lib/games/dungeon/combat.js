@@ -1,3 +1,5 @@
+import { deriveEquipment, rollAffixes } from './affixes.js'
+
 export function nearestTarget(player, enemies) {
   let best = null
   let bestDistance = Infinity
@@ -18,6 +20,16 @@ export function rollDamage(player, random = Math.random) {
   const critical = random() < (player.critChance ?? 0)
   const multiplier = critical ? (player.critMultiplier ?? 2) : 1
   return { damage: Math.round((player.damage ?? 1) * multiplier), critical }
+}
+
+export function modifiedDamage(player, enemy, baseDamage) {
+  let damage = baseDamage
+  const effects = player?.effects ?? {}
+  const hpRatio = (player?.maxHp ?? 0) > 0 ? (player.hp ?? 0) / player.maxHp : 1
+  const enemyRatio = (enemy?.maxHp ?? 0) > 0 ? (enemy.hp ?? 0) / enemy.maxHp : 1
+  if (hpRatio < 0.4) damage *= 1 + (effects.lowHealthDamage ?? 0)
+  if (enemyRatio < 0.3) damage *= 1 + (effects.executioner ?? 0)
+  return Math.max(1, Math.round(damage))
 }
 
 const EQUIPMENT_TABLES = {
@@ -51,7 +63,12 @@ export function rollEquipment(floor, random = Math.random) {
   else if (roll < rareEnd) rarity = 'rare'
   else if (roll < epicEnd) rarity = 'epic'
   if (!rarity) return null
-  return { type: 'weapon.dungeon_blade', rarity, damage: damageForRarity(rarity, roll * 7.31) }
+  return {
+    type: 'weapon.dungeon_blade',
+    rarity,
+    damage: damageForRarity(rarity, roll * 7.31),
+    affixes: rollAffixes(level, rarity, random),
+  }
 }
 
 export function rollPotion(random = Math.random) {
@@ -101,13 +118,14 @@ export function bossProfile(floor = 5) {
   }
 }
 
-export function bossReward(random = Math.random) {
+export function bossReward(random = Math.random, floor = 5) {
   const roll = random()
   const rarity = roll >= 0.72 ? 'epic' : 'rare'
   return {
     type: 'weapon.dungeon_blade',
     rarity,
     damage: rarity === 'epic' ? 12 : 8,
+    affixes: rollAffixes(floor, rarity, random, { forceBuild: true }),
   }
 }
 
@@ -124,14 +142,14 @@ export function rollDrop(_floor, random = Math.random) {
   return null
 }
 
-export function applyPickup(player, item) {
+const DEFAULT_BASE_STATS = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+
+export function applyPickup(player, item, baseStats = player?.baseStats ?? DEFAULT_BASE_STATS) {
   if (!item) return { ...player }
   if (item.type?.startsWith('weapon.')) {
     return {
-      ...player,
-      damage: (player.damage ?? 0) + (item.damage ?? 0),
-      weapon: item.type,
-      weaponRarity: item.rarity ?? player.weaponRarity ?? null,
+      ...deriveEquipment(baseStats, item, player),
+      baseStats: { ...baseStats },
     }
   }
   if (item.type === 'consumable.health_potion') {
