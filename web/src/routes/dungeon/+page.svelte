@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
   import { formatAffixLabel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
+  import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
   const messages = {
@@ -82,6 +83,9 @@
         onStats(next) { stats = next },
         onEvent,
       })
+      const installVisuals = () => installAffixVisuals(game?.scene?.getScene?.('Dungeon'))
+      installVisuals()
+      requestAnimationFrame(installVisuals)
       ready = true
     } catch (cause) {
       console.error(cause)
