@@ -24,30 +24,26 @@ Then:
 ```bash
 git clone https://github.com/wonli/arcade.git
 cd arcade
-make dev
+make start
 ```
-
-`make dev` will:
-
-1. resolve Go modules with `go mod tidy`;
-2. install frontend dependencies with `npm install`;
-3. start the AQI backend;
-4. start the Vite frontend;
-5. stop both processes when you press `Ctrl+C`.
 
 Open:
-
-```text
-http://localhost:5173
-```
-
-The backend runs on:
 
 ```text
 http://localhost:8080
 ```
 
-Useful backend endpoints:
+That's it. `make start` will:
+
+1. install frontend dependencies;
+2. build the Svelte frontend;
+3. embed the frontend into the Go executable;
+4. build `dist/arcade`;
+5. start that single executable.
+
+There is no separate frontend process in the normal runtime path.
+
+Useful endpoints:
 
 ```text
 GET /health
@@ -56,77 +52,111 @@ WS  /ws
 
 ### Try a real two-player game
 
-1. Open `http://localhost:5173`.
+1. Open `http://localhost:8080`.
 2. Create a Gomoku room.
 3. Copy the room link.
-4. Open the link in another browser, incognito window, or another device on the same network.
+4. Open the link in another browser, incognito window, or another device that can reach the same server.
 5. Start ruining a friendship.
 
 AQI Arcade uses a persistent local guest ID, so no account is required.
 
-## Build and run
+## Development
 
-To build both backend and frontend and then run the built version:
+The default development path still uses one Go process:
 
 ```bash
-make start
+make dev
 ```
 
-Then open:
+`make dev` rebuilds the frontend into `internal/frontend/dist/` and then runs:
+
+```bash
+go run ./cmd/arcade
+```
+
+Open the same URL:
 
 ```text
-http://localhost:4173
+http://localhost:8080
 ```
 
-`make start` builds first, then starts:
+If you are actively working on Svelte and want Vite HMR, there is an optional frontend-only command:
 
-- `dist/arcade` — the Go backend binary;
-- Vite preview for the built frontend;
-- WebSocket proxying from the frontend to `localhost:8080`.
+```bash
+make web-dev
+```
 
-To only build the project:
+That server uses port `5173` with `strictPort: true`, so it will fail clearly instead of silently jumping to 5174/5175 when the port is occupied. It proxies `/ws` and `/health` to the Go server on `8080`.
+
+For normal playing, building, and distribution, you do not need Vite running.
+
+## Build
+
+Build the distributable executable:
 
 ```bash
 make build
 ```
 
-Build output:
+Output:
 
 ```text
 dist/
-├── arcade
-└── web/
+└── arcade
 ```
 
-The frontend is intentionally not embedded into the Go binary yet. `make start` runs the two build outputs together for local testing.
+The Svelte build is embedded into that executable with Go `embed`, so distribution only needs the binary plus whatever external AQI configuration you intentionally keep outside it.
+
+Run it directly:
+
+```bash
+./dist/arcade
+```
+
+Then visit:
+
+```text
+http://localhost:8080
+```
 
 ## Make commands
 
 ```text
 make help            Show available commands
-make setup           Install/resolve Go and frontend dependencies
-make dev             Start backend + frontend development servers
-make build           Build backend + frontend into ./dist
-make start           Build and run backend + frontend preview
-make backend         Start only the Go backend
-make frontend        Start only the Vite frontend
-make test            Run Go tests and verify the frontend build
+make start           Build everything and run the single embedded binary
+make dev             Rebuild frontend and run the Go server on :8080
+make build           Build frontend + dist/arcade
+make test            Build frontend and run all Go tests
+make setup           Resolve Go modules + install frontend dependencies
+make frontend        Install/build frontend into the Go embed directory
+make web-dev         Optional Vite HMR server for frontend-only development
+make backend         Rebuild frontend and run the Go server
 make clean           Remove generated build output
 ```
 
-If you prefer doing everything manually, the rough equivalent of `make dev` is:
+## How the frontend is shipped
 
-```bash
-go mod tidy
-
-# terminal 1
-go run ./cmd/arcade
-
-# terminal 2
-cd web
-npm install
-npm run dev -- --host 0.0.0.0
+```text
+web/ (Svelte source)
+       ↓ npm run build
+internal/frontend/dist/
+       ↓ go:embed
+internal/frontend
+       ↓ go build
+dist/arcade
 ```
+
+At runtime the same Go process serves everything:
+
+```text
+http://localhost:8080/
+├── /              embedded Svelte app
+├── /assets/*      embedded JS/CSS assets
+├── /health        Gin health endpoint
+└── /ws            AQI WebSocket
+```
+
+SPA routes fall back to the embedded `index.html`, while missing `/assets/*` requests return a real 404 instead of HTML.
 
 ## Current games
 
