@@ -43,9 +43,7 @@
     oscillator.stop(start + duration)
   }
 
-  function playMoveSound() {
-    tone(360, 0.06, 0.025)
-  }
+  function playMoveSound() { tone(360, 0.06, 0.025) }
 
   function playFinishSound(winner, roomState) {
     if (!winner) {
@@ -68,15 +66,12 @@
     room = snapshot
     gameState = snapshot.state ?? null
     if (gameName !== 'gomoku' || !previous || !gameState) return
-    if (gameState.status === 'finished' && previous.status !== 'finished') {
-      playFinishSound(gameState.winner, snapshot)
-    } else if (gameState.moves > previous.moves) {
-      playMoveSound()
-    }
+    if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
+    else if (gameState.moves > previous.moves) playMoveSound()
   }
 
   function myStone(roomState) {
-    const index = roomState?.players?.findIndex((player) => player.id === identity.playerId) ?? -1
+    const index = roomState?.players?.findIndex((player) => player.id === identity.sessionId) ?? -1
     return index === 0 ? 1 : index === 1 ? 2 : 0
   }
 
@@ -87,7 +82,7 @@
   }
 
   function canAddBot(roomState) {
-    return gameName === 'gomoku' && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.playerId
+    return gameName === 'gomoku' && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId
   }
 
   function subscribeRoom() {
@@ -106,7 +101,10 @@
     connection = 'connecting'
 
     await socket.connect()
-    await socket.request('arcade.login', identity)
+    await socket.request('arcade.login', {
+      playerId: identity.sessionId,
+      sessionId: identity.sessionId,
+    })
 
     if (roomCode === 'NEW') {
       const snapshot = await socket.request('room.create', { game: gameName, name })
@@ -130,11 +128,7 @@
     if (!canMove(room, gameState, x, y)) return
     error = ''
     try {
-      const snapshot = await socket.request('game.move', {
-        roomId: roomCode,
-        move: { x, y },
-      })
-      applySnapshot(snapshot)
+      applySnapshot(await socket.request('game.move', { roomId: roomCode, move: { x, y } }))
     } catch (err) {
       error = err.message
     }
@@ -173,13 +167,8 @@
     }
   }
 
-  function stoneAt(state, x, y) {
-    return state?.board?.[y]?.[x] ?? 0
-  }
-
-  function isLast(state, x, y) {
-    return state?.last?.x === x && state?.last?.y === y
-  }
+  function stoneAt(state, x, y) { return state?.board?.[y]?.[x] ?? 0 }
+  function isLast(state, x, y) { return state?.last?.x === x && state?.last?.y === y }
 
   function gameLabel(roomState, state) {
     if (!roomState || roomState.players.length < 2) return 'Waiting for a friend'
@@ -192,15 +181,8 @@
   }
 
   onMount(() => {
-    unsubscribeConnection = socket.onConnection((state) => {
-      connection = state
-    })
-
-    bootstrap().catch((err) => {
-      connection = 'offline'
-      error = err.message
-    })
-
+    unsubscribeConnection = socket.onConnection((state) => { connection = state })
+    bootstrap().catch((err) => { connection = 'offline'; error = err.message })
     return () => {
       unsubscribeRoom()
       unsubscribeConnection()
@@ -224,10 +206,7 @@
 
   <main class="room-main">
     {#if gameName === 'tetris'}
-      {#if room}
-        <TetrisBattle {room} {roomCode} {identity} {socket} />
-      {/if}
-
+      {#if room}<TetrisBattle {room} {roomCode} {identity} {socket} />{/if}
       <aside class="room-panel tetris-panel">
         <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div>
         <button class="primary-button" onclick={copyInvite}>{copied ? 'Link copied' : 'Copy invite link'}</button>
@@ -240,13 +219,11 @@
           <div class="player-stone black"></div>
           <div><span>BLACK</span><strong>{room?.players?.[0]?.name ?? name}</strong></div>
         </div>
-
         <div class="match-status">
           <span>GOMOKU</span>
           <h1>{gameLabel(room, gameState)}</h1>
           <p>{room?.players?.length ?? 0}/2 players</p>
         </div>
-
         <div class="player-card right">
           <div><span>WHITE</span><strong>{room?.players?.[1]?.name ?? 'Waiting...'}</strong></div>
           <div class="player-stone white"></div>
