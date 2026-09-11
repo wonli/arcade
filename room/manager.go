@@ -11,10 +11,10 @@ const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 type Manager struct { rooms sync.Map }
 func NewManager() *Manager { return &Manager{} }
 
-func (m *Manager) Create(gameName string, maxPlayers int) (*Room, error) {
+func (m *Manager) Create(gameName string, minPlayers, maxPlayers int) (*Room, error) {
 	for range 10 {
 		id, err := roomID(6); if err != nil { return nil, err }
-		r := New(id, gameName, maxPlayers)
+		r := New(id, gameName, minPlayers, maxPlayers)
 		if _, loaded := m.rooms.LoadOrStore(id, r); !loaded { return r, nil }
 	}
 	return nil, errors.New("could not allocate room id")
