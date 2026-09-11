@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, readdirSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,6 +8,18 @@ const root = resolve(scriptDir, '..')
 const archive = join(root, 'assets', 'DebtsInTheDepthsAssets.zip')
 const output = join(root, 'web', 'static', 'assets', 'debts')
 
+function makeWritable(target) {
+  if (!existsSync(target)) return
+  const stat = lstatSync(target)
+  if (stat.isDirectory()) {
+    chmodSync(target, 0o755)
+    for (const name of readdirSync(target)) makeWritable(join(target, name))
+    return
+  }
+  chmodSync(target, 0o644)
+}
+
+makeWritable(output)
 rmSync(output, { recursive: true, force: true })
 mkdirSync(output, { recursive: true })
 execFileSync('unzip', ['-q', '-o', archive, '-d', output], { stdio: 'inherit' })
