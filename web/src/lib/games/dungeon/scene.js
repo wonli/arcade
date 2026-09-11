@@ -1,9 +1,16 @@
 import { createDungeonAmbient } from './ambient.js'
-import { applyPickup, nearestTarget, rollDamage, rollDrop } from './combat.js'
+import {
+  applyPickup,
+  enemyArchetype,
+  floorWave,
+  nearestTarget,
+  rollDamage,
+  rollEquipment,
+  rollPotion,
+} from './combat.js'
 
 const WIDTH = 960
 const HEIGHT = 600
-const ENEMY_COUNT = 20
 const TILE = 48
 
 function normalizeAssets(manifest = {}) {
@@ -33,6 +40,21 @@ export function directionFromInput(dx, dy, current = 'down') {
   return current
 }
 
+export function rarityPresentation(rarity = 'common') {
+  const styles = {
+    common: { color: 0xf4f0e8, beamAlpha: 0.22, particles: 0 },
+    uncommon: { color: 0x70ff9f, beamAlpha: 0.34, particles: 2 },
+    rare: { color: 0x67a8ff, beamAlpha: 0.5, particles: 4 },
+    epic: { color: 0xc984ff, beamAlpha: 0.68, particles: 7 },
+  }
+  return styles[rarity] || styles.common
+}
+
+export function floorOutcome(floor, livingEnemies) {
+  if (livingEnemies > 0) return 'combat'
+  return floor >= 5 ? 'complete' : 'portal'
+}
+
 export function chooseDungeonAssets(manifest = {}) {
   const all = normalizeAssets(manifest)
   const rpgAssets = all.filter((asset) => asset.source === 'rpg-main-character')
@@ -54,18 +76,30 @@ export function chooseDungeonAssets(manifest = {}) {
   }
 }
 
-export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () => {}, onEvent = () => {} }) {
+export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, onStats = () => {}, onEvent = () => {} }) {
+  const text = {
+    floor: (value) => typeof labels.floor === 'function' ? labels.floor(value) : `FLOOR ${value}`,
+    floorClear: () => typeof labels.floorClear === 'function' ? labels.floorClear() : (labels.floorClear || 'FLOOR CLEAR'),
+    runComplete: () => typeof labels.runComplete === 'function' ? labels.runComplete() : (labels.runComplete || 'DUNGEON CLEARED'),
+    runCompleteHint: () => typeof labels.runCompleteHint === 'function' ? labels.runCompleteHint() : (labels.runCompleteHint || 'Five floors survived'),
+    rarity: (rarity) => typeof labels.rarity === 'function' ? labels.rarity(rarity) : rarity.toUpperCase(),
+  }
+
   class DungeonScene extends Phaser.Scene {
     constructor() {
       super('Dungeon')
-      this.playerState = { x: WIDTH / 2, y: HEIGHT / 2, hp: 100, maxHp: 100, damage: 10, critChance: 0.18, critMultiplier: 2, speed: 190, weapon: null }
+      this.playerState = { x: WIDTH / 2, y: HEIGHT / 2, hp: 100, maxHp: 100, damage: 10, critChance: 0.18, critMultiplier: 2, speed: 190, weapon: null, weaponRarity: null }
       this.playerFacing = 'down'
       this.playerMoving = false
       this.playerAttacking = false
       this.enemies = []
       this.drops = []
+      this.portal = null
       this.kills = 0
+      this.floorKills = 0
       this.floor = 1
+      this.floorCleared = false
+      this.runComplete = false
       this.lastAttackAt = 0
       this.skillReadyAt = 0
       this.lastContactAt = 0
@@ -107,7 +141,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       this.playerBar = this.createHealthBar(this.playerState.x, this.playerState.y - 42, 54, 6, 0x55e879)
       this.setupPlayerAnimations()
       this.syncPlayerAnimation()
-      for (let i = 0; i < ENEMY_COUNT; i++) this.spawnEnemy(i)
+      this.startFloor(true)
       const startAmbient = () => this.ambient.start().catch(() => {})
       this.input.once('pointerdown', startAmbient)
       this.input.keyboard.once('keydown', startAmbient)
@@ -244,7 +278,25 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       return this.add.circle(x, y, kind === 'player' ? 18 : 16, color, 1).setStrokeStyle(3, kind === 'player' ? 0xf5ffe7 : 0xcab8ff, 0.9).setData('usesTexture', false)
     }
 
-    spawnEnemy(index = 0) {
+    startFloor(initial = false) {
+      this.floorCleared = false
+      this.floorKills = 0
+      this.destroyPortal()
+      if (!initial) {
+        this.clearEnemies()
+        this.clearDrops()
+        this.playerState.x = WIDTH / 2
+        this.playerState.y = HEIGHT / 2
+        this.player.setPosition(this.playerState.x, this.playerState.y)
+      }
+      const wave = floorWave(this.floor)
+      for (let i = 0; i < wave.count; i++) this.spawnEnemy(i, { elite: i < wave.eliteCount })
+      this.showBanner(text.floor(this.floor), '#f4f0e8', 42)
+      onEvent({ type: 'floorstart', floor: this.floor })
+      this.emitStats()
+    }
+
+    spawnEnemy(index = 0, { elite = false } = {}) {
       const edge = index % 4
       const padding = 72
       let x = padding + Math.random() * (WIDTH - padding * 2)
@@ -253,20 +305,47 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       if (edge === 1) x = WIDTH - padding
       if (edge === 2) y = HEIGHT - padding
       if (edge === 3) x = padding
-      const visual = this.makeActor(x, y, 'enemy').setDepth(10)
-      const maxHp = 26 + Math.floor(this.floor * 1.5)
-      const enemy = { id: `enemy-${Date.now()}-${Math.random()}`, x, y, hp: maxHp, maxHp, speed: 42 + Math.random() * 18 + this.floor, visual, hitUntil: 0 }
-      enemy.healthBar = this.createHealthBar(x, y - 28, 36, 5, 0xff5964)
+
+      const archetype = enemyArchetype(this.floor, Math.random, { elite })
+      const visual = this.makeActor(x, y, 'enemy').setDepth(elite ? 12 : 10)
+      visual.setScale(visual.scaleX * archetype.scale, visual.scaleY * archetype.scale)
+      const tint = elite ? 0xffd86b : archetype.type === 'fast' ? 0xa8d9ff : archetype.type === 'brute' ? 0xffb58a : null
+      if (tint) visual.setTint?.(tint)
+
+      const baseHp = 24 + this.floor * 6
+      const maxHp = Math.round(baseHp * archetype.hpMultiplier)
+      const speed = (44 + this.floor * 2 + Math.random() * 8) * archetype.speedMultiplier
+      const barWidth = elite ? 58 : archetype.type === 'brute' ? 46 : 36
+      const barHeight = elite ? 8 : archetype.type === 'brute' ? 7 : 5
+      const barOffset = 28 + Math.max(0, archetype.scale - 1) * 22
+      const enemy = {
+        id: `enemy-${Date.now()}-${Math.random()}`,
+        x,
+        y,
+        hp: maxHp,
+        maxHp,
+        speed,
+        visual,
+        hitUntil: 0,
+        archetype: archetype.type,
+        elite: archetype.elite,
+        contactDamage: archetype.contactDamage,
+        tint,
+        scale: archetype.scale,
+        barOffset,
+      }
+      enemy.healthBar = this.createHealthBar(x, y - barOffset, barWidth, barHeight, elite ? 0xffc857 : 0xff5964)
       this.enemies.push(enemy)
       return enemy
     }
 
     update(time, delta) {
-      if (this.dead) return
+      if (this.dead || this.runComplete) return
       const dt = Math.min(delta, 40) / 1000
       this.updatePlayer(dt)
       this.updateEnemies(time, dt)
       this.updateDrops()
+      this.updatePortal(time)
       this.autoAttack(time)
       this.trySkill(time)
     }
@@ -300,13 +379,15 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         enemy.x += (dx / distance) * enemy.speed * dt
         enemy.y += (dy / distance) * enemy.speed * dt
         enemy.visual.setPosition(enemy.x, enemy.y)
-        this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - 28, enemy.hp, enemy.maxHp)
+        this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
         if (enemy.visual.setFlipX && Math.abs(dx) > 1) enemy.visual.setFlipX(dx < 0)
         if (time < enemy.hitUntil) enemy.visual.setTintFill?.(0xffffff)
+        else if (enemy.tint) enemy.visual.setTint?.(enemy.tint)
         else enemy.visual.clearTint?.()
-        if (distance < 30 && time - this.lastContactAt > 420) {
+        const contactRadius = 30 + Math.max(0, enemy.scale - 1) * 12
+        if (distance < contactRadius && time - this.lastContactAt > 420) {
           this.lastContactAt = time
-          this.playerState.hp = Math.max(0, this.playerState.hp - 7)
+          this.playerState.hp = Math.max(0, this.playerState.hp - enemy.contactDamage)
           this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
           this.flashPlayer()
           this.emitStats()
@@ -364,15 +445,15 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       const distance = Math.hypot(dx, dy) || 1
       enemy.x += (dx / distance) * knockback
       enemy.y += (dy / distance) * knockback
-      this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - 28, enemy.hp, enemy.maxHp)
+      this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
       this.damageText(enemy.x, enemy.y - 16, damage, critical)
       if (critical) this.cameras.main.shake(70, 0.004)
       if (enemy.hp <= 0) this.killEnemy(enemy)
     }
 
     damageText(x, y, damage, critical) {
-      const text = this.add.text(x, y, critical ? `CRIT ${damage}` : `${damage}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: critical ? '18px' : '14px', fontStyle: 'bold', color: critical ? '#ffdc68' : '#f5f1e8', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(40)
-      this.tweens.add({ targets: text, y: y - 28, alpha: 0, duration: 520, ease: 'Quad.Out', onComplete: () => text.destroy() })
+      const label = this.add.text(x, y, critical ? `CRIT ${damage}` : `${damage}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: critical ? '18px' : '14px', fontStyle: 'bold', color: critical ? '#ffdc68' : '#f5f1e8', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(40)
+      this.tweens.add({ targets: label, y: y - 28, alpha: 0, duration: 520, ease: 'Quad.Out', onComplete: () => label.destroy() })
     }
 
     killEnemy(enemy) {
@@ -380,21 +461,41 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       this.destroyHealthBar(enemy.healthBar)
       enemy.healthBar = null
       this.kills++
-      this.deathBurst(enemy.x, enemy.y)
-      const drop = rollDrop(this.floor)
-      if (drop) this.spawnDrop(enemy.x, enemy.y, drop)
+      this.floorKills++
+      this.deathBurst(enemy.x, enemy.y, enemy.elite ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : 0xa980ff)
+
+      const equipment = rollEquipment(this.floor)
+      const potion = rollPotion()
+      if (equipment) this.spawnDrop(enemy.x - (potion ? 12 : 0), enemy.y, equipment)
+      if (potion) this.spawnDrop(enemy.x + (equipment ? 12 : 0), enemy.y, potion)
+
       this.emitStats()
-      this.time.delayedCall(700, () => {
+      this.checkFloorClear()
+      this.time.delayedCall(350, () => {
         const index = this.enemies.indexOf(enemy)
         if (index >= 0) this.enemies.splice(index, 1)
         enemy.visual.destroy()
-        if (!this.dead) this.spawnEnemy(this.kills)
       })
     }
 
-    deathBurst(x, y) {
+    checkFloorClear() {
+      if (this.floorCleared || this.dead || this.runComplete) return
+      const living = this.enemies.filter((enemy) => enemy.hp > 0).length
+      const outcome = floorOutcome(this.floor, living)
+      if (outcome === 'combat') return
+      this.floorCleared = true
+      this.showBanner(text.floorClear(), '#c1ff56', 34)
+      onEvent({ type: 'floorclear', floor: this.floor })
+      if (outcome === 'complete') {
+        this.time.delayedCall(900, () => this.completeRun())
+      } else {
+        this.time.delayedCall(750, () => this.openPortal())
+      }
+    }
+
+    deathBurst(x, y, color = 0xa980ff) {
       for (let i = 0; i < 8; i++) {
-        const particle = this.add.rectangle(x, y, 5, 5, 0xa980ff, 1).setDepth(25)
+        const particle = this.add.rectangle(x, y, 5, 5, color, 1).setDepth(25)
         const angle = Math.random() * Math.PI * 2
         const distance = 24 + Math.random() * 34
         this.tweens.add({ targets: particle, x: x + Math.cos(angle) * distance, y: y + Math.sin(angle) * distance, alpha: 0, angle: Math.random() * 180, duration: 260 + Math.random() * 180, onComplete: () => particle.destroy() })
@@ -403,11 +504,12 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
 
     spawnDrop(x, y, item) {
       const potion = item.type === 'consumable.health_potion'
-      const color = potion ? 0xff5964 : 0x70ff9f
-      const glow = this.add.rectangle(x, y - 24, 3, 64, color, 0.26).setDepth(6)
+      const style = potion ? { color: 0xff5964, beamAlpha: 0.32, particles: 1 } : rarityPresentation(item.rarity)
+      const color = style.color
+      const glow = this.add.rectangle(x, y - 28, potion ? 3 : 4, potion ? 68 : 78, color, style.beamAlpha).setDepth(6)
       let visual
       if (!potion && this.textures.exists('dungeon-weapon')) {
-        visual = this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15)
+        visual = this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15).setTint?.(color) || this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15)
         const frameHeight = assets.weapon?.frameHeight || assets.weapon?.height || visual.height || 16
         visual.setScale(Math.max(1, Math.round(30 / frameHeight)))
       } else if (potion) {
@@ -421,9 +523,23 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         const grip = this.add.rectangle(0, 16, 4, 12, 0x8b6846, 1)
         visual = this.add.container(x, y, [blade, guard, grip]).setAngle(42).setDepth(15)
       }
+
+      let label = null
+      if (!potion) {
+        const cssColor = `#${color.toString(16).padStart(6, '0')}`
+        label = this.add.text(x, y + 26, `${text.rarity(item.rarity)}  +${item.damage}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '10px', fontStyle: 'bold', color: cssColor, stroke: '#08090b', strokeThickness: 3 }).setOrigin(0.5).setDepth(16)
+      }
+
+      const sparkles = []
+      for (let i = 0; i < style.particles; i++) {
+        const sparkle = this.add.rectangle(x - 14 + Math.random() * 28, y - 18 - Math.random() * 32, 3, 3, color, 0.85).setDepth(14)
+        this.tweens.add({ targets: sparkle, y: sparkle.y - 18, alpha: 0.15, duration: 520 + i * 70, yoyo: true, repeat: -1 })
+        sparkles.push(sparkle)
+      }
+
       this.tweens.add({ targets: visual, y: y - 6, duration: 480, yoyo: true, repeat: -1 })
-      this.tweens.add({ targets: glow, alpha: 0.62, duration: 650, yoyo: true, repeat: -1 })
-      this.drops.push({ x, y, item, visual, glow })
+      this.tweens.add({ targets: glow, alpha: Math.min(0.92, style.beamAlpha + 0.28), duration: 650, yoyo: true, repeat: -1 })
+      this.drops.push({ x, y, item, visual, glow, label, sparkles })
       onEvent({ type: 'drop', item })
     }
 
@@ -433,8 +549,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         if (Math.hypot(drop.x - this.playerState.x, drop.y - this.playerState.y) > 34) continue
         const beforeHp = this.playerState.hp
         this.playerState = applyPickup(this.playerState, drop.item)
-        drop.visual.destroy()
-        drop.glow.destroy()
+        this.destroyDrop(drop)
         this.drops.splice(i, 1)
         const healed = Math.max(0, this.playerState.hp - beforeHp)
         this.pickupBurst(drop.x, drop.y, drop.item, healed)
@@ -444,10 +559,72 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       }
     }
 
+    destroyDrop(drop) {
+      drop?.visual?.destroy()
+      drop?.glow?.destroy()
+      drop?.label?.destroy()
+      for (const sparkle of drop?.sparkles || []) sparkle.destroy()
+    }
+
+    clearDrops() {
+      for (const drop of this.drops) this.destroyDrop(drop)
+      this.drops = []
+    }
+
+    clearEnemies() {
+      for (const enemy of this.enemies) {
+        this.destroyHealthBar(enemy.healthBar)
+        enemy.visual?.destroy()
+      }
+      this.enemies = []
+    }
+
     pickupBurst(x, y, item, healed = 0) {
       const potion = item.type === 'consumable.health_potion'
-      const label = this.add.text(x, y - 28, potion ? `+${healed} HP` : `+${item.damage ?? 0} DMG`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '14px', fontStyle: 'bold', color: potion ? '#ff7c86' : '#70ff9f', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(50)
+      const color = potion ? '#ff7c86' : `#${rarityPresentation(item.rarity).color.toString(16).padStart(6, '0')}`
+      const label = this.add.text(x, y - 28, potion ? `+${healed} HP` : `+${item.damage ?? 0} DMG`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '14px', fontStyle: 'bold', color, stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(50)
       this.tweens.add({ targets: label, y: y - 64, alpha: 0, duration: 700, onComplete: () => label.destroy() })
+    }
+
+    openPortal() {
+      if (this.portal || this.dead || this.runComplete || this.floor >= 5) return
+      const x = WIDTH / 2
+      const y = HEIGHT - TILE * 1.7
+      const glow = this.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
+      const ring = this.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
+      const core = this.add.circle(x, y, 16, 0x70ff9f, 0.42).setDepth(10)
+      this.tweens.add({ targets: glow, scale: 1.3, alpha: 0.18, duration: 850, yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: ring, scale: 1.12, alpha: 0.62, duration: 620, yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: core, alpha: 0.72, duration: 420, yoyo: true, repeat: -1 })
+      this.portal = { x, y, glow, ring, core, unlockAt: this.time.now + 500 }
+      onEvent({ type: 'portal', floor: this.floor })
+    }
+
+    updatePortal(time) {
+      if (!this.portal || time < this.portal.unlockAt) return
+      if (Math.hypot(this.portal.x - this.playerState.x, this.portal.y - this.playerState.y) > 38) return
+      this.advanceFloor()
+    }
+
+    destroyPortal() {
+      if (!this.portal) return
+      this.portal.glow?.destroy()
+      this.portal.ring?.destroy()
+      this.portal.core?.destroy()
+      this.portal = null
+    }
+
+    advanceFloor() {
+      if (this.floor >= 5 || this.dead || this.runComplete) return
+      this.destroyPortal()
+      this.floor++
+      this.lastContactAt = this.time.now
+      this.startFloor(false)
+    }
+
+    showBanner(message, color = '#f4f0e8', size = 38) {
+      const label = this.add.text(WIDTH / 2, HEIGHT * 0.28, message, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: `${size}px`, fontStyle: 'bold', color, stroke: '#08090b', strokeThickness: 7 }).setOrigin(0.5).setDepth(70).setAlpha(0)
+      this.tweens.add({ targets: label, alpha: 1, y: label.y - 8, duration: 180, yoyo: true, hold: 620, onComplete: () => label.destroy() })
     }
 
     flashPlayer() {
@@ -456,6 +633,18 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         this.time.delayedCall(90, () => this.player.clearTint?.())
       }
       this.cameras.main.shake(70, 0.003)
+    }
+
+    completeRun() {
+      if (this.runComplete || this.dead) return
+      this.runComplete = true
+      this.destroyPortal()
+      this.ambient.stop()
+      this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x050607, 0.7).setDepth(80)
+      this.add.text(WIDTH / 2, HEIGHT / 2 - 24, text.runComplete(), { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '42px', fontStyle: 'bold', color: '#c1ff56' }).setOrigin(0.5).setDepth(81)
+      this.add.text(WIDTH / 2, HEIGHT / 2 + 34, text.runCompleteHint(), { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '14px', color: '#9aa4ae' }).setOrigin(0.5).setDepth(81)
+      onEvent({ type: 'runcomplete', floor: this.floor, kills: this.kills })
+      this.emitStats()
     }
 
     gameOver() {
@@ -468,7 +657,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     emitStats(now = this.time?.now ?? 0) {
-      onStats({ hp: this.playerState.hp, maxHp: this.playerState.maxHp, damage: this.playerState.damage, kills: this.kills, floor: this.floor, weapon: this.playerState.weapon, skillCooldown: Math.max(0, this.skillReadyAt - now) })
+      onStats({
+        hp: this.playerState.hp,
+        maxHp: this.playerState.maxHp,
+        damage: this.playerState.damage,
+        kills: this.kills,
+        floor: this.floor,
+        weapon: this.playerState.weapon,
+        weaponRarity: this.playerState.weaponRarity,
+        skillCooldown: Math.max(0, this.skillReadyAt - now),
+      })
     }
   }
 
