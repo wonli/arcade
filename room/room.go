@@ -27,15 +27,16 @@ type Player struct {
 type Room struct {
 	mu sync.RWMutex
 
-	ID         string        `json:"id"`
-	GameName   string        `json:"game"`
-	MinPlayers int           `json:"minPlayers"`
-	MaxPlayers int           `json:"maxPlayers"`
-	HostID     game.PlayerID `json:"hostId"`
-	Status     Status        `json:"status"`
-	Players    []Player      `json:"players"`
-	CreatedAt  time.Time     `json:"createdAt"`
-	game       game.Game
+	ID           string        `json:"id"`
+	GameName     string        `json:"game"`
+	MinPlayers   int           `json:"minPlayers"`
+	MaxPlayers   int           `json:"maxPlayers"`
+	HostID       game.PlayerID `json:"hostId"`
+	Status       Status        `json:"status"`
+	Players      []Player      `json:"players"`
+	CreatedAt    time.Time     `json:"createdAt"`
+	game         game.Game
+	runtimeState any
 }
 
 func New(id, gameName string, minPlayers, maxPlayers int) *Room {
@@ -107,6 +108,12 @@ func (r *Room) SetStatus(status Status) {
 	r.Status = status
 }
 
+func (r *Room) SetRuntimeState(state any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.runtimeState = state
+}
+
 func (r *Room) Ready(g game.Game) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -139,7 +146,7 @@ func (r *Room) Snapshot() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var state any
+	state := r.runtimeState
 	if r.game != nil {
 		state = r.game.State()
 	}
