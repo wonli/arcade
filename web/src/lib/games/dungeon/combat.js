@@ -62,6 +62,28 @@ export function rollPotion(random = Math.random) {
 export function enemyArchetype(floor, random = Math.random, { elite = false } = {}) {
   if (elite) return { ...bossProfile(floor), type: 'brute', elite: true, boss: true, speedMultiplier: 0.78 }
   const roll = random()
+  const level = Math.max(1, Math.floor(floor || 1))
+
+  if (level >= 3) {
+    if (roll < 0.42) return { type: 'skeleton', hpMultiplier: 1, speedMultiplier: 1, scale: 1, contactDamage: 10, elite: false, boss: false }
+    if (roll < 0.64) return { type: 'fast', hpMultiplier: 0.65, speedMultiplier: 1.55, scale: 0.9, contactDamage: 8, elite: false, boss: false }
+    if (roll < 0.80) return {
+      type: 'ranged',
+      hpMultiplier: 0.82,
+      speedMultiplier: 0.82,
+      scale: 1,
+      contactDamage: 7,
+      attackRange: 230,
+      preferredRange: 185,
+      projectileDamage: 11 + Math.min(5, level),
+      projectileCooldown: Math.max(900, 1450 - level * 70),
+      projectileSpeed: 245 + level * 10,
+      elite: false,
+      boss: false,
+    }
+    return { type: 'brute', hpMultiplier: 1.75, speedMultiplier: 0.72, scale: 1.2, contactDamage: 14, elite: false, boss: false }
+  }
+
   if (roll < 0.5) return { type: 'skeleton', hpMultiplier: 1, speedMultiplier: 1, scale: 1, contactDamage: 10, elite: false, boss: false }
   if (roll < 0.78) return { type: 'fast', hpMultiplier: 0.65, speedMultiplier: 1.55, scale: 0.9, contactDamage: 8, elite: false, boss: false }
   return { type: 'brute', hpMultiplier: 1.75, speedMultiplier: 0.72, scale: 1.2, contactDamage: 14, elite: false, boss: false }
