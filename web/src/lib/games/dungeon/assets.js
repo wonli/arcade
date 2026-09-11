@@ -2,6 +2,19 @@ const WIZARD_FRAME_WIDTH = 26
 const WIZARD_FRAME_HEIGHT = 18
 const WIZARD_ANIMATION_FRAMES = 4
 
+export function describeRpgMainCharacterAsset(path, width, height) {
+  if (height !== 128 || width % 64 !== 0) {
+    return { frames: 1, frameWidth: width, frameHeight: height, action: null, direction: null }
+  }
+
+  const lower = path.toLowerCase()
+  const direction = lower.includes('_down') ? 'down' : lower.includes('_up') ? 'up' : lower.includes('_side') ? 'side' : null
+  const action = lower.includes('attack') ? 'attack' : lower.includes('walk') ? 'walk' : lower.includes('idle') ? 'idle' : null
+  const frames = Math.floor(width / 64)
+
+  return { frames, frameWidth: 64, frameHeight: 128, action, direction }
+}
+
 export function describeDungeonAsset(path, width, height) {
   const actor = /character|creature|wizard|dragon|slime|skeleton|goblin|bat|monster|enemy|rat/i.test(path)
 
