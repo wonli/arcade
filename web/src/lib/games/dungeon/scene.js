@@ -28,14 +28,50 @@ function chooseAsset(assets, patterns, predicate = () => true) {
   return null
 }
 
+function chooseRpgAnimation(assets, direction, action) {
+  return assets.find((asset) => asset.source === 'rpg-main-character' && asset.direction === direction && asset.action === action) || null
+}
+
+export function directionFromInput(dx, dy, current = 'down') {
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
+  if (dy < 0) return 'up'
+  if (dy > 0) return 'down'
+  if (dx < 0) return 'left'
+  if (dx > 0) return 'right'
+  return current
+}
+
 export function chooseDungeonAssets(manifest = {}) {
   const assets = normalizeAssets(manifest)
+  const rpgAssets = assets.filter((asset) => asset.source === 'rpg-main-character')
+  const hasRpgPlayer = rpgAssets.some((asset) => asset.action && asset.direction)
+  const oldAssets = assets.filter((asset) => asset.source !== 'rpg-main-character')
+
+  const player = hasRpgPlayer ? {
+    source: 'rpg-main-character',
+    down: {
+      idle: chooseRpgAnimation(assets, 'down', 'idle'),
+      walk: chooseRpgAnimation(assets, 'down', 'walk'),
+      attack: chooseRpgAnimation(assets, 'down', 'attack'),
+    },
+    up: {
+      idle: chooseRpgAnimation(assets, 'up', 'idle'),
+      walk: chooseRpgAnimation(assets, 'up', 'walk'),
+      attack: chooseRpgAnimation(assets, 'up', 'attack'),
+    },
+    side: {
+      idle: chooseRpgAnimation(assets, 'side', 'idle'),
+      walk: chooseRpgAnimation(assets, 'side', 'walk'),
+      attack: chooseRpgAnimation(assets, 'side', 'attack'),
+    },
+  } : chooseAsset(oldAssets, [/wizard/i, /hero/i, /player/i, /knight/i, /character/i])
+
   return {
-    player: chooseAsset(assets, [/wizard/i, /hero/i, /player/i, /knight/i, /character/i]),
-    enemy: chooseAsset(assets, [/slime/i, /blob/i, /skeleton/i, /skull/i, /goblin/i, /bat/i, /rat/i, /creature/i, /monster/i]),
-    floor: chooseAsset(assets, [/floor/i, /ground/i, /brick/i, /stone/i, /tile/i], (asset) => asset.frames === 1),
-    wall: chooseAsset(assets, [/wall/i, /brick/i, /stone/i, /brimstone/i], (asset) => asset.frames === 1),
-    weapon: chooseAsset(assets, [/sword/i, /blade/i, /weapon/i, /axe/i, /staff/i, /bow/i, /item/i]),
+    player,
+    enemy: chooseAsset(oldAssets, [/slime/i, /blob/i, /skeleton/i, /skull/i, /goblin/i, /bat/i, /rat/i, /creature/i, /monster/i]),
+    floor: chooseAsset(oldAssets, [/floor/i, /ground/i, /brick/i, /stone/i, /tile/i], (asset) => asset.frames === 1),
+    wall: chooseAsset(oldAssets, [/wall/i, /brick/i, /stone/i, /brimstone/i], (asset) => asset.frames === 1),
+    weapon: chooseAsset(oldAssets, [/sword/i, /blade/i, /weapon/i, /axe/i, /staff/i, /bow/i, /item/i]),
   }
 }
 
@@ -54,6 +90,9 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
         speed: 190,
         weapon: null,
       }
+      this.playerFacing = 'down'
+      this.playerMoving = false
+      this.playerAttacking = false
       this.enemies = []
       this.drops = []
       this.kills = 0
@@ -65,11 +104,24 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     preload() {
-      this.loadAsset('dungeon-player', assets.player)
+      this.loadPlayerAssets()
       this.loadAsset('dungeon-enemy', assets.enemy)
       this.loadAsset('dungeon-floor', assets.floor)
       this.loadAsset('dungeon-wall', assets.wall)
       this.loadAsset('dungeon-weapon', assets.weapon)
+    }
+
+    loadPlayerAssets() {
+      if (assets.player?.source !== 'rpg-main-character') {
+        this.loadAsset('dungeon-player', assets.player)
+        return
+      }
+
+      for (const direction of ['down', 'up', 'side']) {
+        for (const action of ['idle', 'walk', 'attack']) {
+          this.loadAsset(`dungeon-player-${direction}-${action}`, assets.player[direction]?.[action])
+        }
+      }
     }
 
     loadAsset(key, asset) {
@@ -90,6 +142,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE')
       this.player = this.makeActor(this.playerState.x, this.playerState.y, 'player')
       this.player.setDepth(20)
+      this.setupPlayerAnimations()
+      this.syncPlayerAnimation()
 
       for (let i = 0; i < ENEMY_COUNT; i++) this.spawnEnemy(i)
       this.emitStats()
@@ -178,7 +232,48 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       })
     }
 
+    setupPlayerAnimations() {
+      if (assets.player?.source !== 'rpg-main-character' || !this.player?.anims) return
+      for (const direction of ['down', 'up', 'side']) {
+        for (const action of ['idle', 'walk', 'attack']) {
+          const asset = assets.player[direction]?.[action]
+          const textureKey = `dungeon-player-${direction}-${action}`
+          const animationKey = `dungeon-player-${direction}-${action}`
+          if (!asset || !this.textures.exists(textureKey) || this.anims.exists(animationKey)) continue
+          this.anims.create({
+            key: animationKey,
+            frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: asset.frames - 1 }),
+            frameRate: action === 'attack' ? 10 : action === 'walk' ? 8 : 4,
+            repeat: action === 'attack' ? 0 : -1,
+          })
+        }
+      }
+      this.player.on('animationcomplete', (animation) => {
+        if (!animation?.key?.endsWith('-attack')) return
+        this.playerAttacking = false
+        this.syncPlayerAnimation()
+      })
+    }
+
+    syncPlayerAnimation(forceAction = null) {
+      if (assets.player?.source !== 'rpg-main-character' || !this.player?.anims) return
+      const action = forceAction || (this.playerMoving ? 'walk' : 'idle')
+      const sheetDirection = this.playerFacing === 'up' ? 'up' : this.playerFacing === 'down' ? 'down' : 'side'
+      const animationKey = `dungeon-player-${sheetDirection}-${action}`
+      this.player.setFlipX?.(this.playerFacing === 'left')
+      if (this.anims.exists(animationKey) && this.player.anims.currentAnim?.key !== animationKey) {
+        this.player.play(animationKey, true)
+      }
+    }
+
     makeActor(x, y, kind) {
+      if (kind === 'player' && assets.player?.source === 'rpg-main-character' && this.textures.exists('dungeon-player-down-idle')) {
+        const visual = this.add.sprite(x, y, 'dungeon-player-down-idle', 0)
+        visual.setScale(0.5)
+        visual.setData('usesTexture', true)
+        return visual
+      }
+
       const key = kind === 'player' ? 'dungeon-player' : 'dungeon-enemy'
       const asset = kind === 'player' ? assets.player : assets.enemy
       if (this.textures.exists(key)) {
@@ -248,15 +343,19 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
       if (this.keys.D.isDown) dx += 1
       if (this.keys.W.isDown) dy -= 1
       if (this.keys.S.isDown) dy += 1
+
+      this.playerFacing = directionFromInput(dx, dy, this.playerFacing)
+      this.playerMoving = Boolean(dx || dy)
+
       if (dx || dy) {
         const length = Math.hypot(dx, dy) || 1
         this.playerState.x += (dx / length) * this.playerState.speed * dt
         this.playerState.y += (dy / length) * this.playerState.speed * dt
-        if (this.player.setFlipX && dx !== 0) this.player.setFlipX(dx < 0)
       }
       this.playerState.x = Phaser.Math.Clamp(this.playerState.x, TILE + 18, WIDTH - TILE - 18)
       this.playerState.y = Phaser.Math.Clamp(this.playerState.y, TILE + 18, HEIGHT - TILE - 18)
       this.player.setPosition(this.playerState.x, this.playerState.y)
+      if (!this.playerAttacking) this.syncPlayerAnimation()
     }
 
     updateEnemies(time, dt) {
@@ -317,8 +416,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, onStats = () =>
     }
 
     slash(target) {
+      const targetDx = target.x - this.playerState.x
+      const targetDy = target.y - this.playerState.y
+      this.playerFacing = directionFromInput(targetDx, targetDy, this.playerFacing)
+      if (assets.player?.source === 'rpg-main-character') {
+        this.playerAttacking = true
+        this.syncPlayerAnimation('attack')
+      }
+
       const result = rollDamage(this.playerState)
-      const angle = Math.atan2(target.y - this.playerState.y, target.x - this.playerState.x)
+      const angle = Math.atan2(targetDy, targetDx)
       const x = this.playerState.x + Math.cos(angle) * 34
       const y = this.playerState.y + Math.sin(angle) * 34
       const slash = this.add.arc(x, y, 34, -55, 55, false, result.critical ? 0xffdd6e : 0xeafbc9, 0.85)
