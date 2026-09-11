@@ -1,0 +1,94 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import {
+  AFFIXES,
+  affixSlots,
+  rollAffixes,
+  deriveEquipment,
+  affixSummary,
+} from './affixes.js'
+
+const sequence = (values) => {
+  let index = 0
+  return () => values[index++ % values.length]
+}
+
+test('affix catalog contains the approved 18 affixes', () => {
+  assert.equal(Object.keys(AFFIXES).length, 18)
+  for (const id of [
+    'power', 'attack_speed', 'critical', 'movement_speed', 'vitality', 'life_steal',
+    'piercing', 'chain', 'corpse_burst', 'critical_heal', 'hurt_haste', 'low_health_damage', 'skill_radius', 'skill_haste',
+    'whirlwind', 'thunder', 'executioner', 'berserker',
+  ]) assert.ok(AFFIXES[id], `missing ${id}`)
+})
+
+test('rarity maps to fixed affix slot counts', () => {
+  assert.equal(affixSlots('common'), 0)
+  assert.equal(affixSlots('uncommon'), 1)
+  assert.equal(affixSlots('rare'), 2)
+  assert.equal(affixSlots('epic'), 3)
+})
+
+test('build affixes are gated before floor three and forced boss rolls contain exactly one build identity', () => {
+  const floorTwo = rollAffixes(2, 'epic', sequence([0.99, 0.91, 0.83, 0.74, 0.61, 0.52, 0.43]))
+  assert.equal(floorTwo.length, 3)
+  assert.equal(floorTwo.some((affix) => AFFIXES[affix.id].category === 'build'), false)
+
+  const boss = rollAffixes(5, 'epic', sequence([0.1, 0.9, 0.4, 0.8, 0.3, 0.7]), { forceBuild: true })
+  assert.equal(boss.length, 3)
+  assert.equal(boss.filter((affix) => AFFIXES[affix.id].category === 'build').length, 1)
+  assert.equal(new Set(boss.map((affix) => affix.id)).size, boss.length)
+})
+
+test('higher floor rolls use stronger affix tiers', () => {
+  const low = rollAffixes(1, 'uncommon', () => 0)
+  const high = rollAffixes(5, 'uncommon', () => 0)
+  assert.equal(low[0].tier, 1)
+  assert.equal(high[0].tier, 3)
+  assert.ok(high[0].value >= low[0].value)
+})
+
+test('deriving equipment rebuilds stats instead of accumulating old weapon bonuses', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const strong = deriveEquipment(base, {
+    type: 'weapon.dungeon_blade', rarity: 'rare', damage: 12,
+    affixes: [{ id: 'power', tier: 1, value: 0.2 }, { id: 'critical', tier: 1, value: 0.05 }],
+  }, { hp: 60 })
+  const weak = deriveEquipment(base, {
+    type: 'weapon.dungeon_blade', rarity: 'uncommon', damage: 4,
+    affixes: [{ id: 'movement_speed', tier: 1, value: 0.08 }],
+  }, strong)
+
+  assert.ok(strong.damage > weak.damage)
+  assert.equal(weak.damage, 14)
+  assert.equal(weak.critChance, 0.18)
+  assert.ok(weak.speed > base.speed)
+})
+
+test('vitality increases max hp and grants the newly gained max hp on equip', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const result = deriveEquipment(base, {
+    type: 'weapon.dungeon_blade', rarity: 'uncommon', damage: 2,
+    affixes: [{ id: 'vitality', tier: 1, value: 20 }],
+  }, { hp: 55, maxHp: 100 })
+  assert.equal(result.maxHp, 120)
+  assert.equal(result.hp, 75)
+})
+
+test('derived effects expose normalized combat hooks and summary is compact', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const item = {
+    type: 'weapon.dungeon_blade', rarity: 'epic', damage: 9,
+    affixes: [
+      { id: 'life_steal', tier: 2, value: 0.08 },
+      { id: 'skill_haste', tier: 2, value: 0.16 },
+      { id: 'thunder', tier: 2, value: 0.45 },
+    ],
+  }
+  const result = deriveEquipment(base, item, { hp: 100, maxHp: 100 })
+  assert.equal(result.effects.lifeSteal, 0.08)
+  assert.equal(result.effects.skillHaste, 0.16)
+  assert.equal(result.effects.thunder, 0.45)
+  assert.equal(affixSummary(item).length, 3)
+})
