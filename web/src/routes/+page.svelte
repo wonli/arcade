@@ -11,6 +11,10 @@
   }
 
   function createRoom() {
+    if (game === 'dungeon') {
+      goto('/dungeon')
+      return
+    }
     if (game === 'snake' || game === 'drawguess') {
       goto(`/room/new/${game}`)
       return
@@ -20,7 +24,7 @@
 
   function joinRoom() {
     const code = roomCode.trim().toLowerCase()
-    if (!code) return
+    if (!code || game === 'dungeon') return
     goto(`/room/${code}/${game}`)
   }
 
@@ -28,17 +32,20 @@
     if (game === 'gomoku') return 'Gomoku'
     if (game === 'tetris') return 'Tetris Battle'
     if (game === 'snake') return 'Snake Arena'
-    return 'Draw & Guess'
+    if (game === 'drawguess') return 'Draw & Guess'
+    return 'Endless Dungeon'
   }
 
   function description() {
     if (game === 'gomoku') return 'Two players. Five in a row.'
     if (game === 'tetris') return players === 1 ? 'Solo practice. Just you and the stack.' : 'Your board. Their board. One survives.'
     if (game === 'snake') return '1–8 players. One arena. Host starts.'
-    return '2–8 players. Draw badly. Guess loudly.'
+    if (game === 'drawguess') return '2–8 players. Draw badly. Guess loudly.'
+    return 'WASD. Auto attacks. Loot everywhere. Go deeper.'
   }
 
   function createLabel() {
+    if (game === 'dungeon') return 'Enter the Dungeon'
     if (game === 'snake') return 'Create Snake Arena'
     if (game === 'drawguess') return 'Create Draw & Guess'
     if (game === 'gomoku') return 'Start 2 player Gomoku'
@@ -46,6 +53,7 @@
   }
 
   function helper() {
+    if (game === 'dungeon') return 'Combat prototype · solo · WASD + Space · gear upgrades immediately.'
     if (game === 'snake') return 'Create a lobby, invite up to 7 friends, then the host starts the arena.'
     if (game === 'drawguess') return 'Create a lobby, invite friends, then take turns drawing and guessing.'
     if (players === 2) return 'Create a room, share the invite, and the game starts when your friend joins.'
@@ -67,6 +75,7 @@
       <button class:active={game === 'tetris'} onclick={() => selectGame('tetris')}><span>02</span><strong>Tetris Battle</strong><small>Clear lines. Send garbage.</small></button>
       <button class:active={game === 'snake'} onclick={() => selectGame('snake')}><span>03</span><strong>Snake Arena</strong><small>1–8 players · Host starts</small></button>
       <button class:active={game === 'drawguess'} onclick={() => selectGame('drawguess')}><span>04</span><strong>Draw & Guess</strong><small>2–8 players · Host starts</small></button>
+      <button class:active={game === 'dungeon'} onclick={() => selectGame('dungeon')}><span>05</span><strong>Endless Dungeon</strong><small>Solo · Combat prototype</small></button>
     </div>
 
     <div class="home-game"><h1>{title()}</h1><p>{description()}</p></div>
@@ -80,11 +89,13 @@
 
     <button class="create" onclick={createRoom}>{createLabel()}</button>
 
-    <div class="divider"><span>or join</span></div>
-    <div class="join">
-      <input bind:value={roomCode} maxlength="6" autocomplete="off" placeholder="ROOM CODE" aria-label="Room code" onkeydown={(event) => event.key === 'Enter' && joinRoom()} />
-      <button onclick={joinRoom}>Join</button>
-    </div>
+    {#if game !== 'dungeon'}
+      <div class="divider"><span>or join</span></div>
+      <div class="join">
+        <input bind:value={roomCode} maxlength="6" autocomplete="off" placeholder="ROOM CODE" aria-label="Room code" onkeydown={(event) => event.key === 'Enter' && joinRoom()} />
+        <button onclick={joinRoom}>Join</button>
+      </div>
+    {/if}
     <small>{helper()}</small>
   </section>
 </main>
