@@ -1,18 +1,19 @@
 const WIZARD_FRAME_WIDTH = 26
 const WIZARD_FRAME_HEIGHT = 18
 const WIZARD_ANIMATION_FRAMES = 4
+const RPG_FRAME_SIZE = 64
 
 export function describeRpgMainCharacterAsset(path, width, height) {
-  if (height !== 128 || width % 64 !== 0) {
+  if (width % RPG_FRAME_SIZE !== 0 || height % RPG_FRAME_SIZE !== 0) {
     return { frames: 1, frameWidth: width, frameHeight: height, action: null, direction: null }
   }
 
   const lower = path.toLowerCase()
   const direction = lower.includes('_down') ? 'down' : lower.includes('_up') ? 'up' : lower.includes('_side') ? 'side' : null
   const action = lower.includes('attack') ? 'attack' : lower.includes('walk') ? 'walk' : lower.includes('idle') ? 'idle' : null
-  const frames = Math.floor(width / 64)
+  const frames = (width / RPG_FRAME_SIZE) * (height / RPG_FRAME_SIZE)
 
-  return { frames, frameWidth: 64, frameHeight: 128, action, direction }
+  return { frames, frameWidth: RPG_FRAME_SIZE, frameHeight: RPG_FRAME_SIZE, action, direction }
 }
 
 export function describeDungeonAsset(path, width, height) {
