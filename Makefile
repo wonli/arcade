@@ -29,7 +29,7 @@ LDFLAGS := -X '$(FLAGS_PKG).BuildDate=$(BUILD_DATE)' \
 
 GO_FLAGS := -trimpath -tags netgo -ldflags "$(LDFLAGS)"
 
-.PHONY: help setup deps frontend web-dev backend dev build start test clean
+.PHONY: help setup deps frontend web-dev backend dev build start test clean dungeon-assets
 
 help:
 	@echo "AQI Arcade"
@@ -50,13 +50,16 @@ setup:
 
 deps: setup
 
-frontend:
+dungeon-assets:
+	node ./scripts/prepare-dungeon-assets.mjs
+
+frontend: dungeon-assets
 	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) run build
 	@touch $(EMBED_DIR)/.gitkeep
 
 # Optional frontend-only workflow. The default project workflow does not need Vite.
-web-dev:
+web-dev: dungeon-assets
 	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) run dev -- --host 0.0.0.0
 
@@ -78,7 +81,7 @@ build: frontend
 start: build
 	./$(BUILD_PATH)/$(APP_NAME)
 
-test:
+test: dungeon-assets
 	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) test
 	cd $(WEB_DIR) && $(NPM) run build
