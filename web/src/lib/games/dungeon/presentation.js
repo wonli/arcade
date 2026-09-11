@@ -15,8 +15,22 @@ const PERCENT_PREFIX = new Set(['power', 'attack_speed', 'critical', 'movement_s
 const PERCENT_SUFFIX = new Set(['life_steal', 'piercing', 'chain', 'corpse_burst', 'hurt_haste', 'low_health_damage'])
 const BUILD = new Set(['whirlwind', 'thunder', 'executioner', 'berserker'])
 
+const COMBAT_VISUALS = {
+  thunder: { kind: 'chain-lightning', color: 0x8fdcff, width: 4, duration: 150 },
+  whirlwind: { kind: 'radial-slash', color: 0xc984ff, radius: 112, duration: 220 },
+  corpse_burst: { kind: 'corpse-burst', color: 0xff875f, radius: 82, duration: 260 },
+  piercing: { kind: 'pierce-trail', color: 0xeafbc9, length: 92, duration: 160 },
+  heal: { kind: 'heal-number', color: '#70ff9f', duration: 620 },
+  critical: { kind: 'critical-hit', color: '#ffdc68', shake: 0.006, duration: 120 },
+}
+
 function percent(value) {
   return Math.round((value ?? 0) * 100)
+}
+
+export function combatVisualCue(type) {
+  const cue = COMBAT_VISUALS[type]
+  return cue ? { ...cue } : null
 }
 
 export function formatAffixLabel(entry, locale = 'en') {
