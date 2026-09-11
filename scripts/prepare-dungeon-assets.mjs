@@ -3,7 +3,7 @@ import { chmodSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, mk
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describeDungeonAsset } from '../web/src/lib/games/dungeon/assets.js'
+import { describeDungeonAsset, describeRpgMainCharacterAsset } from '../web/src/lib/games/dungeon/assets.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const root = resolve(scriptDir, '..')
@@ -55,7 +55,7 @@ function walk(pack, dir) {
     if (!size) continue
     const layout = pack.source === 'debts'
       ? describeDungeonAsset(path, size.width, size.height)
-      : { frames: 1, frameWidth: size.width, frameHeight: size.height }
+      : describeRpgMainCharacterAsset(path, size.width, size.height)
 
     files.push({
       path,
@@ -77,9 +77,6 @@ for (const pack of packs) {
   const packAssets = walk(pack, pack.output).sort((a, b) => a.path.localeCompare(b.path))
   assets.push(...packAssets)
   console.log(`Prepared ${packAssets.length} ${pack.source} PNG assets`)
-  if (pack.source === 'rpg-main-character') {
-    for (const asset of packAssets) console.log(`RPG asset ${asset.width}x${asset.height} ${asset.path}`)
-  }
 }
 
 const manifest = {
