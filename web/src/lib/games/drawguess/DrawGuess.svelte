@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte'
+  import { mountCanvas } from './canvas.js'
 
   export let room
   export let roomCode
@@ -23,7 +24,6 @@
   let eraser = false
   let unsubscribe = () => {}
   let timer = null
-  let resizeObserver = null
   let audioContext = null
 
   const palette = ['#111111', '#ff5d5d', '#ffcf5a', '#c1ff56', '#65d5ff', '#a98bff']
@@ -168,21 +168,18 @@
     const stroke = { points, color, width, eraser }
     const tail = points[points.length - 1]
     pendingPoints = final ? [] : [tail]
+    state = { ...state, strokes: [...(state?.strokes ?? []), stroke] }
     socket.request('draw.stroke', { roomId: roomCode, stroke }).catch((err) => { error = err.message })
   }
 
-  function resizeCanvas() {
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const dpr = Math.max(1, window.devicePixelRatio || 1)
-    const nextWidth = Math.max(1, Math.round(rect.width * dpr))
-    const nextHeight = Math.max(1, Math.round(rect.height * dpr))
-    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-      canvas.width = nextWidth
-      canvas.height = nextHeight
-      context = canvas.getContext('2d')
-      redraw()
-    }
+  function canvasSurface(node) {
+    return mountCanvas(node, {
+      onReady(nextCanvas, nextContext) {
+        canvas = nextCanvas
+        context = nextContext
+        redraw()
+      },
+    })
   }
 
   function redraw() {
@@ -260,17 +257,12 @@
       }
     })
 
-    context = canvas?.getContext('2d')
-    resizeObserver = new ResizeObserver(resizeCanvas)
-    if (canvas) resizeObserver.observe(canvas)
-    resizeCanvas()
     applyState(room?.state, false)
     timer = setInterval(updateRemaining, 250)
 
     return () => {
       unsubscribe()
       if (timer) clearInterval(timer)
-      resizeObserver?.disconnect()
       audioContext?.close()
     }
   })
@@ -302,7 +294,7 @@
     <div class="game-grid">
       <div class="canvas-column">
         <div class:locked={!isDrawer()} class="canvas-frame">
-          <canvas bind:this={canvas} onpointerdown={pointerDown} onpointermove={pointerMove} onpointerup={pointerUp} onpointercancel={pointerUp} aria-label="Drawing canvas"></canvas>
+          <canvas bind:this={canvas} use:canvasSurface onpointerdown={pointerDown} onpointermove={pointerMove} onpointerup={pointerUp} onpointercancel={pointerUp} aria-label="Drawing canvas"></canvas>
           {#if !isDrawer() && state?.status === 'playing'}<div class="watching">WATCH & GUESS</div>{/if}
         </div>
 
