@@ -17,10 +17,7 @@ export function nearestTarget(player, enemies) {
 export function rollDamage(player, random = Math.random) {
   const critical = random() < (player.critChance ?? 0)
   const multiplier = critical ? (player.critMultiplier ?? 2) : 1
-  return {
-    damage: Math.round((player.damage ?? 1) * multiplier),
-    critical,
-  }
+  return { damage: Math.round((player.damage ?? 1) * multiplier), critical }
 }
 
 const EQUIPMENT_TABLES = {
@@ -54,67 +51,54 @@ export function rollEquipment(floor, random = Math.random) {
   else if (roll < rareEnd) rarity = 'rare'
   else if (roll < epicEnd) rarity = 'epic'
   if (!rarity) return null
-  return {
-    type: 'weapon.dungeon_blade',
-    rarity,
-    damage: damageForRarity(rarity, roll * 7.31),
-  }
+  return { type: 'weapon.dungeon_blade', rarity, damage: damageForRarity(rarity, roll * 7.31) }
 }
 
 export function rollPotion(random = Math.random) {
   if (random() >= 0.12) return null
-  return {
-    type: 'consumable.health_potion',
-    rarity: 'common',
-    heal: 28,
-  }
+  return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
 }
 
 export function enemyArchetype(floor, random = Math.random, { elite = false } = {}) {
-  if (elite) {
-    return {
-      type: 'brute',
-      hpMultiplier: 2.8 + Math.max(0, floor - 1) * 0.08,
-      speedMultiplier: 0.72,
-      scale: 1.35,
-      contactDamage: 18,
-      elite: true,
-    }
-  }
+  if (elite) return { ...bossProfile(floor), type: 'brute', elite: true, boss: true, speedMultiplier: 0.78 }
   const roll = random()
-  if (roll < 0.5) {
-    return { type: 'skeleton', hpMultiplier: 1, speedMultiplier: 1, scale: 1, contactDamage: 10, elite: false }
+  if (roll < 0.5) return { type: 'skeleton', hpMultiplier: 1, speedMultiplier: 1, scale: 1, contactDamage: 10, elite: false, boss: false }
+  if (roll < 0.78) return { type: 'fast', hpMultiplier: 0.65, speedMultiplier: 1.55, scale: 0.9, contactDamage: 8, elite: false, boss: false }
+  return { type: 'brute', hpMultiplier: 1.75, speedMultiplier: 0.72, scale: 1.2, contactDamage: 14, elite: false, boss: false }
+}
+
+export function bossProfile(floor = 5) {
+  const level = Math.max(1, Math.min(5, Math.floor(floor || 5)))
+  return {
+    hpMultiplier: 6.4 + Math.max(0, level - 4) * 0.35,
+    scale: 1.75,
+    contactDamage: 24,
+    phaseThreshold: 0.5,
+    chargeCooldown: 3800,
+    shockwaveCooldown: 5200,
   }
-  if (roll < 0.78) {
-    return { type: 'fast', hpMultiplier: 0.65, speedMultiplier: 1.55, scale: 0.9, contactDamage: 8, elite: false }
+}
+
+export function bossReward(random = Math.random) {
+  const roll = random()
+  const rarity = roll >= 0.72 ? 'epic' : 'rare'
+  return {
+    type: 'weapon.dungeon_blade',
+    rarity,
+    damage: rarity === 'epic' ? 12 : 8,
   }
-  return { type: 'brute', hpMultiplier: 1.75, speedMultiplier: 0.72, scale: 1.2, contactDamage: 14, elite: false }
 }
 
 export function floorWave(floor) {
   const level = Math.max(1, Math.min(5, Math.floor(floor || 1)))
-  return {
-    count: 10 + level * 2,
-    eliteCount: level === 5 ? 1 : 0,
-  }
+  if (level === 5) return { count: 9, eliteCount: 1 }
+  return { count: 10 + level * 2, eliteCount: 0 }
 }
 
 export function rollDrop(_floor, random = Math.random) {
   const roll = random()
-  if (roll < 0.18) {
-    return {
-      type: 'weapon.rust_sword',
-      rarity: 'uncommon',
-      damage: 3,
-    }
-  }
-  if (roll < 0.30) {
-    return {
-      type: 'consumable.health_potion',
-      rarity: 'common',
-      heal: 28,
-    }
-  }
+  if (roll < 0.18) return { type: 'weapon.rust_sword', rarity: 'uncommon', damage: 3 }
+  if (roll < 0.30) return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
   return null
 }
 
@@ -130,10 +114,7 @@ export function applyPickup(player, item) {
   }
   if (item.type === 'consumable.health_potion') {
     const maxHp = player.maxHp ?? player.hp ?? 0
-    return {
-      ...player,
-      hp: Math.min(maxHp, (player.hp ?? 0) + (item.heal ?? 0)),
-    }
+    return { ...player, hp: Math.min(maxHp, (player.hp ?? 0) + (item.heal ?? 0)) }
   }
   return { ...player }
 }
