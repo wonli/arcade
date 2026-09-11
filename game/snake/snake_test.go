@@ -82,17 +82,28 @@ func TestHeadToHeadKillsBothSnakes(t *testing.T) {
 	}
 }
 
-func TestLastAlivePlayerWins(t *testing.T) {
+func TestDeadSnakeIsClearedAndLastSurvivorKeepsPlaying(t *testing.T) {
 	g := New([]Player{{ID: "p1", Name: "Player 1"}, {ID: "p2", Name: "Player 2"}}, fixedRandom)
 	g.state.Snakes[0].Body = []Point{{X: Width - 1, Y: 5}, {X: Width - 2, Y: 5}, {X: Width - 3, Y: 5}}
 	g.state.Snakes[0].Direction = Right
 	g.state.Snakes[1].Body = []Point{{X: 10, Y: 10}, {X: 9, Y: 10}, {X: 8, Y: 10}}
 	g.state.Snakes[1].Direction = Right
+
 	state := g.Tick()
-	if state.Status != game.StatusFinished {
-		t.Fatalf("status = %q, want finished", state.Status)
+	if state.Snakes[0].Alive {
+		t.Fatal("p1 should be dead")
 	}
-	if state.Winner != "p2" {
-		t.Fatalf("winner = %q, want p2", state.Winner)
+	if len(state.Snakes[0].Body) != 0 {
+		t.Fatalf("dead snake body = %#v, want cleared body", state.Snakes[0].Body)
+	}
+	if state.Status != game.StatusPlaying {
+		t.Fatalf("status = %q, want playing while p2 is alive", state.Status)
+	}
+
+	before := state.Snakes[1].Body[0]
+	state = g.Tick()
+	after := state.Snakes[1].Body[0]
+	if after.X != before.X+1 || after.Y != before.Y {
+		t.Fatalf("survivor head = %#v, want one cell right from %#v", after, before)
 	}
 }
