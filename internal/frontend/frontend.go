@@ -52,10 +52,9 @@ func registerFS(engine *gin.Engine, root fs.FS) {
 			return
 		}
 
-		// Room codes are runtime values, so adapter-static cannot prerender each
-		// possible room. Its fallback document boots the SvelteKit client router
-		// for clean URLs such as /room/ABC123.
-		if name == "room" || strings.HasPrefix(name, "room/") {
+		// Runtime client routes cannot all be prerendered. The fallback document
+		// boots the SvelteKit client router for clean URLs.
+		if name == "room" || strings.HasPrefix(name, "room/") || name == "dungeon" || strings.HasPrefix(name, "dungeon/") {
 			serveHTML(c, root, "200.html")
 			return
 		}
