@@ -1,19 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome } from './scene.js'
+import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor } from './scene.js'
 
 const manifest = {
   assets: [
-    { path: '/assets/rpg-main-character/_down idle.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'down' },
-    { path: '/assets/rpg-main-character/_down walk.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'down' },
-    { path: '/assets/rpg-main-character/_down attack.png', width: 128, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'down' },
-    { path: '/assets/rpg-main-character/_side idle.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'side' },
-    { path: '/assets/rpg-main-character/_side walk.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'side' },
-    { path: '/assets/rpg-main-character/_side attack.png', width: 128, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'side' },
-    { path: '/assets/rpg-main-character/_up idle.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'up' },
-    { path: '/assets/rpg-main-character/_up walk.png', width: 256, height: 128, frames: 8, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'up' },
-    { path: '/assets/rpg-main-character/_up attack.png', width: 128, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'up' },
+    { path: '/assets/rpg-main-character/_down idle.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'down' },
+    { path: '/assets/rpg-main-character/_down walk.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'down' },
+    { path: '/assets/rpg-main-character/_down attack.png', width: 128, height: 128, frames: 2, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'down' },
+    { path: '/assets/rpg-main-character/_side idle.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'side' },
+    { path: '/assets/rpg-main-character/_side walk.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'side' },
+    { path: '/assets/rpg-main-character/_side attack.png', width: 128, height: 128, frames: 2, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'side' },
+    { path: '/assets/rpg-main-character/_up idle.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'idle', direction: 'up' },
+    { path: '/assets/rpg-main-character/_up walk.png', width: 256, height: 128, frames: 4, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'walk', direction: 'up' },
+    { path: '/assets/rpg-main-character/_up attack.png', width: 128, height: 128, frames: 2, frameWidth: 64, frameHeight: 64, source: 'rpg-main-character', action: 'attack', direction: 'up' },
+    { path: '/assets/debts/Creatures/Skeleton.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Creatures/Bat.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Creatures/Dragon.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
@@ -21,12 +24,14 @@ const manifest = {
   ],
 }
 
-test('prefers the new RPG main character while keeping old dungeon assets', () => {
+test('prefers the RPG player and resolves distinct enemy role assets', () => {
   const assets = chooseDungeonAssets(manifest)
   assert.equal(assets.player.source, 'rpg-main-character')
   assert.equal(assets.player.down.walk.path, '/assets/rpg-main-character/_down walk.png')
-  assert.equal(assets.player.side.attack.frames, 4)
-  assert.equal(assets.enemy.source, 'debts')
+  assert.equal(assets.enemies.skeleton.path, '/assets/debts/Creatures/Skeleton.png')
+  assert.equal(assets.enemies.fast.path, '/assets/debts/Creatures/Bat.png')
+  assert.equal(assets.enemies.brute.path, '/assets/debts/Creatures/Dragon.png')
+  assert.notEqual(assets.enemies.skeleton.path, assets.enemies.fast.path)
   assert.equal(assets.floor.source, 'debts')
   assert.equal(assets.wall.source, 'debts')
   assert.equal(assets.weapon.source, 'debts')
@@ -52,4 +57,8 @@ test('clearing floors one through four opens a portal and floor five completes t
   assert.equal(floorOutcome(4, 0), 'portal')
   assert.equal(floorOutcome(5, 0), 'complete')
   assert.equal(floorOutcome(5, 1), 'combat')
+})
+
+test('five floors rotate through three authored room layouts', () => {
+  assert.deepEqual([1, 2, 3, 4, 5].map(roomLayoutForFloor), ['pillars', 'cross', 'broken-hall', 'pillars', 'cross'])
 })
