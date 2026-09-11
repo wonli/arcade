@@ -7,8 +7,20 @@ import { describeDungeonAsset } from '../web/src/lib/games/dungeon/assets.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const root = resolve(scriptDir, '..')
-const archive = join(root, 'assets', 'DebtsInTheDepthsAssets.zip')
-const output = join(root, 'web', 'static', 'assets', 'debts')
+const packs = [
+  {
+    source: 'debts',
+    archive: join(root, 'assets', 'DebtsInTheDepthsAssets.zip'),
+    output: join(root, 'web', 'static', 'assets', 'debts'),
+    publicBase: '/assets/debts/',
+  },
+  {
+    source: 'rpg-main-character',
+    archive: join(root, 'assets', 'RPGMCharacter_v1.0.zip'),
+    output: join(root, 'web', 'static', 'assets', 'rpg-main-character'),
+    publicBase: '/assets/rpg-main-character/',
+  },
+]
 
 function makeWritable(target) {
   if (!existsSync(target)) return
@@ -21,34 +33,33 @@ function makeWritable(target) {
   chmodSync(target, 0o644)
 }
 
-makeWritable(output)
-rmSync(output, { recursive: true, force: true })
-mkdirSync(output, { recursive: true })
-execFileSync('unzip', ['-q', '-o', archive, '-d', output], { stdio: 'inherit' })
-
 function pngSize(file) {
   const header = readFileSync(file).subarray(0, 24)
   if (header.length < 24 || header.toString('ascii', 1, 4) !== 'PNG') return null
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
 }
 
-function walk(dir) {
+function walk(pack, dir) {
   const files = []
   for (const name of readdirSync(dir)) {
     const full = join(dir, name)
     const stat = statSync(full)
     if (stat.isDirectory()) {
-      files.push(...walk(full))
+      files.push(...walk(pack, full))
       continue
     }
     if (!/\.png$/i.test(name)) continue
 
-    const path = '/assets/debts/' + relative(output, full).split('\\').join('/')
+    const path = pack.publicBase + relative(pack.output, full).split('\\').join('/')
     const size = pngSize(full)
     if (!size) continue
-    const layout = describeDungeonAsset(path, size.width, size.height)
+    const layout = pack.source === 'debts'
+      ? describeDungeonAsset(path, size.width, size.height)
+      : { frames: 1, frameWidth: size.width, frameHeight: size.height }
+
     files.push({
       path,
+      source: pack.source,
       width: size.width,
       height: size.height,
       ...layout,
@@ -57,13 +68,29 @@ function walk(dir) {
   return files
 }
 
-const assets = walk(output).sort((a, b) => a.path.localeCompare(b.path))
+const assets = []
+for (const pack of packs) {
+  makeWritable(pack.output)
+  rmSync(pack.output, { recursive: true, force: true })
+  mkdirSync(pack.output, { recursive: true })
+  execFileSync('unzip', ['-q', '-o', pack.archive, '-d', pack.output], { stdio: 'inherit' })
+  const packAssets = walk(pack, pack.output).sort((a, b) => a.path.localeCompare(b.path))
+  assets.push(...packAssets)
+  console.log(`Prepared ${packAssets.length} ${pack.source} PNG assets`)
+  if (pack.source === 'rpg-main-character') {
+    for (const asset of packAssets) console.log(`RPG asset ${asset.width}x${asset.height} ${asset.path}`)
+  }
+}
+
 const manifest = {
-  source: 'Debts in the Depths by Reaktori',
-  license: 'CC0-1.0',
-  assets,
+  sources: [
+    { id: 'debts', name: 'Debts in the Depths by Reaktori', license: 'CC0-1.0' },
+    { id: 'rpg-main-character', name: 'RPG Main Character by Szadi art.' },
+  ],
+  assets: assets.sort((a, b) => a.path.localeCompare(b.path)),
   png: assets.map((asset) => asset.path),
 }
 
-writeFileSync(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
-console.log(`Prepared ${manifest.assets.length} dungeon PNG assets`)
+const manifestDir = join(root, 'web', 'static', 'assets', 'debts')
+writeFileSync(join(manifestDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+console.log(`Prepared ${manifest.assets.length} dungeon PNG assets total`)
