@@ -66,6 +66,15 @@ export function createGame(random = Math.random) {
   }
 }
 
+export function previewBoard(piece) {
+  const board = Array.from({ length: 4 }, () => Array(4).fill(0))
+  if (!piece) return board
+  for (const [x, y] of piece.cells) {
+    if (x >= 0 && x < 4 && y >= 0 && y < 4) board[y][x] = piece.value
+  }
+  return board
+}
+
 export function move(state, dx, dy = 0) {
   const active = { ...cloneActive(state.active), x: state.active.x + dx, y: state.active.y + dy }
   if (!fits(state.board, active)) return { state, events: [] }
@@ -91,8 +100,8 @@ function clearLines(board) {
 }
 
 function attackFor(lines, combo) {
-  const base = [0, 0, 1, 2, 4][Math.min(lines, 4)] ?? 0
-  return base + (combo >= 3 ? 1 : 0)
+  const base = [0, 0, 1, 2, 4][lines] ?? Math.max(0, lines)
+  return base + (combo >= 2 ? Math.floor(combo / 2) : 0)
 }
 
 function lock(state, random = Math.random) {
@@ -100,44 +109,35 @@ function lock(state, random = Math.random) {
   for (const [x, y] of state.active.cells) {
     const bx = state.active.x + x
     const by = state.active.y + y
-    if (by >= 0 && by < HEIGHT && bx >= 0 && bx < WIDTH) board[by][bx] = state.active.value
+    if (by >= 0 && by < HEIGHT) board[by][bx] = state.active.value
   }
 
   const cleared = clearLines(board)
   const combo = cleared.lines > 0 ? state.combo + 1 : 0
-  const events = [{ type: 'lock' }]
-  if (cleared.lines > 0) {
-    events.push({ type: 'clear', lines: cleared.lines, attack: attackFor(cleared.lines, combo) })
-  }
-
+  const attack = attackFor(cleared.lines, combo)
   const nextSerial = state.pieceSerial + 1
-  const active = state.next ? cloneActive(state.next) : randomPiece(random, nextSerial)
-  active.x = 3
-  active.y = 0
+  const active = { ...cloneActive(state.next), x: 3, y: 0 }
   const next = randomPiece(random, nextSerial)
-  const status = fits(cleared.board, active) ? 'playing' : 'gameover'
-  if (status === 'gameover') events.push({ type: 'gameover' })
-
-  return {
-    state: {
-      ...state,
-      board: cleared.board,
-      active,
-      next,
-      pieceSerial: nextSerial,
-      lines: state.lines + cleared.lines,
-      score: state.score + [0, 100, 300, 500, 800][Math.min(cleared.lines, 4)],
-      combo,
-      status,
-    },
-    events,
+  const nextState = {
+    ...state,
+    board: cleared.board,
+    active,
+    next,
+    pieceSerial: nextSerial,
+    lines: state.lines + cleared.lines,
+    score: state.score + cleared.lines * cleared.lines * 100 + 10,
+    combo,
   }
+  const events = [{ type: 'lock' }]
+  if (cleared.lines > 0) events.push({ type: 'clear', lines: cleared.lines, attack })
+  if (!fits(nextState.board, active)) nextState.status = 'gameover'
+  return { state: nextState, events }
 }
 
 export function tick(state, random = Math.random) {
   if (state.status !== 'playing') return { state, events: [] }
   const moved = move(state, 0, 1)
-  if (moved.state !== state) return moved
+  if (moved.state !== state) return { state: moved.state, events: [] }
   return lock(state, random)
 }
 
@@ -149,26 +149,16 @@ export function hardDrop(state, random = Math.random) {
 }
 
 export function addGarbage(state, lines, random = Math.random) {
-  if (lines <= 0 || state.status !== 'playing') return { state, events: [] }
-
+  if (state.status !== 'playing' || lines <= 0) return { state, events: [] }
   const board = cloneBoard(state.board)
-  let toppedOut = false
   for (let i = 0; i < lines; i++) {
-    const removed = board.shift()
-    if (removed.some((cell) => cell !== 0)) toppedOut = true
-    const hole = Math.min(WIDTH - 1, Math.floor(random() * WIDTH))
-    board.push(Array.from({ length: WIDTH }, (_, x) => (x === hole ? 0 : 8)))
+    board.shift()
+    const hole = Math.floor(random() * WIDTH)
+    board.push(Array.from({ length: WIDTH }, (_, x) => x === hole ? 0 : 8))
   }
-
-  const active = { ...cloneActive(state.active), y: Math.max(0, state.active.y - lines) }
-  const status = toppedOut || !fits(board, active) ? 'gameover' : state.status
-  const events = [{ type: 'garbage', lines }]
-  if (status === 'gameover') events.push({ type: 'gameover' })
-
-  return {
-    state: { ...state, board, active, status },
-    events,
-  }
+  const nextState = { ...state, board }
+  if (!fits(board, nextState.active)) nextState.status = 'gameover'
+  return { state: nextState, events: [{ type: 'garbage', lines }] }
 }
 
 export function visibleBoard(state) {
@@ -177,7 +167,7 @@ export function visibleBoard(state) {
   for (const [x, y] of state.active.cells) {
     const bx = state.active.x + x
     const by = state.active.y + y
-    if (by >= 0 && by < HEIGHT && bx >= 0 && bx < WIDTH) board[by][bx] = state.active.value
+    if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) board[by][bx] = state.active.value
   }
   return board
 }
