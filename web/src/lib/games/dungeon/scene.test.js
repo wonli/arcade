@@ -17,6 +17,7 @@ const manifest = {
     { path: '/assets/debts/Creatures/Skeleton.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Creatures/Bat.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Creatures/Dragon.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Characters/Wizard.png', width: 182, height: 18, frames: 4, frameWidth: 26, frameHeight: 18, source: 'debts' },
     { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
@@ -31,7 +32,9 @@ test('prefers the RPG player and resolves distinct enemy role assets', () => {
   assert.equal(assets.enemies.skeleton.path, '/assets/debts/Creatures/Skeleton.png')
   assert.equal(assets.enemies.fast.path, '/assets/debts/Creatures/Bat.png')
   assert.equal(assets.enemies.brute.path, '/assets/debts/Creatures/Dragon.png')
+  assert.equal(assets.enemies.ranged.path, '/assets/debts/Characters/Wizard.png')
   assert.notEqual(assets.enemies.skeleton.path, assets.enemies.fast.path)
+  assert.notEqual(assets.enemies.ranged.path, assets.enemies.brute.path)
   assert.equal(assets.floor.source, 'debts')
   assert.equal(assets.wall.source, 'debts')
   assert.equal(assets.weapon.source, 'debts')
