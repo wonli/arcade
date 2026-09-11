@@ -1,0 +1,10 @@
+port: 8080
+devMode: true
+log:
+  logFile: arcade.log
+  logPath: logs
+  maxSize: 50
+  maxBackups: 3
+  maxAge: 7
+  compress: true
+  useCaller: true
