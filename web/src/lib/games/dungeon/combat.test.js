@@ -12,6 +12,10 @@ import {
   bossReward,
   applyPickup,
   modifiedDamage,
+  attackInterval,
+  skillProfile,
+  healFromHit,
+  secondaryTarget,
 } from './combat.js'
 import { AFFIXES, affixSlots } from './affixes.js'
 
@@ -132,6 +136,42 @@ test('target-aware modifiers reward low-health and executioner builds', () => {
   assert.equal(base, 20)
   assert.equal(lowHealth, 25)
   assert.equal(execute, 30)
+})
+
+test('attack interval combines equipment speed, berserker missing hp, and hurt haste', () => {
+  const normal = attackInterval({ hp: 100, maxHp: 100, effects: {} }, 1000)
+  const geared = attackInterval({ hp: 100, maxHp: 100, effects: { attackSpeed: 0.2 } }, 1000)
+  const berserk = attackInterval({ hp: 25, maxHp: 100, effects: { attackSpeed: 0.2, berserker: 0.4 } }, 1000)
+  const hurt = attackInterval({ hp: 100, maxHp: 100, effects: { hurtHaste: 0.25 }, hasteUntil: 1500 }, 1000)
+  assert.ok(geared < normal)
+  assert.ok(berserk < geared)
+  assert.ok(hurt < normal)
+})
+
+test('skill profile scales radius up and cooldown down', () => {
+  assert.deepEqual(skillProfile({ effects: {} }), { radius: 130, cooldown: 4200 })
+  const boosted = skillProfile({ effects: { skillRadius: 0.25, skillHaste: 0.2 } })
+  assert.equal(boosted.radius, 163)
+  assert.equal(boosted.cooldown, 3360)
+})
+
+test('hit healing combines direct life steal and critical heal only for direct hits', () => {
+  const player = { effects: { lifeSteal: 0.1, criticalHeal: 6 } }
+  assert.equal(healFromHit(player, 50, false, { direct: true }), 5)
+  assert.equal(healFromHit(player, 50, true, { direct: true }), 11)
+  assert.equal(healFromHit(player, 50, true, { direct: false }), 0)
+})
+
+test('secondaryTarget excludes dead and primary enemies and respects range', () => {
+  const primary = { id: 'primary', x: 100, y: 100, hp: 20 }
+  const enemies = [
+    primary,
+    { id: 'dead', x: 105, y: 100, hp: 0 },
+    { id: 'near', x: 135, y: 100, hp: 20 },
+    { id: 'far', x: 400, y: 100, hp: 20 },
+  ]
+  assert.equal(secondaryTarget(primary, enemies, 120)?.id, 'near')
+  assert.equal(secondaryTarget(primary, [primary, enemies[1], enemies[3]], 120), null)
 })
 
 test('picking up a health potion heals without exceeding max hp', () => {
