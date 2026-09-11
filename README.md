@@ -28,6 +28,7 @@ Room links include both the room and game:
 http://localhost:8080/room/b2heyg/gomoku
 http://localhost:8080/room/b2heyg/tetris
 http://localhost:8080/room/b2heyg/snake
+http://localhost:8080/room/b2heyg/drawguess
 ```
 
 ## Development
@@ -79,6 +80,7 @@ http://localhost:8080/
 ├── /room/:code/gomoku       Gomoku room
 ├── /room/:code/tetris       Tetris Battle room
 ├── /room/:code/snake        Snake Arena room
+├── /room/:code/drawguess    Draw & Guess room
 ├── /_app/*                   embedded SvelteKit assets
 ├── /health                   Gin health endpoint
 └── /ws                       AQI WebSocket
@@ -121,9 +123,19 @@ Arrow keys / WASD    change direction
 
 The shared board shows every snake at once with a live leaderboard. Food, deaths, match start, and victory use lightweight Web Audio cues with no external sound assets.
 
+### Draw & Guess
+
+Draw & Guess supports 2–8 players. The host starts from the lobby, then every player gets one 60-second drawing round. The server owns the current drawer, secret word, deadline, guessed-player set, scoring, round rotation, and final winners.
+
+The drawer uses a native canvas with colors, brush sizes, eraser, and clear. Drawing is synchronized as normalized stroke segments rather than images, so different viewport sizes can reproduce the same picture and a refresh can restore the complete canvas from room state.
+
+Guessers type into a shared chat. Wrong guesses are visible to everyone. Correct answers are never echoed back into the room topic; other players only see that somebody guessed correctly. Correct guessers earn 50–100 points based on remaining time and the drawer earns 30 points per successful guesser.
+
+The secret answer is private state: public room snapshots and AQI Pub/Sub payloads never contain it. Only the authenticated current drawer can retrieve it through the direct `draw.privateState` action.
+
 ## Realtime models
 
-The three games deliberately exercise different realtime models.
+The games deliberately exercise different realtime models.
 
 ```text
 Gomoku
@@ -162,6 +174,19 @@ Full world state via room topic
 All players render the same arena
 ```
 
+```text
+Draw & Guess
+Drawer stroke / player guess
+  ↓
+AQI WebSocket
+  ↓
+Server-owned round + private answer + scoring
+  ↓
+Incremental strokes / redacted chat / public state
+  ↓
+Room topic
+```
+
 Guest identity uses a persistent player identity and a per-tab session identity. Room seats are tab-scoped so multiple tabs in one browser can join the same room as separate players.
 
 ## Design principles
@@ -170,6 +195,7 @@ Guest identity uses a persistent player identity and a per-tab session identity.
 - One shared room/lobby model for every game.
 - Use the network model that fits the game instead of forcing every game through one interface.
 - Game rules and simulations stay independent from transport and UI.
+- Public room state must not leak game-private information.
 - AQI owns realtime transport, identity lifecycle, and Pub/Sub plumbing.
 - Do not invent abstractions before another game proves they are needed.
 
