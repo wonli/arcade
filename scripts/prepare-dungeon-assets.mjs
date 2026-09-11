@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -90,4 +90,10 @@ const manifest = {
 
 const manifestDir = join(root, 'web', 'static', 'assets', 'debts')
 writeFileSync(join(manifestDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
+
+const dungeonAudioDir = join(root, 'web', 'static', 'assets', 'dungeon')
+mkdirSync(dungeonAudioDir, { recursive: true })
+copyFileSync(join(root, 'assets', 'm1.m4a'), join(dungeonAudioDir, 'm1.m4a'))
+
 console.log(`Prepared ${manifest.assets.length} dungeon PNG assets total`)
+console.log('Prepared dungeon music asset m1.m4a')
