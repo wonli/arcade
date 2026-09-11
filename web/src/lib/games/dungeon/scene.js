@@ -1,6 +1,7 @@
 import { createDungeonAmbient } from './ambient.js'
 import {
   applyPickup,
+  bossReward,
   enemyArchetype,
   floorWave,
   nearestTarget,
@@ -55,6 +56,39 @@ export function floorOutcome(floor, livingEnemies) {
   return floor >= 5 ? 'complete' : 'portal'
 }
 
+export function roomLayoutForFloor(floor) {
+  return ['pillars', 'cross', 'broken-hall'][(Math.max(1, Math.floor(floor || 1)) - 1) % 3]
+}
+
+function roomDescriptor(floor) {
+  const name = roomLayoutForFloor(floor)
+  if (name === 'cross') {
+    return {
+      name,
+      pillars: [[WIDTH / 2 - 120, HEIGHT / 2], [WIDTH / 2 + 120, HEIGHT / 2]],
+      blocks: [[WIDTH / 2, 132, 210, 18], [WIDTH / 2, HEIGHT - 132, 210, 18], [228, HEIGHT / 2, 18, 150], [WIDTH - 228, HEIGHT / 2, 18, 150]],
+      torches: [[WIDTH / 2 - 170, 92], [WIDTH / 2 + 170, 92], [WIDTH / 2 - 170, HEIGHT - 92], [WIDTH / 2 + 170, HEIGHT - 92]],
+      spawnPoints: [[120, 92], [WIDTH - 120, 92], [120, HEIGHT - 92], [WIDTH - 120, HEIGHT - 92], [WIDTH / 2, 82], [WIDTH / 2, HEIGHT - 82]],
+    }
+  }
+  if (name === 'broken-hall') {
+    return {
+      name,
+      pillars: [[188, 176], [WIDTH - 188, HEIGHT - 176], [WIDTH / 2 + 76, 164]],
+      blocks: [[300, 260, 170, 18], [WIDTH - 280, 346, 190, 18], [WIDTH / 2, 454, 140, 18]],
+      torches: [[112, 86], [WIDTH - 110, 122], [164, HEIGHT - 92], [WIDTH - 150, HEIGHT - 82]],
+      spawnPoints: [[92, 110], [WIDTH - 92, 120], [110, HEIGHT - 94], [WIDTH - 110, HEIGHT - 108], [WIDTH / 2 + 170, 92], [WIDTH / 2 - 160, HEIGHT - 90]],
+    }
+  }
+  return {
+    name,
+    pillars: [[144, 144], [WIDTH - 144, 144], [144, HEIGHT - 144], [WIDTH - 144, HEIGHT - 144]],
+    blocks: [],
+    torches: [[96, 72], [WIDTH - 96, 72], [96, HEIGHT - 72], [WIDTH - 96, HEIGHT - 72]],
+    spawnPoints: [[90, 90], [WIDTH - 90, 90], [90, HEIGHT - 90], [WIDTH - 90, HEIGHT - 90], [WIDTH / 2, 80], [WIDTH / 2, HEIGHT - 80]],
+  }
+}
+
 export function chooseDungeonAssets(manifest = {}) {
   const all = normalizeAssets(manifest)
   const rpgAssets = all.filter((asset) => asset.source === 'rpg-main-character')
@@ -67,9 +101,17 @@ export function chooseDungeonAssets(manifest = {}) {
     side: { idle: chooseRpgAnimation(all, 'side', 'idle'), walk: chooseRpgAnimation(all, 'side', 'walk'), attack: chooseRpgAnimation(all, 'side', 'attack') },
   } : chooseAsset(oldAssets, [/wizard/i, /hero/i, /player/i, /knight/i, /character/i])
 
+  const genericEnemy = chooseAsset(oldAssets, [/skeleton/i, /slime/i, /blob/i, /goblin/i, /bat/i, /rat/i, /dragon/i, /creature/i, /monster/i])
+  const enemies = {
+    skeleton: chooseAsset(oldAssets, [/skeleton/i, /skull/i, /goblin/i]) || genericEnemy,
+    fast: chooseAsset(oldAssets, [/bat/i, /rat/i, /slime/i, /blob/i]) || genericEnemy,
+    brute: chooseAsset(oldAssets, [/dragon/i, /ogre/i, /brute/i, /golem/i, /monster/i, /goblin/i]) || genericEnemy,
+  }
+
   return {
     player,
-    enemy: chooseAsset(oldAssets, [/slime/i, /blob/i, /skeleton/i, /skull/i, /goblin/i, /bat/i, /rat/i, /creature/i, /monster/i]),
+    enemy: enemies.skeleton || genericEnemy,
+    enemies,
     floor: chooseAsset(oldAssets, [/floor/i, /ground/i, /brick/i, /stone/i, /tile/i], (asset) => asset.frames === 1),
     wall: chooseAsset(oldAssets, [/wall/i, /brick/i, /stone/i, /brimstone/i], (asset) => asset.frames === 1),
     weapon: chooseAsset(oldAssets, [/sword/i, /blade/i, /weapon/i, /axe/i, /staff/i, /bow/i, /item/i]),
@@ -95,6 +137,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.enemies = []
       this.drops = []
       this.portal = null
+      this.arenaObjects = []
+      this.spawnPoints = []
       this.kills = 0
       this.floorKills = 0
       this.floor = 1
@@ -109,7 +153,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     preload() {
       this.loadPlayerAssets()
-      this.loadAsset('dungeon-enemy', assets.enemy)
+      for (const type of ['skeleton', 'fast', 'brute']) this.loadAsset(`dungeon-enemy-${type}`, assets.enemies?.[type] || assets.enemy)
       this.loadAsset('dungeon-floor', assets.floor)
       this.loadAsset('dungeon-wall', assets.wall)
       this.loadAsset('dungeon-weapon', assets.weapon)
@@ -150,8 +194,21 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.emitStats()
     }
 
+    trackArena(object) {
+      if (object) this.arenaObjects.push(object)
+      return object
+    }
+
+    clearArena() {
+      for (const object of this.arenaObjects) object?.destroy?.()
+      this.arenaObjects = []
+    }
+
     drawArena() {
-      const graphics = this.add.graphics().setDepth(0)
+      this.clearArena()
+      const layout = roomDescriptor(this.floor)
+      this.spawnPoints = layout.spawnPoints
+      const graphics = this.trackArena(this.add.graphics().setDepth(0))
       graphics.fillStyle(0x080a0d, 1).fillRect(0, 0, WIDTH, HEIGHT)
       const left = TILE, top = TILE, right = WIDTH - TILE, bottom = HEIGHT - TILE
       for (let y = top; y < bottom; y += TILE) {
@@ -172,19 +229,20 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         this.addWallTile(left / 2, y + TILE / 2)
         this.addWallTile(WIDTH - left / 2, y + TILE / 2)
       }
-      this.drawPillar(144, 144)
-      this.drawPillar(WIDTH - 144, 144)
-      this.drawPillar(144, HEIGHT - 144)
-      this.drawPillar(WIDTH - 144, HEIGHT - 144)
-      for (const [x, y] of [[96, 72], [WIDTH - 96, 72], [96, HEIGHT - 72], [WIDTH - 96, HEIGHT - 72]]) {
-        const glow = this.add.circle(x, y, 34, 0xff8a3d, 0.07).setDepth(4)
+      for (const [x, y] of layout.pillars) this.drawPillar(x, y)
+      for (const [x, y, width, height] of layout.blocks) {
+        this.trackArena(this.add.rectangle(x + 5, y + 7, width, height, 0x050607, 0.35).setDepth(4))
+        this.trackArena(this.add.rectangle(x, y, width, height, 0x252b34, 0.92).setStrokeStyle(2, 0x46515e, 0.85).setDepth(5))
+      }
+      for (const [x, y] of layout.torches) {
+        const glow = this.trackArena(this.add.circle(x, y, 34, 0xff8a3d, 0.07).setDepth(4))
         this.tweens.add({ targets: glow, alpha: 0.19, scale: 1.22, duration: 850, yoyo: true, repeat: -1 })
-        this.add.rectangle(x, y, 5, 12, 0xffb45e, 1).setDepth(5)
+        this.trackArena(this.add.rectangle(x, y, 5, 12, 0xffb45e, 1).setDepth(5))
       }
     }
 
     addMapTile(x, y, key, asset, targetHeight, depth) {
-      const image = this.add.image(x, y, key, 0).setDepth(depth)
+      const image = this.trackArena(this.add.image(x, y, key, 0).setDepth(depth))
       const sourceHeight = asset?.frameHeight || asset?.height || image.height || targetHeight
       image.setScale(targetHeight / sourceHeight)
       return image
@@ -195,13 +253,13 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         this.addMapTile(x, y, 'dungeon-wall', assets.wall, TILE, 3).setTint(0x9ca4ad)
         return
       }
-      this.add.rectangle(x, y, TILE - 2, TILE - 2, 0x272d36, 1).setStrokeStyle(2, 0x3d4652, 1).setDepth(3)
+      this.trackArena(this.add.rectangle(x, y, TILE - 2, TILE - 2, 0x272d36, 1).setStrokeStyle(2, 0x3d4652, 1).setDepth(3))
     }
 
     drawPillar(x, y) {
-      this.add.rectangle(x + 5, y + 8, 38, 38, 0x050607, 0.42).setDepth(5)
-      this.add.rectangle(x, y, 36, 36, 0x242a32, 1).setStrokeStyle(3, 0x414b58, 1).setDepth(6)
-      this.add.rectangle(x, y - 12, 26, 5, 0x596573, 0.55).setDepth(7)
+      this.trackArena(this.add.rectangle(x + 5, y + 8, 38, 38, 0x050607, 0.42).setDepth(5))
+      this.trackArena(this.add.rectangle(x, y, 36, 36, 0x242a32, 1).setStrokeStyle(3, 0x414b58, 1).setDepth(6))
+      this.trackArena(this.add.rectangle(x, y - 12, 26, 5, 0x596573, 0.55).setDepth(7))
     }
 
     createHealthBar(x, y, width, height, color) {
@@ -255,12 +313,12 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (this.anims.exists(key) && this.player.anims.currentAnim?.key !== key) this.player.play(key, true)
     }
 
-    makeActor(x, y, kind) {
+    makeActor(x, y, kind, enemyType = 'skeleton') {
       if (kind === 'player' && assets.player?.source === 'rpg-main-character' && this.textures.exists('dungeon-player-down-idle')) {
         return this.add.sprite(x, y, 'dungeon-player-down-idle', 0).setScale(1).setData('usesTexture', true)
       }
-      const key = kind === 'player' ? 'dungeon-player' : 'dungeon-enemy'
-      const asset = kind === 'player' ? assets.player : assets.enemy
+      const key = kind === 'player' ? 'dungeon-player' : `dungeon-enemy-${enemyType}`
+      const asset = kind === 'player' ? assets.player : (assets.enemies?.[enemyType] || assets.enemy)
       if (this.textures.exists(key)) {
         const animated = asset?.frames > 1
         const visual = animated ? this.add.sprite(x, y, key, 0) : this.add.image(x, y, key)
@@ -268,13 +326,13 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         const targetHeight = kind === 'player' ? 52 : 42
         visual.setScale(Math.max(1, Math.round(targetHeight / frameHeight))).setData('usesTexture', true)
         if (animated) {
-          const animationKey = kind === 'player' ? 'dungeon-player-walk' : 'dungeon-enemy-walk'
+          const animationKey = kind === 'player' ? 'dungeon-player-walk' : `dungeon-enemy-${enemyType}-walk`
           this.ensureWalkAnimation(key, asset, animationKey, kind === 'player' ? 8 : 6)
           visual.play(animationKey)
         }
         return visual
       }
-      const color = kind === 'player' ? 0xc1ff56 : 0x8d63ff
+      const color = kind === 'player' ? 0xc1ff56 : enemyType === 'fast' ? 0x65bfff : enemyType === 'brute' ? 0xff9367 : 0x8d63ff
       return this.add.circle(x, y, kind === 'player' ? 18 : 16, color, 1).setStrokeStyle(3, kind === 'player' ? 0xf5ffe7 : 0xcab8ff, 0.9).setData('usesTexture', false)
     }
 
@@ -288,36 +346,33 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         this.playerState.x = WIDTH / 2
         this.playerState.y = HEIGHT / 2
         this.player.setPosition(this.playerState.x, this.playerState.y)
+        this.drawArena()
       }
       const wave = floorWave(this.floor)
       for (let i = 0; i < wave.count; i++) this.spawnEnemy(i, { elite: i < wave.eliteCount })
       this.showBanner(text.floor(this.floor), '#f4f0e8', 42)
-      onEvent({ type: 'floorstart', floor: this.floor })
+      onEvent({ type: 'floorstart', floor: this.floor, layout: roomLayoutForFloor(this.floor) })
       this.emitStats()
     }
 
     spawnEnemy(index = 0, { elite = false } = {}) {
-      const edge = index % 4
-      const padding = 72
-      let x = padding + Math.random() * (WIDTH - padding * 2)
-      let y = padding + Math.random() * (HEIGHT - padding * 2)
-      if (edge === 0) y = padding
-      if (edge === 1) x = WIDTH - padding
-      if (edge === 2) y = HEIGHT - padding
-      if (edge === 3) x = padding
-
+      const point = this.spawnPoints[index % Math.max(1, this.spawnPoints.length)] || [72, 72]
+      const spread = elite ? 0 : 28
+      const x = Phaser.Math.Clamp(point[0] + (Math.random() - 0.5) * spread, 72, WIDTH - 72)
+      const y = Phaser.Math.Clamp(point[1] + (Math.random() - 0.5) * spread, 72, HEIGHT - 72)
       const archetype = enemyArchetype(this.floor, Math.random, { elite })
-      const visual = this.makeActor(x, y, 'enemy').setDepth(elite ? 12 : 10)
+      const visual = this.makeActor(x, y, 'enemy', archetype.type).setDepth(elite ? 12 : 10)
       visual.setScale(visual.scaleX * archetype.scale, visual.scaleY * archetype.scale)
-      const tint = elite ? 0xffd86b : archetype.type === 'fast' ? 0xa8d9ff : archetype.type === 'brute' ? 0xffb58a : null
+      const tint = elite ? 0xffd86b : null
       if (tint) visual.setTint?.(tint)
 
       const baseHp = 24 + this.floor * 6
       const maxHp = Math.round(baseHp * archetype.hpMultiplier)
       const speed = (44 + this.floor * 2 + Math.random() * 8) * archetype.speedMultiplier
-      const barWidth = elite ? 58 : archetype.type === 'brute' ? 46 : 36
-      const barHeight = elite ? 8 : archetype.type === 'brute' ? 7 : 5
-      const barOffset = 28 + Math.max(0, archetype.scale - 1) * 22
+      const boss = Boolean(archetype.boss)
+      const barWidth = boss ? 150 : archetype.type === 'brute' ? 46 : 36
+      const barHeight = boss ? 11 : archetype.type === 'brute' ? 7 : 5
+      const barOffset = boss ? 58 : 28 + Math.max(0, archetype.scale - 1) * 22
       const enemy = {
         id: `enemy-${Date.now()}-${Math.random()}`,
         x,
@@ -329,12 +384,22 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         hitUntil: 0,
         archetype: archetype.type,
         elite: archetype.elite,
+        boss,
+        phase: 1,
+        phaseThreshold: archetype.phaseThreshold ?? 0.5,
+        chargeCooldown: archetype.chargeCooldown ?? 0,
+        shockwaveCooldown: archetype.shockwaveCooldown ?? 0,
+        nextChargeAt: this.time.now + 1600,
+        nextShockwaveAt: this.time.now + 2600,
+        chargingUntil: 0,
+        chargeVx: 0,
+        chargeVy: 0,
         contactDamage: archetype.contactDamage,
         tint,
         scale: archetype.scale,
         barOffset,
       }
-      enemy.healthBar = this.createHealthBar(x, y - barOffset, barWidth, barHeight, elite ? 0xffc857 : 0xff5964)
+      enemy.healthBar = this.createHealthBar(x, y - barOffset, barWidth, barHeight, boss ? 0xffc857 : 0xff5964)
       this.enemies.push(enemy)
       return enemy
     }
@@ -373,27 +438,103 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     updateEnemies(time, dt) {
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0) continue
-        const dx = this.playerState.x - enemy.x
-        const dy = this.playerState.y - enemy.y
-        const distance = Math.hypot(dx, dy) || 1
-        enemy.x += (dx / distance) * enemy.speed * dt
-        enemy.y += (dy / distance) * enemy.speed * dt
-        enemy.visual.setPosition(enemy.x, enemy.y)
-        this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
-        if (enemy.visual.setFlipX && Math.abs(dx) > 1) enemy.visual.setFlipX(dx < 0)
-        if (time < enemy.hitUntil) enemy.visual.setTintFill?.(0xffffff)
-        else if (enemy.tint) enemy.visual.setTint?.(enemy.tint)
-        else enemy.visual.clearTint?.()
-        const contactRadius = 30 + Math.max(0, enemy.scale - 1) * 12
-        if (distance < contactRadius && time - this.lastContactAt > 420) {
-          this.lastContactAt = time
-          this.playerState.hp = Math.max(0, this.playerState.hp - enemy.contactDamage)
-          this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
-          this.flashPlayer()
-          this.emitStats()
-          if (this.playerState.hp <= 0) this.gameOver()
-        }
+        if (enemy.boss) this.updateBoss(enemy, time, dt)
+        else this.moveEnemyTowardPlayer(enemy, time, dt)
       }
+    }
+
+    moveEnemyTowardPlayer(enemy, time, dt) {
+      const dx = this.playerState.x - enemy.x
+      const dy = this.playerState.y - enemy.y
+      const distance = Math.hypot(dx, dy) || 1
+      enemy.x += (dx / distance) * enemy.speed * dt
+      enemy.y += (dy / distance) * enemy.speed * dt
+      this.syncEnemyVisual(enemy, time, dx, distance)
+    }
+
+    updateBoss(enemy, time, dt) {
+      if (enemy.phase === 1 && enemy.hp / enemy.maxHp <= enemy.phaseThreshold) {
+        enemy.phase = 2
+        enemy.speed *= 1.18
+        enemy.contactDamage += 5
+        enemy.visual.setTint?.(0xff705c)
+        this.showBanner('BOSS PHASE II', '#ff705c', 28)
+        this.cameras.main.shake(180, 0.008)
+      }
+
+      if (time < enemy.chargingUntil) {
+        enemy.x += enemy.chargeVx * dt
+        enemy.y += enemy.chargeVy * dt
+        enemy.x = Phaser.Math.Clamp(enemy.x, 68, WIDTH - 68)
+        enemy.y = Phaser.Math.Clamp(enemy.y, 68, HEIGHT - 68)
+        const distance = Math.hypot(this.playerState.x - enemy.x, this.playerState.y - enemy.y)
+        this.syncEnemyVisual(enemy, time, enemy.chargeVx, distance)
+        if (distance < 42 && time - this.lastContactAt > 420) this.hitPlayer(enemy.contactDamage + 8)
+        return
+      }
+
+      const chargeCooldown = enemy.phase === 2 ? enemy.chargeCooldown * 0.68 : enemy.chargeCooldown
+      const shockwaveCooldown = enemy.phase === 2 ? enemy.shockwaveCooldown * 0.72 : enemy.shockwaveCooldown
+      if (time >= enemy.nextShockwaveAt) {
+        enemy.nextShockwaveAt = time + shockwaveCooldown
+        this.bossShockwave(enemy)
+      }
+      if (time >= enemy.nextChargeAt) {
+        enemy.nextChargeAt = time + chargeCooldown
+        this.bossCharge(enemy)
+        return
+      }
+      this.moveEnemyTowardPlayer(enemy, time, dt)
+    }
+
+    syncEnemyVisual(enemy, time, dx, distance) {
+      enemy.visual.setPosition(enemy.x, enemy.y)
+      this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
+      if (enemy.visual.setFlipX && Math.abs(dx) > 1) enemy.visual.setFlipX(dx < 0)
+      if (time < enemy.hitUntil) enemy.visual.setTintFill?.(0xffffff)
+      else if (enemy.boss && enemy.phase === 2) enemy.visual.setTint?.(0xff705c)
+      else if (enemy.tint) enemy.visual.setTint?.(enemy.tint)
+      else enemy.visual.clearTint?.()
+      const contactRadius = enemy.boss ? 42 : 30 + Math.max(0, enemy.scale - 1) * 12
+      if (distance < contactRadius && time - this.lastContactAt > 420) this.hitPlayer(enemy.contactDamage)
+    }
+
+    hitPlayer(damage) {
+      this.lastContactAt = this.time.now
+      this.playerState.hp = Math.max(0, this.playerState.hp - damage)
+      this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
+      this.flashPlayer()
+      this.emitStats()
+      if (this.playerState.hp <= 0) this.gameOver()
+    }
+
+    bossCharge(enemy) {
+      const dx = this.playerState.x - enemy.x
+      const dy = this.playerState.y - enemy.y
+      const distance = Math.hypot(dx, dy) || 1
+      const line = this.add.rectangle(enemy.x + dx / 2, enemy.y + dy / 2, distance, 7, 0xff665e, 0.26).setOrigin(0.5).setRotation(Math.atan2(dy, dx)).setDepth(24)
+      this.tweens.add({ targets: line, alpha: 0.72, duration: 320, yoyo: true, onComplete: () => line.destroy() })
+      this.time.delayedCall(420, () => {
+        if (enemy.hp <= 0 || this.dead) return
+        const nextDx = this.playerState.x - enemy.x
+        const nextDy = this.playerState.y - enemy.y
+        const nextDistance = Math.hypot(nextDx, nextDy) || 1
+        const speed = enemy.phase === 2 ? 430 : 360
+        enemy.chargeVx = (nextDx / nextDistance) * speed
+        enemy.chargeVy = (nextDy / nextDistance) * speed
+        enemy.chargingUntil = this.time.now + 560
+      })
+    }
+
+    bossShockwave(enemy) {
+      const telegraph = this.add.circle(enemy.x, enemy.y, 34, 0xff8a63, 0.08).setStrokeStyle(4, 0xff8a63, 0.72).setDepth(23)
+      this.tweens.add({ targets: telegraph, radius: 120, alpha: 0.5, duration: 560, onComplete: () => {
+        const distance = Math.hypot(this.playerState.x - enemy.x, this.playerState.y - enemy.y)
+        const ring = this.add.circle(enemy.x, enemy.y, 120, 0xff665e, 0.04).setStrokeStyle(7, 0xff665e, 0.9).setDepth(25)
+        this.tweens.add({ targets: ring, radius: 168, alpha: 0, duration: 320, onComplete: () => ring.destroy() })
+        telegraph.destroy()
+        if (distance <= 130) this.hitPlayer(enemy.phase === 2 ? 24 : 18)
+      } })
     }
 
     autoAttack(time) {
@@ -443,8 +584,9 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const dx = enemy.x - this.playerState.x
       const dy = enemy.y - this.playerState.y
       const distance = Math.hypot(dx, dy) || 1
-      enemy.x += (dx / distance) * knockback
-      enemy.y += (dy / distance) * knockback
+      const effectiveKnockback = enemy.boss ? knockback * 0.2 : knockback
+      enemy.x += (dx / distance) * effectiveKnockback
+      enemy.y += (dy / distance) * effectiveKnockback
       this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
       this.damageText(enemy.x, enemy.y - 16, damage, critical)
       if (critical) this.cameras.main.shake(70, 0.004)
@@ -462,9 +604,9 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       enemy.healthBar = null
       this.kills++
       this.floorKills++
-      this.deathBurst(enemy.x, enemy.y, enemy.elite ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : 0xa980ff)
+      this.deathBurst(enemy.x, enemy.y, enemy.boss ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : 0xa980ff)
 
-      const equipment = rollEquipment(this.floor)
+      const equipment = enemy.boss ? bossReward() : rollEquipment(this.floor)
       const potion = rollPotion()
       if (equipment) this.spawnDrop(enemy.x - (potion ? 12 : 0), enemy.y, equipment)
       if (potion) this.spawnDrop(enemy.x + (equipment ? 12 : 0), enemy.y, potion)
@@ -486,11 +628,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.floorCleared = true
       this.showBanner(text.floorClear(), '#c1ff56', 34)
       onEvent({ type: 'floorclear', floor: this.floor })
-      if (outcome === 'complete') {
-        this.time.delayedCall(900, () => this.completeRun())
-      } else {
-        this.time.delayedCall(750, () => this.openPortal())
-      }
+      if (outcome === 'complete') this.time.delayedCall(900, () => this.completeRun())
+      else this.time.delayedCall(750, () => this.openPortal())
     }
 
     deathBurst(x, y, color = 0xa980ff) {
@@ -509,7 +648,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const glow = this.add.rectangle(x, y - 28, potion ? 3 : 4, potion ? 68 : 78, color, style.beamAlpha).setDepth(6)
       let visual
       if (!potion && this.textures.exists('dungeon-weapon')) {
-        visual = this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15).setTint?.(color) || this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15)
+        visual = this.add.image(x, y, 'dungeon-weapon', 0).setDepth(15)
+        visual.setTint?.(color)
         const frameHeight = assets.weapon?.frameHeight || assets.weapon?.height || visual.height || 16
         visual.setScale(Math.max(1, Math.round(30 / frameHeight)))
       } else if (potion) {
@@ -657,16 +797,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     emitStats(now = this.time?.now ?? 0) {
-      onStats({
-        hp: this.playerState.hp,
-        maxHp: this.playerState.maxHp,
-        damage: this.playerState.damage,
-        kills: this.kills,
-        floor: this.floor,
-        weapon: this.playerState.weapon,
-        weaponRarity: this.playerState.weaponRarity,
-        skillCooldown: Math.max(0, this.skillReadyAt - now),
-      })
+      onStats({ hp: this.playerState.hp, maxHp: this.playerState.maxHp, damage: this.playerState.damage, kills: this.kills, floor: this.floor, weapon: this.playerState.weapon, weaponRarity: this.playerState.weaponRarity, skillCooldown: Math.max(0, this.skillReadyAt - now) })
     }
   }
 
