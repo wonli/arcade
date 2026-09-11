@@ -1,36 +1,62 @@
-export function createDungeonAmbient({ windowImpl = globalThis.window, random = Math.random } = {}) {
+import { DUNGEON_BGM } from './music.js'
+
+export function createDungeonAmbient({ windowImpl = globalThis.window } = {}) {
   let context = null
   let master = null
   let timer = null
   let started = false
   let state = 'idle'
-  const persistent = []
+  const scheduled = []
 
-  function tone(frequency, when, duration, volume, type = 'sine') {
+  function tone(frequency, when, duration, volume, type = 'sine', attack = 0.025) {
     if (!context || !master) return
     const oscillator = context.createOscillator()
     const gain = context.createGain()
     oscillator.type = type
     oscillator.frequency.setValueAtTime(frequency, when)
     gain.gain.setValueAtTime(0.0001, when)
-    gain.gain.exponentialRampToValueAtTime(volume, when + 0.08)
+    gain.gain.exponentialRampToValueAtTime(volume, when + attack)
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration)
     oscillator.connect(gain)
     gain.connect(master)
     oscillator.start(when)
-    oscillator.stop(when + duration + 0.05)
+    oscillator.stop(when + duration + 0.04)
+    scheduled.push(oscillator)
   }
 
-  function persistentTone(frequency, type, volume) {
-    const oscillator = context.createOscillator()
-    const gain = context.createGain()
-    oscillator.type = type
-    oscillator.frequency.value = frequency
-    gain.gain.value = volume
-    oscillator.connect(gain)
-    gain.connect(master)
-    oscillator.start()
-    persistent.push(oscillator)
+  function scheduleLoop(startAt) {
+    if (!context || context.state === 'closed') return
+    const beatSeconds = 60 / DUNGEON_BGM.bpm
+    const frequency = (note) => DUNGEON_BGM.notes[note]
+
+    for (const note of DUNGEON_BGM.bass) {
+      const when = startAt + note.beat * beatSeconds
+      tone(frequency(note.note), when, note.duration * beatSeconds, note.volume, 'triangle', 0.08)
+      tone(frequency(note.note) * 2, when, note.duration * beatSeconds * 0.82, note.volume * 0.24, 'sine', 0.12)
+    }
+
+    for (const note of DUNGEON_BGM.pulses) {
+      tone(frequency(note.note), startAt + note.beat * beatSeconds, note.duration * beatSeconds, note.volume, 'square', 0.008)
+    }
+
+    for (const note of DUNGEON_BGM.melody) {
+      const when = startAt + note.beat * beatSeconds
+      tone(frequency(note.note), when, note.duration * beatSeconds, note.volume, 'square', 0.018)
+      tone(frequency(note.note) * 0.5, when + 0.025, note.duration * beatSeconds, note.volume * 0.22, 'triangle', 0.03)
+    }
+
+    for (const note of DUNGEON_BGM.bells) {
+      const when = startAt + note.beat * beatSeconds
+      tone(frequency(note.note), when, note.duration * beatSeconds, note.volume, 'triangle', 0.012)
+      tone(frequency(note.note) * 1.5, when + 0.04, note.duration * beatSeconds * 0.7, note.volume * 0.32, 'sine', 0.015)
+    }
+  }
+
+  function queueNextLoop() {
+    if (!context || context.state === 'closed') return
+    const nextStart = context.currentTime + 0.08
+    scheduleLoop(nextStart)
+    timer = windowImpl.setTimeout?.(queueNextLoop, DUNGEON_BGM.duration * 1000) ?? null
   }
 
   async function start() {
@@ -48,39 +74,20 @@ export function createDungeonAmbient({ windowImpl = globalThis.window, random = 
     context = new AudioContext()
     state = context.state || 'suspended'
     master = context.createGain()
-    master.gain.value = 0.16
+    master.gain.value = 0.42
     master.connect(context.destination)
 
     if (context.state === 'suspended' && typeof context.resume === 'function') await context.resume()
     state = context.state || 'running'
-
-    // Keep the persistent bed above the sub-bass range so laptop and monitor
-    // speakers can reproduce it. Individual node gains stay modest because
-    // they sum into the master bus.
-    persistentTone(96, 'sine', 0.22)
-    persistentTone(144, 'triangle', 0.07)
-    persistentTone(192, 'sine', 0.025)
-
-    const scheduleBell = () => {
-      if (!context || context.state === 'closed') return
-      const now = context.currentTime + 0.05
-      const base = random() > 0.5 ? 440 : 330
-      tone(base, now, 2.5, 0.075, 'triangle')
-      tone(base * 1.5, now + 0.18, 1.9, 0.038, 'sine')
-      tone(110, now + 0.7, 1.3, 0.045, 'sine')
-    }
-    scheduleBell()
-    timer = windowImpl.setInterval?.(scheduleBell, 5200 + random() * 1800) ?? null
-
+    queueNextLoop()
     started = true
-    state = context.state || 'running'
   }
 
   function stop() {
-    if (timer) windowImpl?.clearInterval?.(timer)
+    if (timer) windowImpl?.clearTimeout?.(timer)
     timer = null
     started = false
-    for (const oscillator of persistent.splice(0)) {
+    for (const oscillator of scheduled.splice(0)) {
       try { oscillator.stop() } catch {}
     }
     const current = context
