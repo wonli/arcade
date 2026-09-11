@@ -52,6 +52,15 @@ test('enemy archetypes expose distinct combat profiles', () => {
   assert.equal(enemyArchetype(3, () => 0.9).type, 'brute')
 })
 
+test('ranged enemies enter the mix from floor three onward', () => {
+  assert.notEqual(enemyArchetype(2, () => 0.7).type, 'ranged')
+  const ranged = enemyArchetype(3, () => 0.7)
+  assert.equal(ranged.type, 'ranged')
+  assert.ok(ranged.attackRange >= 180)
+  assert.ok(ranged.projectileDamage > 0)
+  assert.ok(ranged.projectileCooldown > 0)
+})
+
 test('floor five focuses on one boss with fewer trash enemies', () => {
   assert.deepEqual(floorWave(1), { count: 12, eliteCount: 0 })
   const floorFive = floorWave(5)
