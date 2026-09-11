@@ -75,11 +75,12 @@ test('floor waves stay bounded and floor five includes an elite', () => {
   assert.deepEqual(floorWave(5), { count: 20, eliteCount: 1 })
 })
 
-test('picking up generated equipment immediately increases damage', () => {
-  const player = { damage: 10, weapon: null }
+test('picking up generated equipment immediately increases damage and preserves rarity', () => {
+  const player = { damage: 10, weapon: null, weaponRarity: null }
   const next = applyPickup(player, { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 7 })
   assert.equal(next.damage, 17)
   assert.equal(next.weapon, 'weapon.dungeon_blade')
+  assert.equal(next.weaponRarity, 'rare')
 })
 
 test('picking up a health potion heals without exceeding max hp', () => {
