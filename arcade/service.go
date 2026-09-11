@@ -18,6 +18,10 @@ type Service struct {
 	snakeMu   sync.Mutex
 	snakes    map[string]*snakeRuntime
 	snakeTick time.Duration
+
+	drawMu   sync.Mutex
+	draws    map[string]*drawGuessRuntime
+	drawTick time.Duration
 }
 
 func NewService() *Service {
@@ -25,6 +29,8 @@ func NewService() *Service {
 		rooms:     room.NewManager(),
 		snakes:    make(map[string]*snakeRuntime),
 		snakeTick: 100 * time.Millisecond,
+		draws:     make(map[string]*drawGuessRuntime),
+		drawTick:  250 * time.Millisecond,
 	}
 }
 
@@ -39,6 +45,8 @@ func (s *Service) Create(gameName string, bounds ...int) (*room.Room, error) {
 		if minPlayers != maxPlayers || (maxPlayers != 1 && maxPlayers != 2) { return nil, errors.New("tetris supports one or two players") }
 	case "snake":
 		if minPlayers != 1 || maxPlayers != 8 { return nil, errors.New("snake supports 1-8 players") }
+	case "drawguess":
+		if minPlayers != 2 || maxPlayers != 8 { return nil, errors.New("drawguess supports 2-8 players") }
 	default:
 		return nil, fmt.Errorf("unsupported game: %s", gameName)
 	}
@@ -83,14 +91,16 @@ func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMe
 }
 func (s *Service) ready(r *room.Room) error {
 	ids := r.PlayerIDs()
-	if len(ids) != r.MaxPlayers || r.Started() { return nil }
+	if r.Started() { return nil }
 	switch r.GameName {
 	case "gomoku":
+		if len(ids) != r.MaxPlayers { return nil }
 		if len(ids) != 2 { return errors.New("gomoku requires two players") }
 		r.Ready(gomoku.New(ids[0], ids[1]))
 	case "tetris":
+		if len(ids) != r.MaxPlayers { return nil }
 		r.SetStatus(room.StatusPlaying)
-	case "snake":
+	case "snake", "drawguess":
 		return nil
 	default:
 		return fmt.Errorf("unsupported game: %s", r.GameName)
