@@ -4,8 +4,7 @@ APP_NAME := arcade
 APP_PATH := ./cmd/arcade
 BUILD_PATH := ./dist
 WEB_DIR := ./web
-WEB_BUILD_DIR := $(WEB_DIR)/dist
-WEB_DIST_DIR := $(BUILD_PATH)/web
+EMBED_DIR := ./internal/frontend/dist
 
 GO ?= go
 NPM ?= npm
@@ -30,18 +29,19 @@ LDFLAGS := -X '$(FLAGS_PKG).BuildDate=$(BUILD_DATE)' \
 
 GO_FLAGS := -trimpath -tags netgo -ldflags "$(LDFLAGS)"
 
-.PHONY: help setup deps dev backend frontend build backend-build frontend-build start test clean
+.PHONY: help setup deps frontend web-dev backend dev build start test clean
 
 help:
 	@echo "AQI Arcade"
 	@echo ""
-	@echo "  make setup          Install/resolve Go and web dependencies"
-	@echo "  make dev            Install dependencies and start backend + frontend dev servers"
-	@echo "  make build          Build backend binary and frontend into ./dist"
-	@echo "  make start          Build, then run backend + frontend preview"
-	@echo "  make backend        Start only the Go backend"
-	@echo "  make frontend       Start only the Vite frontend"
-	@echo "  make test           Run Go tests and verify the frontend build"
+	@echo "  make start          Install/build everything and run one embedded Go binary"
+	@echo "  make dev            Rebuild frontend, then run the Go server on :8080"
+	@echo "  make build          Build frontend and dist/arcade single binary"
+	@echo "  make test           Build frontend and run all Go tests"
+	@echo "  make setup          Resolve Go modules and install frontend dependencies"
+	@echo "  make frontend       Install frontend dependencies and build embedded assets"
+	@echo "  make web-dev        Optional Vite HMR server for frontend-only development"
+	@echo "  make backend        Rebuild frontend, then run only the Go server"
 	@echo "  make clean          Remove generated build output"
 
 setup:
@@ -50,49 +50,38 @@ setup:
 
 deps: setup
 
-backend:
-	$(GO) run $(APP_PATH)
-
 frontend:
+	cd $(WEB_DIR) && $(NPM) install
+	cd $(WEB_DIR) && $(NPM) run build
+
+# Optional frontend-only workflow. The default project workflow does not need Vite.
+web-dev:
+	cd $(WEB_DIR) && $(NPM) install
 	cd $(WEB_DIR) && $(NPM) run dev -- --host 0.0.0.0
 
-# Development mode. Both processes are stopped when make exits or Ctrl+C is pressed.
-dev: setup
-	@set -e; \
-	$(GO) run $(APP_PATH) & backend_pid=$$!; \
-	(cd $(WEB_DIR) && $(NPM) run dev -- --host 0.0.0.0) & frontend_pid=$$!; \
-	trap 'kill $$backend_pid $$frontend_pid 2>/dev/null || true' EXIT INT TERM; \
-	wait
+backend: frontend
+	$(GO) run $(APP_PATH)
 
-frontend-build:
-	cd $(WEB_DIR) && $(NPM) run build
-	rm -rf $(WEB_DIST_DIR)
-	mkdir -p $(WEB_DIST_DIR)
-	cp -R $(WEB_BUILD_DIR)/. $(WEB_DIST_DIR)/
+dev: frontend
+	$(GO) mod tidy
+	$(GO) run $(APP_PATH)
 
-backend-build:
+build: frontend
+	$(GO) mod tidy
 	mkdir -p $(BUILD_PATH)
 	CGO_ENABLED=0 $(GO) build $(GO_FLAGS) -o $(BUILD_PATH)/$(APP_NAME) $(APP_PATH)
-
-build: setup frontend-build backend-build
 	@echo ""
-	@echo "Build complete:"
-	@echo "  backend: $(BUILD_PATH)/$(APP_NAME)"
-	@echo "  frontend: $(WEB_DIST_DIR)"
+	@echo "Build complete: $(BUILD_PATH)/$(APP_NAME)"
+	@echo "Frontend is embedded in the binary."
 
-# Runs the built Go binary and Vite's preview server together.
-# Frontend: http://localhost:4173
-# Backend:  http://localhost:8080
 start: build
-	@set -e; \
-	./$(BUILD_PATH)/$(APP_NAME) & backend_pid=$$!; \
-	(cd $(WEB_DIR) && $(NPM) run preview -- --host 0.0.0.0) & frontend_pid=$$!; \
-	trap 'kill $$backend_pid $$frontend_pid 2>/dev/null || true' EXIT INT TERM; \
-	wait
+	./$(BUILD_PATH)/$(APP_NAME)
 
-test: setup
+test: frontend
+	$(GO) mod tidy
 	$(GO) test ./...
-	cd $(WEB_DIR) && $(NPM) run build
 
 clean:
-	rm -rf $(BUILD_PATH) $(WEB_BUILD_DIR)
+	rm -rf $(BUILD_PATH)
+	mkdir -p $(EMBED_DIR)
+	find $(EMBED_DIR) -mindepth 1 -maxdepth 1 ! -name '.gitkeep' -exec rm -rf {} +
