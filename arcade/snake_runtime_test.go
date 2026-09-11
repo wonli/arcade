@@ -34,6 +34,20 @@ func TestSnakeStartRequiresHostAndSupportsSolo(t *testing.T) {
 	}
 }
 
+func TestSnakeStateRestoresRunningGameAfterReconnect(t *testing.T) {
+	s := NewService()
+	s.snakeTick = time.Hour
+	r, _ := s.Create("snake", 1, 8)
+	_ = s.Join(r.ID, "p1", "Player 1")
+	if err := s.StartSnake(r.ID, "p1", nil); err != nil { t.Fatal(err) }
+	if err := s.SnakeInput(r.ID, "p1", snake.Down); err != nil { t.Fatal(err) }
+
+	state, err := s.SnakeState(r.ID, "p1")
+	if err != nil { t.Fatal(err) }
+	if state.Status != "playing" { t.Fatalf("status = %q, want playing", state.Status) }
+	if len(state.Snakes) != 1 || state.Snakes[0].PlayerID != "p1" { t.Fatalf("snakes = %#v", state.Snakes) }
+}
+
 func TestSnakeInputRequiresRoomPlayer(t *testing.T) {
 	s := NewService()
 	s.snakeTick = time.Hour
