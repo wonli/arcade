@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { chooseDungeonAssets, directionFromInput } from './scene.js'
+import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome } from './scene.js'
 
 const manifest = {
   assets: [
@@ -38,4 +38,18 @@ test('resolves movement into four player directions', () => {
   assert.equal(directionFromInput(-1, 0, 'down'), 'left')
   assert.equal(directionFromInput(1, 0, 'left'), 'right')
   assert.equal(directionFromInput(0, 0, 'right'), 'right')
+})
+
+test('rarity presentation makes rare loot visually stronger', () => {
+  assert.deepEqual(rarityPresentation('common'), { color: 0xf4f0e8, beamAlpha: 0.22, particles: 0 })
+  assert.deepEqual(rarityPresentation('uncommon'), { color: 0x70ff9f, beamAlpha: 0.34, particles: 2 })
+  assert.deepEqual(rarityPresentation('rare'), { color: 0x67a8ff, beamAlpha: 0.5, particles: 4 })
+  assert.deepEqual(rarityPresentation('epic'), { color: 0xc984ff, beamAlpha: 0.68, particles: 7 })
+})
+
+test('clearing floors one through four opens a portal and floor five completes the run', () => {
+  assert.equal(floorOutcome(1, 0), 'portal')
+  assert.equal(floorOutcome(4, 0), 'portal')
+  assert.equal(floorOutcome(5, 0), 'complete')
+  assert.equal(floorOutcome(5, 1), 'combat')
 })
