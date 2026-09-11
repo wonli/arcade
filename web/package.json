@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "test": "node --test src/lib/games/**/*.test.js"
+    "test": "node --test src/lib/*.test.js src/lib/games/**/*.test.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",
