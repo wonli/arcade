@@ -106,6 +106,7 @@ export function chooseDungeonAssets(manifest = {}) {
     skeleton: chooseAsset(oldAssets, [/skeleton/i, /skull/i, /goblin/i]) || genericEnemy,
     fast: chooseAsset(oldAssets, [/bat/i, /rat/i, /slime/i, /blob/i]) || genericEnemy,
     brute: chooseAsset(oldAssets, [/dragon/i, /ogre/i, /brute/i, /golem/i, /monster/i, /goblin/i]) || genericEnemy,
+    ranged: chooseAsset(oldAssets, [/wizard/i, /mage/i, /caster/i, /archer/i, /bow/i]) || genericEnemy,
   }
 
   return {
@@ -135,6 +136,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.playerMoving = false
       this.playerAttacking = false
       this.enemies = []
+      this.enemyProjectiles = []
       this.drops = []
       this.portal = null
       this.arenaObjects = []
@@ -153,7 +155,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     preload() {
       this.loadPlayerAssets()
-      for (const type of ['skeleton', 'fast', 'brute']) this.loadAsset(`dungeon-enemy-${type}`, assets.enemies?.[type] || assets.enemy)
+      for (const type of ['skeleton', 'fast', 'brute', 'ranged']) this.loadAsset(`dungeon-enemy-${type}`, assets.enemies?.[type] || assets.enemy)
       this.loadAsset('dungeon-floor', assets.floor)
       this.loadAsset('dungeon-wall', assets.wall)
       this.loadAsset('dungeon-weapon', assets.weapon)
@@ -332,7 +334,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         }
         return visual
       }
-      const color = kind === 'player' ? 0xc1ff56 : enemyType === 'fast' ? 0x65bfff : enemyType === 'brute' ? 0xff9367 : 0x8d63ff
+      const color = kind === 'player' ? 0xc1ff56 : enemyType === 'fast' ? 0x65bfff : enemyType === 'brute' ? 0xff9367 : enemyType === 'ranged' ? 0x66e6c2 : 0x8d63ff
       return this.add.circle(x, y, kind === 'player' ? 18 : 16, color, 1).setStrokeStyle(3, kind === 'player' ? 0xf5ffe7 : 0xcab8ff, 0.9).setData('usesTexture', false)
     }
 
@@ -342,6 +344,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.destroyPortal()
       if (!initial) {
         this.clearEnemies()
+        this.clearEnemyProjectiles()
         this.clearDrops()
         this.playerState.x = WIDTH / 2
         this.playerState.y = HEIGHT / 2
@@ -394,6 +397,12 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         chargingUntil: 0,
         chargeVx: 0,
         chargeVy: 0,
+        attackRange: archetype.attackRange ?? 0,
+        preferredRange: archetype.preferredRange ?? 0,
+        projectileDamage: archetype.projectileDamage ?? 0,
+        projectileCooldown: archetype.projectileCooldown ?? 0,
+        projectileSpeed: archetype.projectileSpeed ?? 0,
+        nextProjectileAt: this.time.now + 700 + Math.random() * 500,
         contactDamage: archetype.contactDamage,
         tint,
         scale: archetype.scale,
@@ -409,6 +418,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const dt = Math.min(delta, 40) / 1000
       this.updatePlayer(dt)
       this.updateEnemies(time, dt)
+      this.updateEnemyProjectiles(dt)
       this.updateDrops()
       this.updatePortal(time)
       this.autoAttack(time)
@@ -439,6 +449,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0) continue
         if (enemy.boss) this.updateBoss(enemy, time, dt)
+        else if (enemy.archetype === 'ranged') this.updateRangedEnemy(enemy, time, dt)
         else this.moveEnemyTowardPlayer(enemy, time, dt)
       }
     }
@@ -450,6 +461,84 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       enemy.x += (dx / distance) * enemy.speed * dt
       enemy.y += (dy / distance) * enemy.speed * dt
       this.syncEnemyVisual(enemy, time, dx, distance)
+    }
+
+    updateRangedEnemy(enemy, time, dt) {
+      const dx = this.playerState.x - enemy.x
+      const dy = this.playerState.y - enemy.y
+      const distance = Math.hypot(dx, dy) || 1
+      const preferred = enemy.preferredRange || 180
+
+      if (distance > enemy.attackRange) {
+        enemy.x += (dx / distance) * enemy.speed * dt
+        enemy.y += (dy / distance) * enemy.speed * dt
+      } else if (distance < preferred - 34) {
+        enemy.x -= (dx / distance) * enemy.speed * 0.72 * dt
+        enemy.y -= (dy / distance) * enemy.speed * 0.72 * dt
+      } else {
+        const strafe = Math.sin((time + enemy.x * 7) / 650) * enemy.speed * 0.28 * dt
+        enemy.x += (-dy / distance) * strafe
+        enemy.y += (dx / distance) * strafe
+      }
+
+      enemy.x = Phaser.Math.Clamp(enemy.x, 66, WIDTH - 66)
+      enemy.y = Phaser.Math.Clamp(enemy.y, 66, HEIGHT - 66)
+      const nextDx = this.playerState.x - enemy.x
+      const nextDy = this.playerState.y - enemy.y
+      const nextDistance = Math.hypot(nextDx, nextDy) || 1
+      this.syncEnemyVisual(enemy, time, nextDx, nextDistance)
+
+      if (nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
+        enemy.nextProjectileAt = time + enemy.projectileCooldown
+        this.fireEnemyProjectile(enemy)
+      }
+    }
+
+    fireEnemyProjectile(enemy) {
+      const dx = this.playerState.x - enemy.x
+      const dy = this.playerState.y - enemy.y
+      const distance = Math.hypot(dx, dy) || 1
+      const speed = enemy.projectileSpeed || 260
+      const visual = this.add.circle(enemy.x, enemy.y - 4, 7, 0x70f2ce, 0.92).setStrokeStyle(2, 0xd6fff3, 0.9).setDepth(24)
+      const glow = this.add.circle(enemy.x, enemy.y - 4, 13, 0x70f2ce, 0.16).setDepth(23)
+      this.enemyProjectiles.push({
+        x: enemy.x,
+        y: enemy.y - 4,
+        vx: (dx / distance) * speed,
+        vy: (dy / distance) * speed,
+        damage: enemy.projectileDamage || 12,
+        life: 3,
+        visual,
+        glow,
+      })
+    }
+
+    updateEnemyProjectiles(dt) {
+      for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+        const projectile = this.enemyProjectiles[i]
+        projectile.x += projectile.vx * dt
+        projectile.y += projectile.vy * dt
+        projectile.life -= dt
+        projectile.visual?.setPosition(projectile.x, projectile.y)
+        projectile.glow?.setPosition(projectile.x, projectile.y)
+
+        const hit = Math.hypot(projectile.x - this.playerState.x, projectile.y - this.playerState.y) <= 20
+        const expired = projectile.life <= 0 || projectile.x < 42 || projectile.x > WIDTH - 42 || projectile.y < 42 || projectile.y > HEIGHT - 42
+        if (!hit && !expired) continue
+
+        if (hit) this.hitPlayer(projectile.damage)
+        projectile.visual?.destroy()
+        projectile.glow?.destroy()
+        this.enemyProjectiles.splice(i, 1)
+      }
+    }
+
+    clearEnemyProjectiles() {
+      for (const projectile of this.enemyProjectiles) {
+        projectile.visual?.destroy()
+        projectile.glow?.destroy()
+      }
+      this.enemyProjectiles = []
     }
 
     updateBoss(enemy, time, dt) {
@@ -604,7 +693,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       enemy.healthBar = null
       this.kills++
       this.floorKills++
-      this.deathBurst(enemy.x, enemy.y, enemy.boss ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : 0xa980ff)
+      const deathColor = enemy.boss ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : enemy.archetype === 'ranged' ? 0x70f2ce : 0xa980ff
+      this.deathBurst(enemy.x, enemy.y, deathColor)
 
       const equipment = enemy.boss ? bossReward() : rollEquipment(this.floor)
       const potion = rollPotion()
@@ -779,6 +869,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (this.runComplete || this.dead) return
       this.runComplete = true
       this.destroyPortal()
+      this.clearEnemyProjectiles()
       this.ambient.stop()
       this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x050607, 0.7).setDepth(80)
       this.add.text(WIDTH / 2, HEIGHT / 2 - 24, text.runComplete(), { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '42px', fontStyle: 'bold', color: '#c1ff56' }).setOrigin(0.5).setDepth(81)
@@ -789,6 +880,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     gameOver() {
       this.dead = true
+      this.clearEnemyProjectiles()
       this.ambient.stop()
       this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x050607, 0.66).setDepth(80)
       this.add.text(WIDTH / 2, HEIGHT / 2 - 18, 'RUN ENDED', { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '42px', fontStyle: 'bold', color: '#f4f0e8' }).setOrigin(0.5).setDepth(81)
