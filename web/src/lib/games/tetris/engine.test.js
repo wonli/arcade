@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createGame, move, rotate, hardDrop, addGarbage, WIDTH, HEIGHT } from './engine.js'
+import { createGame, move, rotate, hardDrop, addGarbage, previewBoard, WIDTH, HEIGHT } from './engine.js'
 
 test('piece moves horizontally until collision', () => {
   let state = createGame(() => 0)
@@ -29,6 +29,15 @@ test('hard drop locks piece and spawns the next piece', () => {
   assert.ok(result.events.some((event) => event.type === 'lock'))
   assert.notDeepEqual(result.state.active, before.active)
   assert.ok(result.state.board.flat().some((cell) => cell !== 0))
+})
+
+test('next piece can be rendered in a 4 by 4 preview', () => {
+  const state = createGame(() => 0)
+  const preview = previewBoard(state.next)
+  assert.equal(preview.length, 4)
+  assert.ok(preview.every((row) => row.length === 4))
+  assert.equal(preview.flat().filter((cell) => cell !== 0).length, 4)
+  assert.ok(preview.flat().every((cell) => cell === 0 || cell === state.next.value))
 })
 
 test('hard drop clears a completed line', () => {
