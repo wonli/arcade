@@ -13,14 +13,34 @@ import (
 type Service struct { rooms *room.Manager }
 func NewService() *Service { return &Service{rooms: room.NewManager()} }
 
-func (s *Service) Create(gameName string, maxPlayers int) (*room.Room, error) {
-	if maxPlayers != 1 && maxPlayers != 2 { return nil, errors.New("players must be 1 or 2") }
-	if gameName == "gomoku" && maxPlayers == 1 { return nil, errors.New("solo gomoku is not supported") }
+func (s *Service) Create(gameName string, bounds ...int) (*room.Room, error) {
+	minPlayers, maxPlayers, err := roomBounds(bounds)
+	if err != nil { return nil, err }
+	if minPlayers < 1 || maxPlayers < minPlayers || maxPlayers > 8 { return nil, errors.New("invalid player bounds") }
 	switch gameName {
-	case "gomoku", "tetris": return s.rooms.Create(gameName, maxPlayers)
-	default: return nil, fmt.Errorf("unsupported game: %s", gameName)
+	case "gomoku":
+		if minPlayers != 2 || maxPlayers != 2 { return nil, errors.New("gomoku requires two players") }
+	case "tetris":
+		if minPlayers != maxPlayers || (maxPlayers != 1 && maxPlayers != 2) { return nil, errors.New("tetris supports one or two players") }
+	case "snake":
+		if minPlayers != 1 || maxPlayers != 8 { return nil, errors.New("snake supports 1-8 players") }
+	default:
+		return nil, fmt.Errorf("unsupported game: %s", gameName)
+	}
+	return s.rooms.Create(gameName, minPlayers, maxPlayers)
+}
+
+func roomBounds(bounds []int) (int, int, error) {
+	switch len(bounds) {
+	case 1:
+		return bounds[0], bounds[0], nil
+	case 2:
+		return bounds[0], bounds[1], nil
+	default:
+		return 0, 0, errors.New("player bounds required")
 	}
 }
+
 func (s *Service) Get(roomID string) (*room.Room, bool) { return s.rooms.Get(roomID) }
 func (s *Service) Join(roomID string, playerID game.PlayerID, name string) error {
 	r, ok := s.rooms.Get(roomID); if !ok { return errors.New("room not found") }
@@ -39,7 +59,7 @@ func (s *Service) Rematch(roomID string, playerID game.PlayerID) error {
 	r, ok := s.rooms.Get(roomID); if !ok { return errors.New("room not found") }
 	if !r.HasPlayer(playerID) { return errors.New("player is not in room") }
 	g := r.Game(); if g == nil || g.Status() != game.StatusFinished { return errors.New("game is not finished") }
-	g.Reset(); return nil
+	g.Reset(); r.SetStatus(room.StatusPlaying); return nil
 }
 func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
 	r, ok := s.rooms.Get(roomID); if !ok { return errors.New("room not found") }
@@ -48,13 +68,17 @@ func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMe
 }
 func (s *Service) ready(r *room.Room) error {
 	ids := r.PlayerIDs()
-	if len(ids) != r.MaxPlayers || r.Game() != nil { return nil }
+	if len(ids) != r.MaxPlayers || r.Started() { return nil }
 	switch r.GameName {
 	case "gomoku":
 		if len(ids) != 2 { return errors.New("gomoku requires two players") }
 		r.Ready(gomoku.New(ids[0], ids[1]))
-	case "tetris": return nil
-	default: return fmt.Errorf("unsupported game: %s", r.GameName)
+	case "tetris":
+		r.SetStatus(room.StatusPlaying)
+	case "snake":
+		return nil
+	default:
+		return fmt.Errorf("unsupported game: %s", r.GameName)
 	}
 	return nil
 }
