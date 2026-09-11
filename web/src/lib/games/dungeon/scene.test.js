@@ -5,7 +5,7 @@ import { chooseDungeonAssets } from './scene.js'
 
 const manifest = {
   assets: [
-    { path: '/assets/debts/Characters/Wizard.png', width: 182, height: 18, frames: 1, frameWidth: 182, frameHeight: 18 },
+    { path: '/assets/debts/Characters/Wizard.png', width: 182, height: 18, frames: 4, frameWidth: 26, frameHeight: 18 },
     { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16 },
     { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16 },
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16 },
@@ -13,14 +13,13 @@ const manifest = {
   ],
 }
 
-test('uses the wizard source frame size instead of rendering the full strip', () => {
+test('chooses the normalized wizard animation instead of rendering the full strip', () => {
   const assets = chooseDungeonAssets(manifest)
 
   assert.equal(assets.player.path, '/assets/debts/Characters/Wizard.png')
-  assert.equal(assets.player.frames, 7)
+  assert.equal(assets.player.frames, 4)
   assert.equal(assets.player.frameWidth, 26)
   assert.equal(assets.player.frameHeight, 18)
-  assert.equal(assets.player.animationFrames, 4)
 })
 
 test('chooses dungeon presentation assets without changing enemy framing', () => {
