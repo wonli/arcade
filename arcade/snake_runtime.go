@@ -74,6 +74,7 @@ func (s *Service) startSnakeRuntime(r *room.Room, players []room.Player, publish
 	s.snakes[r.ID] = runtime
 	s.snakeMu.Unlock()
 
+	r.SetRuntimeState(runtime.game.State())
 	r.SetStatus(room.StatusPlaying)
 	go s.runSnake(r, runtime)
 	return nil
@@ -86,6 +87,7 @@ func (s *Service) runSnake(r *room.Room, runtime *snakeRuntime) {
 		select {
 		case <-ticker.C:
 			state := runtime.game.Tick()
+			r.SetRuntimeState(state)
 			if runtime.publish != nil { runtime.publish(r.ID, state) }
 			if state.Status == game.StatusFinished {
 				r.SetStatus(room.StatusFinished)
