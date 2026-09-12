@@ -8,6 +8,9 @@ const HEIGHT = 600
 const COLS = WIDTH / TILE
 const ROWS = Math.floor(HEIGHT / TILE)
 const RADIUS = 20
+const SLOT_COLUMNS = [176, 480, 784]
+const SLOT_ROWS = [144, 304, 464]
+const CORRIDOR = 64
 const rect = (x, y, width, height, kind, extra = {}) => ({ x, y, width, height, kind, ...extra })
 const point = (x, y) => ({ x, y })
 
@@ -41,6 +44,73 @@ function overlaps(a, b, padding = 0) {
 function inside(p, r, padding = 0) {
   return p.x >= r.x + padding && p.x <= r.x + r.width - padding && p.y >= r.y + padding && p.y <= r.y + r.height - padding
 }
+function slotKey(row, column) { return `${row}:${column}` }
+function slotNeighbors(slot) {
+  return [[-1, 0], [1, 0], [0, -1], [0, 1]]
+    .map(([dr, dc]) => ({ row: slot.row + dr, column: slot.column + dc }))
+    .filter(({ row, column }) => row >= 0 && row < SLOT_ROWS.length && column >= 0 && column < SLOT_COLUMNS.length)
+}
+function weightedRoomCount(random) {
+  const roll = random()
+  if (roll < 0.05) return 4
+  if (roll < 0.20) return 5
+  if (roll < 0.45) return 6
+  if (roll < 0.70) return 7
+  if (roll < 0.90) return 8
+  return 9
+}
+function growRoomGraph(random, targetCount) {
+  const start = { row: Math.floor(random() * 3), column: Math.floor(random() * 3) }
+  const slots = [start]
+  const occupied = new Map([[slotKey(start.row, start.column), 0]])
+  const edges = []
+  while (slots.length < targetCount) {
+    const frontier = []
+    for (let parent = 0; parent < slots.length; parent++) {
+      for (const candidate of slotNeighbors(slots[parent])) {
+        if (!occupied.has(slotKey(candidate.row, candidate.column))) frontier.push({ ...candidate, parent })
+      }
+    }
+    const next = pick(random, frontier)
+    const id = slots.length
+    slots.push({ row: next.row, column: next.column })
+    occupied.set(slotKey(next.row, next.column), id)
+    edges.push([next.parent, id])
+  }
+  const existing = new Set(edges.map(([a, b]) => a < b ? `${a}:${b}` : `${b}:${a}`))
+  const extras = []
+  for (let a = 0; a < slots.length; a++) {
+    for (const neighbor of slotNeighbors(slots[a])) {
+      const b = occupied.get(slotKey(neighbor.row, neighbor.column))
+      if (b == null || b <= a) continue
+      const key = `${a}:${b}`
+      if (existing.has(key) || random() >= 0.34) continue
+      existing.add(key)
+      extras.push([a, b])
+    }
+  }
+  return { slots, edges: [...edges, ...extras] }
+}
+function graphInfo(roomCount, edges, start) {
+  const adjacency = Array.from({ length: roomCount }, () => [])
+  for (const [a, b] of edges) { adjacency[a].push(b); adjacency[b].push(a) }
+  const distances = Array(roomCount).fill(Infinity), parents = Array(roomCount).fill(-1), queue = [start]
+  distances[start] = 0
+  for (const room of queue) {
+    for (const next of adjacency[room]) {
+      if (Number.isFinite(distances[next])) continue
+      distances[next] = distances[room] + 1
+      parents[next] = room
+      queue.push(next)
+    }
+  }
+  return { adjacency, distances, parents }
+}
+function routeTo(parents, finish) {
+  const route = []
+  for (let current = finish; current >= 0; current = parents[current]) route.push(current)
+  return route.reverse()
+}
 
 // Merge equal row spans vertically without filling holes or changing tile occupancy.
 function rectanglesFor(grid, kind) {
@@ -63,19 +133,53 @@ function rectanglesFor(grid, kind) {
   return out
 }
 
+function decorationCandidates(random, room, width, height) {
+  const candidates = []
+  const minX = room.x + TILE, maxX = room.x + room.width - width - TILE
+  const minY = room.y + TILE, maxY = room.y + room.height - height - TILE
+  for (let y = minY; y <= maxY; y += TILE) for (let x = minX; x <= maxX; x += TILE) {
+    const edgeDistance = Math.min(x - room.x, room.x + room.width - (x + width), y - room.y, room.y + room.height - (y + height))
+    if (edgeDistance <= TILE * 2) candidates.push(point(x, y))
+  }
+  return shuffle(random, candidates)
+}
+function decorationScale(motif) {
+  const area = motif.width * motif.height
+  if (area >= 12) return 'large'
+  if (area >= 4) return 'medium'
+  return 'small'
+}
+function perimeterWallMotif(bounds) {
+  const width = bounds.width / TILE, height = bounds.height / TILE
+  const cells = []
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (x !== 0 && x !== width - 1 && y !== 0 && y !== height - 1) continue
+    const role = y === 0
+      ? (x === 0 ? 'nw' : x === width - 1 ? 'ne' : 'n')
+      : y === height - 1
+        ? (x === 0 ? 'sw' : x === width - 1 ? 'se' : 's')
+        : x === 0 ? 'w' : 'e'
+    cells.push({ x, y, ...dungeon3Rules.floorDark[role] })
+  }
+  return { id: 'perimeter-wall', width, height, cells }
+}
+
 function build(seed, floor, attempt) {
   const random = rng(seed + Math.imul(attempt, 0x9e3779b9))
   const cells = Array.from({ length: COLS * ROWS }, (_, i) => {
     const x = i % COLS, y = Math.floor(i / COLS)
     return { kind: x < 3 || x >= 57 || y < 3 || y >= 34 ? 'boundary' : 'water', level: 0 }
   })
-  const rooms = []
-  const levels = shuffle(random, [0, 1, 2, 0, 1, 2])
-  for (let row = 0; row < 2; row++) for (let column = 0; column < 3; column++) {
-    const cx = 176 + column * 304, cy = 176 + row * 256
-    const width = pick(random, [192, 224, 256]), height = pick(random, [160, 192])
-    rooms.push(rect(cx - width / 2, cy - height / 2, width, height, 'room', { id: rooms.length, level: levels[rooms.length], center: point(cx, cy) }))
-  }
+  const targetCount = weightedRoomCount(random)
+  const topology = growRoomGraph(random, targetCount)
+  const levelOrder = shuffle(random, Array.from({ length: targetCount }, (_, i) => i % 3))
+  const rooms = topology.slots.map((slot, id) => {
+    const cx = SLOT_COLUMNS[slot.column], cy = SLOT_ROWS[slot.row]
+    const width = pick(random, [192, 224, 256]), height = pick(random, [96, 128])
+    return rect(cx - width / 2, cy - height / 2, width, height, 'room', {
+      id, level: levelOrder[id], center: point(cx, cy), slot: { ...slot },
+    })
+  })
   const carve = (area, kind, level, onlyWater = false) => {
     for (let y = area.y / TILE; y < (area.y + area.height) / TILE; y++) {
       for (let x = area.x / TILE; x < (area.x + area.width) / TILE; x++) {
@@ -86,26 +190,25 @@ function build(seed, floor, attempt) {
     }
   }
   for (const room of rooms) carve(room, 'floor', room.level)
-  // A connected perimeter leaves distinct rooms and waterways; one extra crossing
-  // changes the loop structure while every floor retains at least one alternate route.
-  const edges = [[0, 1], [1, 2], [2, 5], [5, 4], [4, 3], [3, 0]]
-  if (random() < 0.6) edges.push([1, 4])
+
   const paths = [], bridges = []
-  for (const [a, b] of edges) {
+  for (const [a, b] of topology.edges) {
     const from = rooms[a].center, to = rooms[b].center
-    const horizontal = from.y === to.y
+    const horizontal = from.y === to.y, half = CORRIDOR / 2
     const path = horizontal
-      ? rect(Math.min(from.x, to.x) - 48, from.y - 48, Math.abs(to.x - from.x) + 96, 96, 'path')
-      : rect(from.x - 48, Math.min(from.y, to.y) - 48, 96, Math.abs(to.y - from.y) + 96, 'path')
+      ? rect(Math.min(from.x, to.x) - half, from.y - half, Math.abs(to.x - from.x) + CORRIDOR, CORRIDOR, 'path')
+      : rect(from.x - half, Math.min(from.y, to.y) - half, CORRIDOR, Math.abs(to.y - from.y) + CORRIDOR, 'path')
     path.from = a; path.to = b; path.level = rooms[a].level
     paths.push(path)
     const lower = horizontal ? (from.x < to.x ? rooms[a] : rooms[b]) : (from.y < to.y ? rooms[a] : rooms[b])
     const upper = lower === rooms[a] ? rooms[b] : rooms[a]
-    bridges.push(horizontal
-      ? rect(lower.x + lower.width - 16, from.y - 48, upper.x - lower.x - lower.width + 32, 96, 'bridge', { orientation: 'horizontal' })
-      : rect(from.x - 48, lower.y + lower.height - 16, 96, upper.y - lower.y - lower.height + 32, 'bridge', { orientation: 'vertical' }))
+    const bridge = horizontal
+      ? rect(lower.x + lower.width - TILE, from.y - half, Math.max(TILE * 2, upper.x - lower.x - lower.width + TILE * 2), CORRIDOR, 'bridge', { orientation: 'horizontal' })
+      : rect(from.x - half, lower.y + lower.height - TILE, CORRIDOR, Math.max(TILE * 2, upper.y - lower.y - lower.height + TILE * 2), 'bridge', { orientation: 'vertical' })
+    bridges.push(bridge)
     carve(path, 'bridge', path.level, true)
   }
+
   const g = {
     name: 'dungeon3-grid', seed, floor, width: WIDTH, height: HEIGHT,
     bounds: { x: 48, y: 48, width: 864, height: 496 },
@@ -114,43 +217,83 @@ function build(seed, floor, attempt) {
     solids: [...rectanglesFor(cells, 'boundary'), rect(0, ROWS * TILE, WIDTH, HEIGHT - ROWS * TILE, 'boundary')],
     stairs: [], doors: [], traps: [], decorations: [], torches: [], chests: [], spawnPoints: [], criticalPath: [],
   }
-  const start = Math.floor(random() * rooms.length)
-  const finish = [5, 3, 4, 1, 2, 0][start]
-  const anchor = (room) => point(room.center.x + pick(random, [-32, 0, 32]), room.center.y + pick(random, [-16, 16]))
-  g.spawn = anchor(rooms[start]); g.exit = anchor(rooms[finish]); g.rest = { ...rooms[(start + 1) % 6].center }
+
+  const degrees = topology.slots.map((_, id) => topology.edges.reduce((count, [a, b]) => count + (a === id || b === id ? 1 : 0), 0))
+  const leaves = degrees.map((degree, id) => ({ degree, id })).filter(entry => entry.degree === 1).map(entry => entry.id)
+  const start = pick(random, leaves.length ? leaves : rooms.map(room => room.id))
+  const info = graphInfo(rooms.length, topology.edges, start)
+  const maxDistance = Math.max(...info.distances)
+  const finish = pick(random, info.distances.map((distance, id) => ({ distance, id })).filter(entry => entry.distance === maxDistance).map(entry => entry.id))
+  const criticalRooms = routeTo(info.parents, finish)
+  const restRoom = criticalRooms[Math.max(0, Math.min(criticalRooms.length - 1, Math.floor(criticalRooms.length / 2)))]
+  const sideLeaves = leaves.filter(id => id !== start && id !== finish)
+  const chestRoom = sideLeaves.length ? pick(random, sideLeaves) : info.distances
+    .map((distance, id) => ({ distance, id })).filter(entry => entry.id !== start && entry.id !== finish)
+    .sort((a, b) => b.distance - a.distance)[0]?.id ?? restRoom
+  const anchor = room => point(room.center.x + pick(random, [-16, 0, 16]), room.center.y + pick(random, [-16, 0, 16]))
+  g.spawn = anchor(rooms[start]); g.exit = anchor(rooms[finish]); g.rest = { ...rooms[restRoom].center }
   g.spawnPoints = rooms.map(room => ({ ...room.center }))
-  g.chests = [{ ...rooms[(start + 2) % 6].center }]
-  // Exits are floor transitions; portal rendering owns the complete marker.
+  g.chests = [{ ...rooms[chestRoom].center }]
+
   for (const bridge of bridges) {
     const horizontal = bridge.orientation === 'horizontal'
-    g.stairs.push({ x: horizontal ? bridge.x + 16 : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + 16, orientation: horizontal ? 'right' : 'down' })
-    g.stairs.push({ x: horizontal ? bridge.x + bridge.width - 16 : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + bridge.height - 16, orientation: horizontal ? 'left' : 'up' })
+    g.stairs.push({ x: horizontal ? bridge.x + TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + TILE, orientation: horizontal ? 'right' : 'down' })
+    g.stairs.push({ x: horizontal ? bridge.x + bridge.width - TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + bridge.height - TILE, orientation: horizontal ? 'left' : 'up' })
   }
+
   const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints]
-  const motifPools = [['coffin', dungeon3Rules.motifs.coffins], ['object', dungeon3Rules.motifs.otherObjects]]
-  for (const room of rooms) {
-    for (const [kind, pool] of motifPools) {
-      const motifs = shuffle(random, pool.filter(m => m.width <= 4 && m.height <= 4))
-      for (const motif of motifs) {
-        const width = motif.width * TILE, height = motif.height * TILE
-        const candidates = shuffle(random, [
-          point(room.x + 16, room.y + 16), point(room.x + room.width - width - 16, room.y + 16),
-          point(room.x + 16, room.y + room.height - height - 16), point(room.x + room.width - width - 16, room.y + room.height - height - 16),
-        ])
-        const area = candidates.map(p => rect(p.x, p.y, width, height, 'decoration')).find(area =>
-          inside(point(area.x, area.y), room, 16) && inside(point(area.x + width, area.y + height), room, 16) &&
-          !paths.some(path => overlaps(area, path, 8)) &&
-          !reserved.some(p => overlaps(area, rect(p.x - 28, p.y - 28, 56, 56, 'reserved'), 8)) &&
-          !g.decorations.some(d => overlaps(area, rect(d.x - d.footprint.width / 2, d.y - d.footprint.height / 2, d.footprint.width, d.footprint.height, 'prop'), 8)))
-        if (!area) continue
-        g.decorations.push({ x: area.x + width / 2, y: area.y + height / 2, kind, motif, footprint: { width, height } })
-        g.solids.push({ ...area, kind: 'prop', authored: true })
-        break
-      }
-    }
-    // Lighting is a non-blocking accent on each platform.
-    g.torches.push(point(room.center.x, room.y + 32))
+  const motifs = [
+    ...dungeon3Rules.motifs.coffins.map(motif => ({ kind: 'coffin', motif })),
+    ...dungeon3Rules.motifs.otherObjects.map(motif => ({ kind: 'object', motif })),
+  ].filter(entry => entry.motif.width <= 6 && entry.motif.height <= 6)
+  const byScale = {
+    large: motifs.filter(entry => decorationScale(entry.motif) === 'large'),
+    medium: motifs.filter(entry => decorationScale(entry.motif) === 'medium'),
+    small: motifs.filter(entry => decorationScale(entry.motif) === 'small'),
   }
+  const decorationArea = d => rect(d.x - d.footprint.width / 2, d.y - d.footprint.height / 2, d.footprint.width, d.footprint.height, 'prop')
+  const placeDecoration = (room, pool, blocking = true, preferLargest = false) => {
+    if (!pool.length) return false
+    const entries = shuffle(random, pool)
+    if (preferLargest) entries.sort((a, b) => b.motif.width * b.motif.height - a.motif.width * a.motif.height)
+    for (const entry of entries) {
+      const width = entry.motif.width * TILE, height = entry.motif.height * TILE
+      const scale = decorationScale(entry.motif)
+      let collisionArea = null
+      const area = decorationCandidates(random, room, width, height).map(p => rect(p.x, p.y, width, height, 'decoration')).find(candidate => {
+        const collisionWidth = scale === 'large' ? Math.min(width, TILE * 2) : width
+        const collisionHeight = scale === 'large' ? Math.min(height, TILE) : height
+        const collision = rect(candidate.x + (width - collisionWidth) / 2, candidate.y + height - collisionHeight, collisionWidth, collisionHeight, 'prop')
+        const valid = inside(point(candidate.x, candidate.y), room, TILE) && inside(point(candidate.x + width, candidate.y + height), room, TILE) &&
+          (!blocking || !paths.some(path => overlaps(collision, path))) &&
+          !reserved.some(p => overlaps(candidate, rect(p.x - 28, p.y - 28, 56, 56, 'reserved'), 4)) &&
+          !g.decorations.some(d => overlaps(candidate, decorationArea(d), 4))
+        if (valid) collisionArea = collision
+        return valid
+      })
+      if (!area) continue
+      const collisionFootprint = collisionArea ? { width: collisionArea.width, height: collisionArea.height } : { width, height }
+      g.decorations.push({ x: area.x + width / 2, y: area.y + height / 2, kind: entry.kind, motif: entry.motif, scale, footprint: { width, height }, collisionFootprint, blocking })
+      if (blocking) g.solids.push({ ...collisionArea, kind: 'prop', authored: true })
+      return true
+    }
+    return false
+  }
+  for (const room of rooms) {
+    placeDecoration(room, byScale.large.length ? byScale.large : motifs, true, true)
+    if (random() < 0.4) placeDecoration(room, byScale.large.length ? byScale.large : motifs, true, true)
+    const mediumCount = 2 + Math.floor(random() * 2)
+    for (let i = 0; i < mediumCount; i++) placeDecoration(room, byScale.medium.length ? byScale.medium : motifs, i === 0)
+    const smallCount = 5 + Math.floor(random() * 4)
+    for (let i = 0; i < smallCount; i++) placeDecoration(room, byScale.small.length ? byScale.small : motifs, false)
+    g.torches.push(point(room.center.x, room.y + TILE * 2))
+  }
+  const wallMotif = perimeterWallMotif(g.bounds)
+  g.decorations.push({
+    x: g.bounds.x + g.bounds.width / 2, y: g.bounds.y + g.bounds.height / 2,
+    kind: 'wall', motif: wallMotif, scale: 'landmark',
+    footprint: { width: g.bounds.width, height: g.bounds.height }, blocking: false,
+  })
   return g
 }
 
@@ -169,13 +312,13 @@ function validate(g) {
 export function generateDungeonGeometry({ runSeed = 1, floor = 1 } = {}) {
   floor = Math.max(1, Math.floor(Number(floor) || 1))
   const seed = floorSeed(runSeed, floor)
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 12; attempt++) {
     const geometry = build(seed, floor, attempt)
     if (validate(geometry)) return geometry
   }
-  // The fallback follows exactly the same validation; never return an unchecked map.
   const fallback = build(seed, floor, 0)
-  fallback.decorations = []; fallback.solids = fallback.solids.filter(s => !s.authored)
+  fallback.decorations = fallback.decorations.filter(d => d.kind === 'wall')
+  fallback.solids = fallback.solids.filter(s => !s.authored)
   if (!validate(fallback)) throw new Error(`Dungeon3 map is disconnected: ${seed}/${floor}`)
   return fallback
 }
