@@ -1,5 +1,6 @@
 import { clampJoystickVector } from '../touch/joystick.js'
 import { installDungeonPerf } from './perf-runtime.js'
+import { installPhaser4FillTintCompat } from './phaser4-tint-runtime.js'
 
 export { joystickVector } from '../touch/joystick.js'
 
@@ -62,9 +63,11 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   }
 
   scene.__dungeonTouchInput = api
+  const tintCompat = installPhaser4FillTintCompat(scene)
   const perf = installDungeonPerf(scene)
   scene.events?.once?.('shutdown', () => {
     perf?.destroy?.()
+    tintCompat?.destroy?.()
     api.stopMove()
     if (scene.updatePlayer === updatePlayerWithTouch) scene.updatePlayer = originalUpdatePlayer
     if (scene.trySkill === trySkillWithTouch) scene.trySkill = originalTrySkill

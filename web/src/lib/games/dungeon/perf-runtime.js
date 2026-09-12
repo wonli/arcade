@@ -12,6 +12,59 @@ export function perfEnabledFromSearch(search = '') {
   return new URLSearchParams(search).get('perf') === '1'
 }
 
+function createPerfPanel() {
+  if (typeof document === 'undefined') return null
+  const existing = document.querySelector('[data-dungeon-perf]')
+  if (existing) return existing.__perfApi ?? null
+
+  const panel = document.createElement('aside')
+  panel.dataset.dungeonPerf = '1'
+  panel.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;max-height:38vh;border:1px solid #39414b;background:rgba(8,10,13,.94);color:#c1ff56;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:8px 8px 0 rgba(0,0,0,.4);display:flex;flex-direction:column;'
+
+  const header = document.createElement('div')
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px;border-bottom:1px solid #30363f;flex:0 0 auto;'
+  const title = document.createElement('strong')
+  title.textContent = 'DUNGEON PERF · ?perf=1'
+  const copy = document.createElement('button')
+  copy.type = 'button'
+  copy.textContent = 'COPY'
+  copy.style.cssText = 'border:1px solid #c1ff56;background:#111419;color:#c1ff56;padding:4px 9px;font:inherit;font-weight:800;cursor:pointer;'
+  header.append(title, copy)
+
+  const output = document.createElement('pre')
+  output.style.cssText = 'margin:0;padding:8px 9px;overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text;touch-action:pan-y;'
+  panel.append(header, output)
+  document.body.appendChild(panel)
+
+  const lines = []
+  const api = {
+    append(line) {
+      lines.push(line)
+      if (lines.length > 120) lines.splice(0, lines.length - 120)
+      output.textContent = lines.join('\n')
+      output.scrollTop = output.scrollHeight
+    },
+    destroy() { panel.remove() },
+  }
+  copy.addEventListener('click', async () => {
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      copy.textContent = 'COPIED'
+    } catch {
+      const selection = globalThis.getSelection?.()
+      const range = document.createRange()
+      range.selectNodeContents(output)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      copy.textContent = 'SELECTED'
+    }
+    setTimeout(() => { copy.textContent = 'COPY' }, 1200)
+  })
+  panel.__perfApi = api
+  return api
+}
+
 export function createPerfMonitor({ now = () => performance.now(), intervalMs = 2000, log = console.info } = {}) {
   let windowStartedAt = now()
   let frames = []
@@ -63,9 +116,7 @@ export function createPerfMonitor({ now = () => performance.now(), intervalMs = 
       values.push(duration)
       sections.set(key, values)
     },
-    counts(next) {
-      latestCounts = { ...next }
-    },
+    counts(next) { latestCounts = { ...next } },
     event(name, duration, counts = {}) {
       const suffix = Object.entries(counts).map(([key, value]) => `${key}=${value}`).join(' ')
       log(`[dungeon:perf] ${name}=${duration.toFixed(2)}ms${suffix ? ` | ${suffix}` : ''}`)
@@ -81,34 +132,33 @@ export function installDungeonPerf(scene, {
 } = {}) {
   if (!enabled || !scene || scene.__dungeonPerf) return scene?.__dungeonPerf ?? null
 
-  const monitor = createPerfMonitor({ now, log })
+  const panel = createPerfPanel()
+  const output = (line) => {
+    log(line)
+    panel?.append(line)
+  }
+  const monitor = createPerfMonitor({ now, log: output })
   const restorers = []
   const wrapTimed = (name, label = name) => {
     const original = scene[name]
     if (typeof original !== 'function') return
     scene[name] = function (...args) {
       const started = now()
-      try {
-        return original.apply(this, args)
-      } finally {
-        monitor.section(label, now() - started)
-      }
+      try { return original.apply(this, args) }
+      finally { monitor.section(label, now() - started) }
     }
     restorers.push(() => { scene[name] = original })
   }
 
-  for (const name of ['updatePlayer', 'updateEnemies', 'updateEnemyProjectiles', 'updateDrops', 'updatePortal', 'autoAttack', 'trySkill']) {
-    wrapTimed(name, name)
-  }
+  for (const name of ['updatePlayer', 'updateEnemies', 'updateEnemyProjectiles', 'updateDrops', 'updatePortal', 'autoAttack', 'trySkill']) wrapTimed(name, name)
 
   for (const name of ['drawArena', 'startFloor']) {
     const original = scene[name]
     if (typeof original !== 'function') continue
     scene[name] = function (...args) {
       const started = now()
-      try {
-        return original.apply(this, args)
-      } finally {
+      try { return original.apply(this, args) }
+      finally {
         monitor.event(name, now() - started, {
           enemies: this.enemies?.length ?? 0,
           projectiles: this.enemyProjectiles?.length ?? 0,
@@ -123,9 +173,8 @@ export function installDungeonPerf(scene, {
   const originalUpdate = scene.update
   scene.update = function (time, delta, ...rest) {
     monitor.frame(delta)
-    try {
-      return originalUpdate.call(this, time, delta, ...rest)
-    } finally {
+    try { return originalUpdate.call(this, time, delta, ...rest) }
+    finally {
       monitor.counts({
         enemies: this.enemies?.filter?.((enemy) => enemy.hp > 0).length ?? this.enemies?.length ?? 0,
         projectiles: this.enemyProjectiles?.length ?? 0,
@@ -140,10 +189,11 @@ export function installDungeonPerf(scene, {
     flush: () => monitor.flush(),
     destroy() {
       while (restorers.length) restorers.pop()()
+      panel?.destroy()
       delete scene.__dungeonPerf
     },
   }
   scene.__dungeonPerf = api
-  log('[dungeon:perf] enabled; aggregated stats every 2s')
+  output('[dungeon:perf] enabled; aggregated stats every 2s')
   return api
 }
