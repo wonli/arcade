@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describeDungeonAsset, describeDungeonTilesetAsset, describeRpgMainCharacterAsset } from '../web/src/lib/games/dungeon/assets.js'
+import { parseTiledMap } from '../web/src/lib/games/dungeon/tiled-map.js'
 import { classifyVfxAsset } from '../web/src/lib/games/dungeon/vfx-assets.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
@@ -89,6 +90,34 @@ function walk(pack, dir) {
   return files
 }
 
+function findNamedFile(dir, targetName) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name)
+    const stat = statSync(full)
+    if (stat.isDirectory()) {
+      const nested = findNamedFile(full, targetName)
+      if (nested) return nested
+      continue
+    }
+    if (name.toLowerCase() === targetName.toLowerCase()) return full
+  }
+  return null
+}
+
+function serializableTiledMap(parsed, path) {
+  return {
+    path,
+    version: parsed.version,
+    tiledVersion: parsed.tiledVersion,
+    orientation: parsed.orientation,
+    infinite: parsed.infinite,
+    tileWidth: parsed.tileWidth,
+    tileHeight: parsed.tileHeight,
+    tilesets: parsed.tilesets,
+    layers: parsed.layers,
+  }
+}
+
 function walkVfx(pack, dir) {
   const files = []
   for (const name of readdirSync(dir)) {
@@ -116,6 +145,7 @@ function extractZip(pack) {
 }
 
 const assets = []
+const tiledMaps = {}
 for (const pack of packs) {
   if (!extractZip(pack)) continue
   const packAssets = walk(pack, pack.output).sort((a, b) => a.path.localeCompare(b.path))
@@ -124,6 +154,15 @@ for (const pack of packs) {
   if (pack.source === 'dungeon-tileset') {
     console.log('Dungeon tileset inventory:')
     for (const asset of packAssets) console.log(`  ${asset.width}x${asset.height}\t${asset.frameWidth}x${asset.frameHeight}\t${asset.frames}f\t${asset.kind ?? '-'}\t${asset.path}`)
+
+    const dungeon3 = findNamedFile(pack.output, 'Dungeon3.tmx')
+    if (dungeon3) {
+      const publicPath = pack.publicBase + relative(pack.output, dungeon3).split('\\').join('/')
+      tiledMaps.Dungeon3 = serializableTiledMap(parseTiledMap(readFileSync(dungeon3, 'utf8')), publicPath)
+      console.log(`Prepared Dungeon3 Tiled metadata from ${publicPath}`)
+    } else {
+      console.warn('Dungeon3.tmx not found in dungeon tileset pack')
+    }
   }
 }
 
@@ -135,6 +174,7 @@ const manifest = {
   ],
   assets: assets.sort((a, b) => a.path.localeCompare(b.path)),
   png: assets.map((asset) => asset.path),
+  tiledMaps,
 }
 
 const manifestDir = join(root, 'web', 'static', 'assets', 'debts')
