@@ -10,10 +10,11 @@ const geometry = {
   water: [{ x: 48, y: 96, width: 48, height: 48 }],
 }
 
-test('nav grid blocks solids and marks water as higher cost', () => {
+test('nav grid blocks solids and water', () => {
   const grid = buildNavGrid(geometry, { cellSize: 48, actorRadius: 12 })
   assert.equal(navCostAt(grid, { x: 2, y: 1 }), Infinity)
-  assert.ok(navCostAt(grid, { x: 1, y: 2 }) > navCostAt(grid, { x: 0, y: 2 }))
+  assert.equal(navCostAt(grid, { x: 1, y: 2 }), Infinity)
+  assert.equal(navCostAt(grid, { x: 0, y: 2 }), 1)
 })
 
 test('astar routes around a wall instead of crossing blocked cells', () => {
@@ -24,7 +25,7 @@ test('astar routes around a wall instead of crossing blocked cells', () => {
   assert.ok(path.at(-1).x > 190)
 })
 
-test('astar prefers a modest dry detour over expensive water', () => {
+test('astar never routes through water', () => {
   const wide = {
     width: 288,
     height: 192,
@@ -35,4 +36,5 @@ test('astar prefers a modest dry detour over expensive water', () => {
   const path = findPath(grid, { x: 24, y: 72 }, { x: 264, y: 72 })
   const waterCells = path.filter((node) => node.terrain === 'water')
   assert.equal(waterCells.length, 0)
+  assert.ok(path.length > 0)
 })
