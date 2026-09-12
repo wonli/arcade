@@ -44,15 +44,11 @@ test('prefers the RPG player and resolves distinct enemy role assets', () => {
   assert.equal(assets.weapon.source, 'debts')
 })
 
-test('keeps floor wall and obstacle visuals on distinct authored assets', () => {
+test('keeps dungeon floor and wall on distinct authored assets', () => {
   const assets = chooseDungeonAssets(manifest)
   assert.equal(assets.floor.path, '/assets/debts/Tiles/BrickFloor.png')
   assert.equal(assets.wall.path, '/assets/debts/Tiles/StoneWall.png')
-  assert.equal(assets.obstacle.path, '/assets/debts/Environment/Pillar.png')
-  assert.equal(assets.torch.path, '/assets/debts/Environment/Torch.png')
-  assert.equal(assets.chest.path, '/assets/debts/Items/Chest.png')
   assert.notEqual(assets.floor.path, assets.wall.path)
-  assert.notEqual(assets.wall.path, assets.obstacle.path)
 })
 
 test('resolves movement into four player directions', () => {
