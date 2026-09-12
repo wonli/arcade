@@ -1,4 +1,5 @@
 import { rollAffixes } from './affixes.js'
+import { chooseEnvironmentAssets } from './environment-assets.js'
 import { chestRewardProfile, nearestInteractable } from './interactables.js'
 import { buildNavGrid, findPath, nextWaypoint } from './pathfinding.js'
 import { circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry, terrainAt } from './spatial.js'
@@ -41,17 +42,25 @@ export function selectDebtsEnvironmentAssets(manifest = {}) {
 }
 
 export function spatialTextureKey(kind, available = {}) {
-  if (kind === 'floor') return available.floor ? 'dungeon-floor' : null
-  if (kind === 'boundary' || kind === 'wall') return available.wall ? 'dungeon-wall' : null
-  if (kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall') return available.obstacle ? 'dungeon-obstacle' : null
-  if (kind === 'torch') return available.torch ? 'dungeon-torch' : null
-  if (kind === 'chest') return available.chest ? 'dungeon-chest' : null
+  if (kind === 'floor') return available.tilesetFloor ? 'dungeon-tileset-floor' : available.floor ? 'dungeon-floor' : null
+  if (kind === 'boundary' || kind === 'wall') return available.tilesetWall ? 'dungeon-tileset-wall' : available.wall ? 'dungeon-wall' : null
+  if (kind === 'water') return available.tilesetWater ? 'dungeon-tileset-water' : null
+  if (kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall') return available.tilesetObstacle ? 'dungeon-tileset-obstacle' : available.obstacle ? 'dungeon-obstacle' : null
+  if (kind === 'torch') return available.tilesetTorch ? 'dungeon-tileset-torch' : available.torch ? 'dungeon-torch' : null
+  if (kind === 'chest') return available.tilesetChest ? 'dungeon-tileset-chest' : available.chest ? 'dungeon-chest' : null
   return null
+}
+
+export function spatialTextureFrame(kind, frames = {}) {
+  if (kind === 'boundary' || kind === 'wall') return frames.wall ?? null
+  if (kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall') return frames.obstacle ?? null
+  return frames[kind] ?? null
 }
 
 export function spatialSurfaceTint(kind) {
   if (kind === 'floor') return 0xb49a82
   if (kind === 'boundary' || kind === 'wall') return 0x667488
+  if (kind === 'water') return 0x7db5c8
   return 0xaeb5bd
 }
 
@@ -82,23 +91,30 @@ function track(scene, object) {
 }
 
 function textureAvailability(scene) {
+  const exists = (key) => Boolean(scene.textures?.exists?.(key))
   return {
-    floor: Boolean(scene.textures?.exists?.('dungeon-floor')),
-    wall: Boolean(scene.textures?.exists?.('dungeon-wall')),
-    obstacle: Boolean(scene.textures?.exists?.('dungeon-obstacle')),
-    torch: Boolean(scene.textures?.exists?.('dungeon-torch')),
-    chest: Boolean(scene.textures?.exists?.('dungeon-chest')),
+    tilesetFloor: exists('dungeon-tileset-floor'),
+    tilesetWall: exists('dungeon-tileset-wall'),
+    tilesetWater: exists('dungeon-tileset-water'),
+    tilesetObstacle: exists('dungeon-tileset-obstacle'),
+    tilesetTorch: exists('dungeon-tileset-torch'),
+    tilesetChest: exists('dungeon-tileset-chest'),
+    floor: exists('dungeon-floor'),
+    wall: exists('dungeon-wall'),
+    obstacle: exists('dungeon-obstacle'),
+    torch: exists('dungeon-torch'),
+    chest: exists('dungeon-chest'),
   }
 }
 
-function addTiledTexture(scene, x, y, width, height, key, depth, tint = null) {
-  const tile = track(scene, scene.add.tileSprite(x, y, Math.max(1, width), Math.max(1, height), key).setDepth(depth))
+function addTiledTexture(scene, x, y, width, height, key, depth, tint = null, frame = null) {
+  const tile = track(scene, scene.add.tileSprite(x, y, Math.max(1, width), Math.max(1, height), key, frame ?? undefined).setDepth(depth))
   if (tint != null) tile.setTint?.(tint)
   return tile
 }
 
-function addScaledImage(scene, x, y, key, targetHeight, depth) {
-  const image = track(scene, scene.add.image(x, y, key).setDepth(depth))
+function addScaledImage(scene, x, y, key, targetHeight, depth, frame = null) {
+  const image = track(scene, scene.add.image(x, y, key, frame ?? undefined).setDepth(depth))
   const sourceHeight = image.height || targetHeight
   image.setScale?.(targetHeight / Math.max(1, sourceHeight))
   return image
@@ -109,6 +125,7 @@ function renderFloor(scene, geometry) {
   background.fillStyle(0x080a0d, 1).fillRect(0, 0, geometry.width, geometry.height)
   const tile = 48
   const available = textureAvailability(scene)
+  const frames = scene.__dungeonEnvironmentFrames ?? {}
   const floorTexture = spatialTextureKey('floor', available)
 
   if (floorTexture) {
@@ -121,6 +138,7 @@ function renderFloor(scene, geometry) {
       floorTexture,
       1,
       spatialSurfaceTint('floor'),
+      spatialTextureFrame('floor', frames),
     )
   } else {
     for (let y = tile; y < geometry.height - tile; y += tile) {
@@ -133,14 +151,31 @@ function renderFloor(scene, geometry) {
   }
 
   for (const water of geometry.water) {
-    const body = track(scene, scene.add.rectangle(
-      water.x + water.width / 2,
-      water.y + water.height / 2,
-      water.width,
-      water.height,
-      0x174c63,
-      0.62,
-    ).setStrokeStyle(2, 0x3991a9, 0.52).setDepth(2))
+    const waterTexture = spatialTextureKey('water', available)
+    let body
+    if (waterTexture) {
+      body = addTiledTexture(
+        scene,
+        water.x + water.width / 2,
+        water.y + water.height / 2,
+        water.width,
+        water.height,
+        waterTexture,
+        2,
+        spatialSurfaceTint('water'),
+        spatialTextureFrame('water', frames),
+      )
+      body.setAlpha?.(0.9)
+    } else {
+      body = track(scene, scene.add.rectangle(
+        water.x + water.width / 2,
+        water.y + water.height / 2,
+        water.width,
+        water.height,
+        0x174c63,
+        0.62,
+      ).setStrokeStyle(2, 0x3991a9, 0.52).setDepth(2))
+    }
     scene.tweens.add({ targets: body, alpha: 0.76, duration: 1200, yoyo: true, repeat: -1 })
     for (let y = water.y + 18; y < water.y + water.height; y += 30) {
       const ripple = track(scene, scene.add.rectangle(water.x + water.width / 2, y, Math.max(30, water.width - 26), 2, 0x69bed0, 0.18).setDepth(3))
@@ -171,6 +206,7 @@ function renderFloor(scene, geometry) {
         texture,
         depth,
         spatialSurfaceTint(solid.kind),
+        spatialTextureFrame(solid.kind, frames),
       )
       continue
     }
@@ -191,7 +227,7 @@ function renderFloor(scene, geometry) {
     const glow = track(scene, scene.add.circle(torch.x, torch.y, 42, 0xff8a3d, 0.08).setDepth(7))
     const torchTexture = spatialTextureKey('torch', available)
     if (torchTexture) {
-      const sprite = addScaledImage(scene, torch.x, torch.y + 2, torchTexture, 34, 9)
+      const sprite = addScaledImage(scene, torch.x, torch.y + 2, torchTexture, 34, 9, spatialTextureFrame('torch', frames))
       scene.tweens.add({ targets: glow, alpha: 0.2, scale: 1.22, duration: 780 + Math.random() * 220, yoyo: true, repeat: -1 })
       scene.tweens.add({ targets: sprite, y: sprite.y - 1, duration: 460 + Math.random() * 120, yoyo: true, repeat: -1 })
       continue
@@ -208,6 +244,7 @@ function renderChest(scene, anchor, index) {
   const x = anchor.x
   const y = anchor.y
   const available = textureAvailability(scene)
+  const frames = scene.__dungeonEnvironmentFrames ?? {}
   const shadow = track(scene, scene.add.ellipse(x + 4, y + 12, 38, 15, 0x020304, 0.46).setDepth(8))
   const glow = track(scene, scene.add.circle(x, y, 28, 0xffcf68, 0.05).setDepth(10))
   const chestTexture = spatialTextureKey('chest', available)
@@ -216,7 +253,7 @@ function renderChest(scene, anchor, index) {
   let lid = null
   let lock = null
   if (chestTexture) {
-    sprite = addScaledImage(scene, x, y, chestTexture, 34, 13)
+    sprite = addScaledImage(scene, x, y, chestTexture, 34, 13, spatialTextureFrame('chest', frames))
   } else {
     base = track(scene, scene.add.rectangle(x, y + 4, 38, 24, 0x8b542c, 1).setStrokeStyle(2, 0xd5964e, 0.95).setDepth(12))
     lid = track(scene, scene.add.rectangle(x, y - 9, 40, 14, 0xb36b34, 1).setStrokeStyle(2, 0xf0b35f, 0.95).setDepth(13))
@@ -268,20 +305,59 @@ function nearestValidSpawn(geometry, position) {
   return best
 }
 
-async function loadDebtsEnvironmentTextures(scene) {
-  if (typeof fetch !== 'function' || scene.__debtsEnvironmentLoadStarted) return false
-  scene.__debtsEnvironmentLoadStarted = true
+function queueEnvironmentTexture(scene, key, asset) {
+  if (!asset?.path || scene.textures?.exists?.(key)) return false
+  if ((asset.frames ?? 1) > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) {
+    scene.load.spritesheet(key, asset.path, {
+      frameWidth: asset.frameWidth,
+      frameHeight: asset.frameHeight,
+      endFrame: asset.frames - 1,
+    })
+  } else {
+    scene.load.image(key, asset.path)
+  }
+  return true
+}
+
+async function loadEnvironmentTextures(scene) {
+  if (typeof fetch !== 'function' || scene.__environmentLoadStarted) return false
+  scene.__environmentLoadStarted = true
   try {
     const response = await fetch('/assets/debts/manifest.json')
     if (!response.ok) return false
-    const selected = selectDebtsEnvironmentAssets(await response.json())
+    const manifest = await response.json()
+    const selected = chooseEnvironmentAssets(manifest)
+    const complete = selected.floor && selected.wall && selected.water && selected.obstacle && selected.torch && selected.chest
+
+    if (complete) {
+      scene.__dungeonEnvironmentFrames = Object.fromEntries(
+        Object.entries(selected).map(([kind, asset]) => [kind, asset?.frame ?? 0]),
+      )
+      const queue = [
+        ['dungeon-tileset-floor', selected.floor],
+        ['dungeon-tileset-wall', selected.wall],
+        ['dungeon-tileset-water', selected.water],
+        ['dungeon-tileset-obstacle', selected.obstacle],
+        ['dungeon-tileset-torch', selected.torch],
+        ['dungeon-tileset-chest', selected.chest],
+      ]
+      const queued = queue.some(([key, asset]) => queueEnvironmentTexture(scene, key, asset))
+      if (!queued) return true
+      await new Promise((resolve) => {
+        scene.load.once('complete', resolve)
+        scene.load.start()
+      })
+      return true
+    }
+
+    const fallback = selectDebtsEnvironmentAssets(manifest)
     const queue = [
-      ['dungeon-obstacle', selected.obstacle],
-      ['dungeon-torch', selected.torch],
-      ['dungeon-chest', selected.chest],
-    ].filter(([key, asset]) => asset?.path && !scene.textures?.exists?.(key))
-    if (!queue.length) return false
-    for (const [key, asset] of queue) scene.load.image(key, asset.path)
+      ['dungeon-obstacle', fallback.obstacle],
+      ['dungeon-torch', fallback.torch],
+      ['dungeon-chest', fallback.chest],
+    ]
+    const queued = queue.some(([key, asset]) => queueEnvironmentTexture(scene, key, asset))
+    if (!queued) return false
     await new Promise((resolve) => {
       scene.load.once('complete', resolve)
       scene.load.start()
@@ -510,7 +586,7 @@ export function installDungeonSpatial(scene, {
 
   const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
   scene.__dungeonSpatial = api
-  loadDebtsEnvironmentTextures(scene).then((loaded) => {
+  loadEnvironmentTextures(scene).then((loaded) => {
     if (!loaded || !scene.__roomGeometry) return
     refreshRoom({ geometry: scene.__roomGeometry })
   })
