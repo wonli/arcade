@@ -39,7 +39,7 @@ export function formatAffixLabel(entry, locale = 'en') {
   const value = entry?.value ?? 0
 
   if (entry?.id === 'vitality') return `+${Math.round(value)} ${name}`
-  if (entry?.id === 'critical_heal') return lang === 'zh-CN' ? `+${Math.round(value)} ${name}` : `+${Math.round(value)} ${name}`
+  if (entry?.id === 'critical_heal') return `+${Math.round(value)} ${name}`
   if (BUILD.has(entry?.id)) {
     if (entry.id === 'executioner') return `★ ${name} +${percent(value)}%`
     return `★ ${name} ${percent(value)}%`
@@ -47,6 +47,40 @@ export function formatAffixLabel(entry, locale = 'en') {
   if (PERCENT_PREFIX.has(entry?.id)) return `+${percent(value)}% ${name}`
   if (PERCENT_SUFFIX.has(entry?.id)) return `${percent(value)}% ${name}`
   return `${name} ${value}`
+}
+
+function compareAffixes(entries = [], otherEntries = [], locale = 'en', side = 'candidate') {
+  const other = new Map(otherEntries.map((entry) => [entry.id, entry]))
+  return entries.map((entry) => {
+    const previous = other.get(entry.id)
+    let direction = side === 'candidate' ? 'new' : 'lost'
+    if (previous) {
+      if ((entry.value ?? 0) > (previous.value ?? 0)) direction = 'up'
+      else if ((entry.value ?? 0) < (previous.value ?? 0)) direction = 'down'
+      else direction = 'same'
+    }
+    return { ...entry, label: formatAffixLabel(entry, locale), build: BUILD.has(entry.id), direction }
+  })
+}
+
+export function weaponComparisonModel(current, candidate, locale = 'en') {
+  const currentAffixes = current?.affixes ?? []
+  const candidateAffixes = candidate?.affixes ?? []
+  const currentDamage = current?.damage ?? 0
+  const candidateDamage = candidate?.damage ?? 0
+  return {
+    current: current ? {
+      rarity: current.rarity ?? null,
+      damage: currentDamage,
+      affixes: compareAffixes(currentAffixes, candidateAffixes, locale, 'current'),
+    } : null,
+    candidate: {
+      rarity: candidate?.rarity ?? null,
+      damage: candidateDamage,
+      damageDelta: candidateDamage - currentDamage,
+      affixes: compareAffixes(candidateAffixes, currentAffixes, locale, 'candidate'),
+    },
+  }
 }
 
 export function weaponHudModel(stats = {}, locale = 'en') {
