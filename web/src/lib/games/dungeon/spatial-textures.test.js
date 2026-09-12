@@ -1,13 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
+import { spatialAnimation, spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 
 const allTextures = {
   tilesetFloor: true,
   tilesetWall: true,
   tilesetWater: true,
+  tilesetWaterDetail: true,
   tilesetObstacle: true,
   tilesetTorch: true,
   tilesetChest: true,
@@ -32,4 +33,15 @@ test('pillars render from the authored vertical tile stack', () => {
   assert.deepEqual(spatialTileStack('pillar', stacks), [188, 208, 228, 248])
   assert.equal(spatialTileStack('wall', stacks), null)
   assert.equal(spatialTileStack('boundary', stacks), null)
+})
+
+test('water detail uses its own Tiled texture and authored animation timing', () => {
+  const animation = [
+    { tileId: 325, duration: 150 },
+    { tileId: 806, duration: 150 },
+    { tileId: 1287, duration: 150 },
+  ]
+  assert.equal(spatialTextureKey('water-detail', allTextures), 'dungeon-tileset-water-detail')
+  assert.deepEqual(spatialAnimation('water-detail', { waterDetail: animation }), animation)
+  assert.equal(spatialAnimation('water', { waterDetail: animation }), null)
 })
