@@ -15,6 +15,14 @@ const RARITY_DAMAGE = {
   epic: [9, 12],
 }
 
+export function spatialTextureKey(kind, available = {}) {
+  if (kind === 'floor') return available.floor ? 'dungeon-floor' : null
+  if (kind === 'boundary' || kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall' || kind === 'wall') {
+    return available.wall ? 'dungeon-wall' : null
+  }
+  return null
+}
+
 function clamp01(value) {
   return Math.max(0, Math.min(0.999999, value))
 }
@@ -41,15 +49,44 @@ function track(scene, object) {
   return scene.trackArena?.(object) ?? object
 }
 
+function textureAvailability(scene) {
+  return {
+    floor: Boolean(scene.textures?.exists?.('dungeon-floor')),
+    wall: Boolean(scene.textures?.exists?.('dungeon-wall')),
+  }
+}
+
+function addTiledTexture(scene, x, y, width, height, key, depth, tint = null) {
+  const tile = track(scene, scene.add.tileSprite(x, y, Math.max(1, width), Math.max(1, height), key).setDepth(depth))
+  if (tint != null) tile.setTint?.(tint)
+  return tile
+}
+
 function renderFloor(scene, geometry) {
   const background = track(scene, scene.add.graphics().setDepth(0))
   background.fillStyle(0x080a0d, 1).fillRect(0, 0, geometry.width, geometry.height)
   const tile = 48
-  for (let y = 48; y < geometry.height - 48; y += tile) {
-    for (let x = 48; x < geometry.width - 48; x += tile) {
-      const shade = ((x / tile + y / tile) % 2 === 0) ? 0x171b21 : 0x14181e
-      background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
-      background.lineStyle(1, 0x252b34, 0.5).strokeRect(x, y, tile, tile)
+  const available = textureAvailability(scene)
+  const floorTexture = spatialTextureKey('floor', available)
+
+  if (floorTexture) {
+    addTiledTexture(
+      scene,
+      geometry.width / 2,
+      geometry.height / 2,
+      geometry.width - tile * 2,
+      geometry.height - tile * 2,
+      floorTexture,
+      1,
+      0xb9bec4,
+    )
+  } else {
+    for (let y = tile; y < geometry.height - tile; y += tile) {
+      for (let x = tile; x < geometry.width - tile; x += tile) {
+        const shade = ((x / tile + y / tile) % 2 === 0) ? 0x171b21 : 0x14181e
+        background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
+        background.lineStyle(1, 0x252b34, 0.5).strokeRect(x, y, tile, tile)
+      }
     }
   }
 
@@ -71,8 +108,8 @@ function renderFloor(scene, geometry) {
 
   for (const solid of geometry.solids) {
     const isBoundary = solid.kind === 'boundary'
-    const color = isBoundary ? 0x242a33 : solid.kind === 'pillar' ? 0x313844 : 0x292f39
-    const edge = isBoundary ? 0x414b57 : 0x56616f
+    const texture = spatialTextureKey(solid.kind, available)
+    const depth = isBoundary ? 4 : 6
     track(scene, scene.add.rectangle(
       solid.x + solid.width / 2 + (isBoundary ? 0 : 4),
       solid.y + solid.height / 2 + (isBoundary ? 0 : 6),
@@ -80,7 +117,24 @@ function renderFloor(scene, geometry) {
       solid.height,
       0x050607,
       isBoundary ? 0.3 : 0.38,
-    ).setDepth(isBoundary ? 3 : 5))
+    ).setDepth(depth - 1))
+
+    if (texture) {
+      addTiledTexture(
+        scene,
+        solid.x + solid.width / 2,
+        solid.y + solid.height / 2,
+        Math.max(2, solid.width - 2),
+        Math.max(2, solid.height - 2),
+        texture,
+        depth,
+        isBoundary ? 0x9ca4ad : 0xb7bec6,
+      )
+      continue
+    }
+
+    const color = isBoundary ? 0x242a33 : solid.kind === 'pillar' ? 0x313844 : 0x292f39
+    const edge = isBoundary ? 0x414b57 : 0x56616f
     track(scene, scene.add.rectangle(
       solid.x + solid.width / 2,
       solid.y + solid.height / 2,
@@ -88,7 +142,7 @@ function renderFloor(scene, geometry) {
       Math.max(2, solid.height - 2),
       color,
       0.98,
-    ).setStrokeStyle(isBoundary ? 1 : 2, edge, 0.9).setDepth(isBoundary ? 4 : 6))
+    ).setStrokeStyle(isBoundary ? 1 : 2, edge, 0.9).setDepth(depth))
   }
 
   for (const torch of geometry.torches) {
@@ -196,7 +250,6 @@ export function installDungeonSpatial(scene, {
   }
 
   scene.drawArena = function drawSpatialArena() {
-    originalDrawArena()
     refreshRoom()
   }
 
@@ -361,6 +414,7 @@ export function installDungeonSpatial(scene, {
     chestKey.off('down', openNearestChest)
     scene.events.off('update', updateInteraction)
     for (const chest of chests) hideChestPrompt(chest)
+    scene.drawArena = originalDrawArena
     scene.updatePlayer = originalUpdatePlayer
     scene.updateRangedEnemy = originalUpdateRangedEnemy
     scene.updateEnemyProjectiles = originalUpdateEnemyProjectiles
