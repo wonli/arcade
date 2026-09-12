@@ -12,13 +12,13 @@ function createImpactAudio(windowImpl = globalThis.window) {
     if (context.state === 'suspended') context.resume?.().catch?.(() => {})
     return context
   }
-  const play = (options) => {
+  const play = (options = {}) => {
     const ctx = ensure()
     if (!ctx) return
     const profile = hitSoundProfile(options)
     const now = ctx.currentTime
     const master = ctx.createGain()
-    master.gain.setValueAtTime(profile.gain, now)
+    master.gain.setValueAtTime(options.gain ?? profile.gain, now)
     master.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
     master.connect(ctx.destination)
 
@@ -30,7 +30,7 @@ function createImpactAudio(windowImpl = globalThis.window) {
     high.start(now); high.stop(now + profile.duration)
 
     const lowGain = ctx.createGain()
-    lowGain.gain.setValueAtTime(options.killed ? 0.85 : options.critical ? 0.55 : 0.28, now)
+    lowGain.gain.setValueAtTime(options.killed ? (options.elite ? 1 : 0.85) : options.critical ? 0.55 : 0.28, now)
     lowGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
     lowGain.connect(master)
     const low = ctx.createOscillator()
@@ -67,12 +67,13 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     if (enemy.hp >= beforeHp) return
 
     const killed = enemy.hp <= 0
+    const elite = Boolean(enemy.elite || enemy.boss)
     const feedback = hitFeedback({ critical, boss: enemy.boss, damage })
-    scene.__dungeonVfx?.impact?.(impactX, impactY, { critical, explosion: killed || context?.source === 'corpse_burst' })
-    if (context?.direct || critical || killed) audio.play({ damage, critical, killed })
+    scene.__dungeonVfx?.impact?.(impactX, impactY, { critical: critical || (elite && killed), explosion: killed || context?.source === 'corpse_burst' })
+    if (context?.direct || critical || killed) audio.play({ damage, critical, killed, elite })
 
     if (enemy.visual?.setTintFill && enemy.visual?.clearTint) {
-      enemy.visual.setTintFill(critical ? 0xffe18a : 0xffffff)
+      enemy.visual.setTintFill(critical || elite ? 0xffe18a : 0xffffff)
       scene.time?.delayedCall?.(feedback.flashMs, () => {
         if (enemy.hp > 0 && enemy.visual?.active !== false) enemy.visual.clearTint()
       })
@@ -80,8 +81,9 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
 
     const meaningfulStop = context?.direct || critical || killed
     if (meaningfulStop) {
-      scene.__hitStopUntil = Math.max(scene.__hitStopUntil ?? 0, scene.time.now + feedback.hitStopMs + (killed ? 12 : 0))
-      scene.cameras?.main?.shake?.(feedback.flashMs, feedback.shake * (killed ? 1.25 : 1))
+      const killBonus = killed ? (elite ? 22 : 12) : 0
+      scene.__hitStopUntil = Math.max(scene.__hitStopUntil ?? 0, scene.time.now + feedback.hitStopMs + killBonus)
+      scene.cameras?.main?.shake?.(feedback.flashMs, feedback.shake * (killed ? (elite ? 1.55 : 1.25) : 1))
     }
 
     if (enemy.hp > 0 && knockback > 0) {
@@ -143,6 +145,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
   })
 
   const api = {
+    playImpactSound(options) { audio.play(options) },
     restore() {
       scene.slash = originalSlash
       scene.damageEnemy = originalDamageEnemy
