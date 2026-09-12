@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
+import { spatialTextureKey, spatialTextureTint, spatialTileStack } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 
 const allTextures = {
@@ -32,4 +32,12 @@ test('pillars render from the authored vertical tile stack', () => {
   assert.deepEqual(spatialTileStack('pillar', stacks), [188, 208, 228, 248])
   assert.equal(spatialTileStack('wall', stacks), null)
   assert.equal(spatialTileStack('boundary', stacks), null)
+})
+
+test('dedicated dungeon tiles preserve their authored palette', () => {
+  assert.equal(spatialTextureTint('floor', 'dungeon-tileset-floor'), null)
+  assert.equal(spatialTextureTint('wall', 'dungeon-tileset-wall'), null)
+  assert.equal(spatialTextureTint('water', 'dungeon-tileset-water'), null)
+  assert.equal(spatialTextureTint('pillar', 'dungeon-tileset-obstacle'), null)
+  assert.equal(spatialTextureTint('wall', 'dungeon-wall'), 0x667488)
 })
