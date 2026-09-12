@@ -14,8 +14,20 @@ function withFrame(asset, frame) {
   return asset ? { ...asset, frame } : null
 }
 
-function withRegion(asset, region) {
-  return asset ? { ...asset, region } : null
+function withRenderableRegion(asset, region, frame) {
+  if (!asset) return null
+  const columns = Math.floor(asset.width / region.width)
+  const rows = Math.floor(asset.height / region.height)
+  return {
+    ...asset,
+    region,
+    frame,
+    frameWidth: region.width,
+    frameHeight: region.height,
+    columns,
+    rows,
+    frames: columns * rows,
+  }
 }
 
 export function chooseEnvironmentAssets(manifest = {}) {
@@ -31,9 +43,10 @@ export function chooseEnvironmentAssets(manifest = {}) {
     floor: withFrame(wallsFloor, 311),
     wall: withFrame(wallsFloor, 18),
     water: withFrame(water, 0),
-    // Props span multiple 16px cells. Preserve their authored silhouette instead of rendering one fragment.
-    obstacle: withRegion(obstacle, { x: 16, y: 160, width: 32, height: 48 }),
-    torch: withRegion(torch, { x: 16, y: 0, width: 48, height: 48 }),
-    chest: withRegion(chest, { x: 0, y: 0, width: 32, height: 32 }),
+    // Re-slice prop sheets on their authored multi-cell boundaries. The existing loader can then render
+    // a complete prop frame without special-case texture code in the spatial renderer.
+    obstacle: withRenderableRegion(obstacle, { x: 128, y: 128, width: 32, height: 64 }, 24),
+    torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0),
+    chest: withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0),
   }
 }
