@@ -100,11 +100,21 @@ export function circleHitsSolid(position, radius, geometry) {
 }
 
 export function movementWithCollision(from, delta, radius, geometry) {
+  const dx = delta?.x ?? 0
+  const dy = delta?.y ?? 0
+  const maxDistance = Math.max(Math.abs(dx), Math.abs(dy))
+  const maxStep = Math.max(4, Math.min(10, Math.max(1, radius) * 0.5))
+  const steps = Math.max(1, Math.ceil(maxDistance / maxStep))
+  const stepX = dx / steps
+  const stepY = dy / steps
   const next = { x: from.x, y: from.y }
-  const candidateX = { x: from.x + (delta?.x ?? 0), y: from.y }
-  if (!circleHitsSolid(candidateX, radius, geometry)) next.x = candidateX.x
-  const candidateY = { x: next.x, y: from.y + (delta?.y ?? 0) }
-  if (!circleHitsSolid(candidateY, radius, geometry)) next.y = candidateY.y
+
+  for (let index = 0; index < steps; index++) {
+    const candidateX = { x: next.x + stepX, y: next.y }
+    if (!circleHitsSolid(candidateX, radius, geometry)) next.x = candidateX.x
+    const candidateY = { x: next.x, y: next.y + stepY }
+    if (!circleHitsSolid(candidateY, radius, geometry)) next.y = candidateY.y
+  }
   return next
 }
 
