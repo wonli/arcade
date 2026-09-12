@@ -2,6 +2,7 @@ const WIZARD_FRAME_WIDTH = 26
 const WIZARD_FRAME_HEIGHT = 18
 const WIZARD_ANIMATION_FRAMES = 4
 const RPG_FRAME_SIZE = 64
+const DUNGEON_TILE_SIZE = 16
 
 export function describeRpgMainCharacterAsset(path, width, height) {
   if (width % RPG_FRAME_SIZE !== 0 || height < RPG_FRAME_SIZE) {
@@ -14,6 +15,22 @@ export function describeRpgMainCharacterAsset(path, width, height) {
   const frames = width / RPG_FRAME_SIZE
 
   return { frames, frameWidth: RPG_FRAME_SIZE, frameHeight: RPG_FRAME_SIZE, action, direction }
+}
+
+export function describeDungeonTilesetAsset(path, width, height) {
+  const tiled = /\/tiled_files\//i.test(path)
+  if (!tiled || width % DUNGEON_TILE_SIZE !== 0 || height % DUNGEON_TILE_SIZE !== 0) {
+    return { frames: 1, frameWidth: width, frameHeight: height, columns: 1, rows: 1 }
+  }
+  const columns = width / DUNGEON_TILE_SIZE
+  const rows = height / DUNGEON_TILE_SIZE
+  return {
+    frames: columns * rows,
+    frameWidth: DUNGEON_TILE_SIZE,
+    frameHeight: DUNGEON_TILE_SIZE,
+    columns,
+    rows,
+  }
 }
 
 export function describeDungeonAsset(path, width, height) {
