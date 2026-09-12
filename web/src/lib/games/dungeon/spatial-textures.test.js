@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialAnimation, spatialTextureKey, spatialTileStack, spatialWallMotif, spatialPropRotation } from './spatial-runtime.js'
+import { spatialAnimation, spatialFloorAutotile, spatialTextureKey, spatialTileStack, spatialWallMotif, spatialPropRotation } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
+import { parseTiledMap } from './tiled-map.js'
 
 const allTextures = {
   tilesetFloor: true,
@@ -42,6 +43,27 @@ test('walls expose the authored Dungeon3 multi-texture motif', () => {
   assert.equal(spatialWallMotif('wall', { wall: motif }), motif)
   assert.equal(spatialWallMotif('boundary', { wall: motif }), motif)
   assert.equal(spatialWallMotif('pillar', { wall: motif }), null)
+})
+
+test('preserves duplicate Tiled layers instead of overwriting floor2_dark', () => {
+  const xml = `<map tilewidth="16" tileheight="16" infinite="1">
+    <tileset firstgid="3815" name="walls_floor" tilewidth="16" tileheight="16" tilecount="442" columns="17"><image source="walls_floor.png" width="272" height="416"/></tileset>
+    <layer id="49" name="floor2_dark" width="2" height="1"><data encoding="csv">4207,4208</data></layer>
+    <layer id="76" name="floor2_dark" width="2" height="1"><data encoding="csv">4224,4225</data></layer>
+  </map>`
+  const map = parseTiledMap(xml)
+  assert.equal(map.layerGroups.floor2_dark.length, 2)
+  assert.equal(map.layerGroups.floor2_dark[0].id, 49)
+  assert.equal(map.layerGroups.floor2_dark[1].id, 76)
+})
+
+test('floor exposes the authored Dungeon3 dark-edge autotile', () => {
+  const autotile = {
+    topLeft: 375, top: 376, topRight: 377,
+    left: 392, center: 393, right: 394,
+    bottomLeft: 409, bottom: 410, bottomRight: 411,
+  }
+  assert.deepEqual(spatialFloorAutotile({ floor: autotile }), autotile)
 })
 
 test('water detail uses its own Tiled texture and authored animation timing', () => {
