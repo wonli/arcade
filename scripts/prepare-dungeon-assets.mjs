@@ -3,7 +3,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, readdirSync, readFileSy
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describeDungeonAsset, describeRpgMainCharacterAsset } from '../web/src/lib/games/dungeon/assets.js'
+import { describeDungeonAsset, describeDungeonTilesetAsset, describeRpgMainCharacterAsset } from '../web/src/lib/games/dungeon/assets.js'
 import { classifyVfxAsset } from '../web/src/lib/games/dungeon/vfx-assets.js'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
@@ -80,9 +80,10 @@ function walk(pack, dir) {
     const path = pack.publicBase + relative(pack.output, full).split('\\').join('/')
     const size = pngSize(full)
     if (!size) continue
-    const layout = pack.source === 'debts' ? describeDungeonAsset(path, size.width, size.height)
-      : pack.source === 'rpg-main-character' ? describeRpgMainCharacterAsset(path, size.width, size.height)
-      : { frames: 1, frameWidth: size.width, frameHeight: size.height, kind: classifyEnvironmentKind(path) }
+    let layout
+    if (pack.source === 'debts') layout = describeDungeonAsset(path, size.width, size.height)
+    else if (pack.source === 'rpg-main-character') layout = describeRpgMainCharacterAsset(path, size.width, size.height)
+    else layout = { ...describeDungeonTilesetAsset(path, size.width, size.height), kind: classifyEnvironmentKind(path) }
     files.push({ path, source: pack.source, width: size.width, height: size.height, ...layout })
   }
   return files
@@ -122,7 +123,7 @@ for (const pack of packs) {
   console.log(`Prepared ${packAssets.length} ${pack.source} PNG assets`)
   if (pack.source === 'dungeon-tileset') {
     console.log('Dungeon tileset inventory:')
-    for (const asset of packAssets) console.log(`  ${asset.width}x${asset.height}\t${asset.kind ?? '-'}\t${asset.path}`)
+    for (const asset of packAssets) console.log(`  ${asset.width}x${asset.height}\t${asset.frameWidth}x${asset.frameHeight}\t${asset.frames}f\t${asset.kind ?? '-'}\t${asset.path}`)
   }
 }
 
