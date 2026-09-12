@@ -7,6 +7,7 @@ const manifest = {
   assets: [
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/walls_floor.png', kind: 'wall', width: 272, height: 416, frames: 442, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/Water_coasts_animation.png', kind: 'water', width: 464, height: 512, frames: 928, frameWidth: 16, frameHeight: 16 },
+    { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/water_details_animation.png', kind: 'water', width: 592, height: 1248, frames: 2886, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/Arches_columns.png', kind: 'obstacle', width: 320, height: 224, frames: 280, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/torches.png', kind: 'torch', width: 224, height: 288, frames: 252, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/chest_lever.png', kind: 'chest', width: 192, height: 176, frames: 132, frameWidth: 16, frameHeight: 16 },
@@ -19,12 +20,28 @@ const tiledManifest = {
     Dungeon3: {
       tilesets: {
         Water_coasts_animation: { name: 'Water_coasts_animation', firstGid: 1, tileCount: 928 },
+        Water_detilazation: {
+          name: 'Water_detilazation',
+          firstGid: 929,
+          tileCount: 2886,
+          animations: {
+            '325': [
+              { tileId: 325, duration: 150 },
+              { tileId: 806, duration: 150 },
+              { tileId: 1287, duration: 150 },
+              { tileId: 1768, duration: 150 },
+              { tileId: 2249, duration: 150 },
+              { tileId: 2730, duration: 150 },
+            ],
+          },
+        },
         walls_floor: { name: 'walls_floor', firstGid: 3815, tileCount: 442 },
       },
       layers: {
         Floor: { chunks: [{ gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
         Walls: { chunks: [{ gids: [3850, 3851, 3851, 3851, 3852, 3851, 0] }] },
         Water: { chunks: [{ gids: [0, 872, 872, 872, 872, 0] }] },
+        Water_details: { chunks: [{ gids: [0, 1254, 1254, 1254, 1254, 0] }] },
       },
     },
   },
@@ -67,6 +84,20 @@ test('derives representative floor wall and water frames from Dungeon3 authored 
   assert.equal(assets.floor.authoredBy, 'Dungeon3/Floor')
   assert.equal(assets.wall.authoredBy, 'Dungeon3/Walls')
   assert.equal(assets.water.authoredBy, 'Dungeon3/Water')
+})
+
+test('derives animated water detail from Dungeon3 instead of inventing frame timing', () => {
+  const assets = chooseEnvironmentAssets(tiledManifest)
+  assert.equal(assets.waterDetail.frame, 325)
+  assert.equal(assets.waterDetail.authoredBy, 'Dungeon3/Water_details')
+  assert.deepEqual(assets.waterDetail.animation, [
+    { tileId: 325, duration: 150 },
+    { tileId: 806, duration: 150 },
+    { tileId: 1287, duration: 150 },
+    { tileId: 1768, duration: 150 },
+    { tileId: 2249, duration: 150 },
+    { tileId: 2730, duration: 150 },
+  ])
 })
 
 test('ignores Tiled transform flags when counting authored surface tiles', () => {
