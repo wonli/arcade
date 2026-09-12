@@ -35,6 +35,10 @@ export function vfxCatalog(manifest) {
   return Object.fromEntries(KINDS.map((kind) => [kind, selectVfx(manifest, kind)]))
 }
 
+export function vfxBlendMode(_kind) {
+  return 'ADD'
+}
+
 function textureKey(kind) {
   return `dungeon-vfx-${kind}`
 }
@@ -101,7 +105,7 @@ function spawnEffectSprite(scene, catalog, kind, x, y, {
   const object = (asset.frames ?? 1) > 1
     ? scene.add.sprite(x, y, key, 0)
     : scene.add.image(x, y, key)
-  object.setDepth(depth).setAlpha(alpha).setAngle(angle)
+  object.setDepth(depth).setAlpha(alpha).setAngle(angle).setBlendMode?.(vfxBlendMode(kind))
   if (tint != null) object.setTint?.(tint)
   if (width != null) object.displayWidth = width
   if (height != null) object.displayHeight = height

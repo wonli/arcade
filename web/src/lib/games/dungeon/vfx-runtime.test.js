@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { selectVfx, vfxCatalog } from './vfx-runtime.js'
+import { selectVfx, vfxBlendMode, vfxCatalog } from './vfx-runtime.js'
 
 const manifest = {
   assets: [
@@ -24,4 +24,10 @@ test('vfxCatalog produces stable one-per-kind runtime selections', () => {
   assert.equal(catalog.lightning.path, '/assets/vfx/lightning/bolt.png')
   assert.equal(catalog.whirlwind.path, '/assets/vfx/foozle/tornado.png')
   assert.equal(catalog.explosion, null)
+})
+
+test('combat vfx use additive blending so opaque black pixels disappear', () => {
+  for (const kind of ['beam', 'lightning', 'slash', 'whirlwind', 'explosion', 'flame', 'sparkle']) {
+    assert.equal(vfxBlendMode(kind), 'ADD')
+  }
 })
