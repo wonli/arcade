@@ -43,6 +43,7 @@ export function selectDebtsEnvironmentAssets(manifest = {}) {
 
 export function spatialTextureKey(kind, available = {}) {
   if (kind === 'floor') return available.tilesetFloor ? 'dungeon-tileset-floor' : available.floor ? 'dungeon-floor' : null
+  if (kind === 'floor-decoration') return available.tilesetFloorDecoration ? 'dungeon-tileset-floor-decoration' : null
   if (kind === 'boundary' || kind === 'wall') return available.tilesetWall ? 'dungeon-tileset-wall' : available.wall ? 'dungeon-wall' : null
   if (kind === 'water') return available.tilesetWater ? 'dungeon-tileset-water' : null
   if (kind === 'water-detail') return available.tilesetWaterDetail ? 'dungeon-tileset-water-detail' : null
@@ -105,6 +106,7 @@ function textureAvailability(scene) {
   const exists = (key) => Boolean(scene.textures?.exists?.(key))
   return {
     tilesetFloor: exists('dungeon-tileset-floor'),
+    tilesetFloorDecoration: exists('dungeon-tileset-floor-decoration'),
     tilesetWall: exists('dungeon-tileset-wall'),
     tilesetWater: exists('dungeon-tileset-water'),
     tilesetWaterDetail: exists('dungeon-tileset-water-detail'),
@@ -201,6 +203,47 @@ function renderAuthoredFloorSkin(scene, geometry, floorTexture, frame, skin) {
   }
 }
 
+function renderFloorDecorations(scene, geometry, available) {
+  const texture = spatialTextureKey('floor-decoration', available)
+  const frames = scene.__dungeonEnvironmentDecorationFrames ?? []
+  if (!texture || !Array.isArray(frames) || !frames.length) return
+  const anchors = [
+    [0.18, 0.22], [0.34, 0.34], [0.67, 0.24],
+    [0.78, 0.46], [0.27, 0.68], [0.63, 0.72],
+    [0.84, 0.76], [0.45, 0.82],
+  ]
+  let placed = 0
+  for (let index = 0; index < anchors.length; index++) {
+    const [rx, ry] = anchors[index]
+    const x = Math.round(geometry.width * rx)
+    const y = Math.round(geometry.height * ry)
+    if (circleHitsSolid({ x, y }, 22, geometry)) continue
+    const sprite = addScaledImage(scene, x, y, texture, 22 + (index % 3) * 2, 1.42, frames[index % frames.length])
+    sprite.setAlpha?.(0.82)
+    placed++
+    if (placed >= 6) break
+  }
+}
+
+function renderWaterLip(scene, water, floorTexture, floorSkin) {
+  track(scene, scene.add.rectangle(
+    water.x + water.width / 2,
+    water.y + water.height / 2 + 7,
+    water.width + 22,
+    water.height + 24,
+    0x050608,
+    0.82,
+  ).setDepth(1.55))
+
+  const edge = floorSkin?.autotile
+  if (!floorTexture || !edge) return
+  const size = 16
+  addTiledTexture(scene, water.x + water.width / 2, water.y - size / 2, water.width, size, floorTexture, 1.72, null, edge.bottom)
+  addTiledTexture(scene, water.x + water.width / 2, water.y + water.height + size / 2, water.width, size, floorTexture, 1.72, null, edge.top)
+  addTiledTexture(scene, water.x - size / 2, water.y + water.height / 2, size, water.height, floorTexture, 1.71, null, edge.right)
+  addTiledTexture(scene, water.x + water.width + size / 2, water.y + water.height / 2, size, water.height, floorTexture, 1.71, null, edge.left)
+}
+
 function renderFloor(scene, geometry) {
   const background = track(scene, scene.add.graphics().setDepth(0))
   background.fillStyle(0x080a0d, 1).fillRect(0, 0, geometry.width, geometry.height)
@@ -224,16 +267,24 @@ function renderFloor(scene, geometry) {
     }
   }
 
+  renderFloorDecorations(scene, geometry, available)
+
   for (const water of geometry.water) {
+    renderWaterLip(scene, water, floorTexture, floorSkin)
     const waterTexture = spatialTextureKey('water', available)
+    const inset = 10
+    const waterX = water.x + inset
+    const waterY = water.y + inset
+    const waterWidth = Math.max(12, water.width - inset * 2)
+    const waterHeight = Math.max(12, water.height - inset * 2)
     let body
     if (waterTexture) {
       body = addTiledTexture(
         scene,
-        water.x + water.width / 2,
-        water.y + water.height / 2,
-        water.width,
-        water.height,
+        waterX + waterWidth / 2,
+        waterY + waterHeight / 2,
+        waterWidth,
+        waterHeight,
         waterTexture,
         2,
         spatialSurfaceTint('water'),
@@ -242,13 +293,13 @@ function renderFloor(scene, geometry) {
       body.setAlpha?.(0.9)
     } else {
       body = track(scene, scene.add.rectangle(
-        water.x + water.width / 2,
-        water.y + water.height / 2,
-        water.width,
-        water.height,
+        waterX + waterWidth / 2,
+        waterY + waterHeight / 2,
+        waterWidth,
+        waterHeight,
         0x174c63,
-        0.62,
-      ).setStrokeStyle(2, 0x3991a9, 0.52).setDepth(2))
+        0.72,
+      ).setStrokeStyle(2, 0x3991a9, 0.62).setDepth(2))
     }
 
     const detailTexture = spatialTextureKey('water-detail', available)
@@ -256,10 +307,10 @@ function renderFloor(scene, geometry) {
     if (detailTexture && detailAnimation) {
       const detail = addTiledTexture(
         scene,
-        water.x + water.width / 2,
-        water.y + water.height / 2,
-        water.width,
-        water.height,
+        waterX + waterWidth / 2,
+        waterY + waterHeight / 2,
+        waterWidth,
+        waterHeight,
         detailTexture,
         3,
         null,
@@ -270,24 +321,36 @@ function renderFloor(scene, geometry) {
     }
 
     scene.tweens.add({ targets: body, alpha: 0.76, duration: 1200, yoyo: true, repeat: -1 })
-    for (let y = water.y + 18; y < water.y + water.height; y += 30) {
-      const ripple = track(scene, scene.add.rectangle(water.x + water.width / 2, y, Math.max(30, water.width - 26), 2, 0x69bed0, 0.18).setDepth(4))
+    for (let y = waterY + 18; y < waterY + waterHeight; y += 30) {
+      const ripple = track(scene, scene.add.rectangle(waterX + waterWidth / 2, y, Math.max(30, waterWidth - 26), 2, 0x69bed0, 0.18).setDepth(4))
       scene.tweens.add({ targets: ripple, x: ripple.x + 9, alpha: 0.34, duration: 900 + (y % 3) * 120, yoyo: true, repeat: -1 })
     }
   }
 
   for (const solid of geometry.solids) {
     const isBoundary = solid.kind === 'boundary'
+    const isPillar = solid.kind === 'pillar'
     const texture = spatialTextureKey(solid.kind, available)
     const depth = isBoundary ? 4 : 6
-    track(scene, scene.add.rectangle(
-      solid.x + solid.width / 2 + (isBoundary ? 0 : 4),
-      solid.y + solid.height / 2 + (isBoundary ? 0 : 6),
-      solid.width,
-      solid.height,
-      0x050607,
-      isBoundary ? 0.34 : 0.42,
-    ).setDepth(depth - 1))
+    if (isPillar) {
+      track(scene, scene.add.ellipse(
+        solid.x + solid.width / 2 + 2,
+        solid.y + solid.height + 5,
+        Math.max(34, solid.width * 1.15),
+        15,
+        0x050607,
+        0.42,
+      ).setDepth(depth - 1))
+    } else {
+      track(scene, scene.add.rectangle(
+        solid.x + solid.width / 2 + (isBoundary ? 0 : 4),
+        solid.y + solid.height / 2 + (isBoundary ? 0 : 6),
+        solid.width,
+        solid.height,
+        0x050607,
+        isBoundary ? 0.34 : 0.42,
+      ).setDepth(depth - 1))
+    }
 
     if (texture) {
       const tileStack = spatialTileStack(solid.kind, stacks)
@@ -295,7 +358,7 @@ function renderFloor(scene, geometry) {
         addStackedTileProp(
           scene,
           solid.x + solid.width / 2,
-          solid.y + solid.height / 2 + 10,
+          solid.y + solid.height + 2,
           texture,
           tileStack,
           Math.max(64, solid.height + 24),
@@ -453,8 +516,12 @@ async function loadEnvironmentTextures(scene) {
         autotile: selected.floor?.autotile ? { ...selected.floor.autotile } : null,
         detailFrames: Array.isArray(selected.floor?.detailFrames) ? [...selected.floor.detailFrames] : [],
       }
+      scene.__dungeonEnvironmentDecorationFrames = Array.isArray(selected.floorDecoration?.frameset)
+        ? [...selected.floorDecoration.frameset]
+        : []
       const queue = [
         ['dungeon-tileset-floor', selected.floor],
+        ['dungeon-tileset-floor-decoration', selected.floorDecoration],
         ['dungeon-tileset-wall', selected.wall],
         ['dungeon-tileset-water', selected.water],
         ['dungeon-tileset-water-detail', selected.waterDetail],
@@ -546,12 +613,10 @@ export function installDungeonSpatial(scene, {
     }
     originalUpdatePlayer(dt)
     const desired = { x: scene.playerState.x, y: scene.playerState.y }
-    const terrain = terrainAt(before, scene.__roomGeometry)
-    const delta = {
-      x: (desired.x - before.x) * terrain.speedMultiplier,
-      y: (desired.y - before.y) * terrain.speedMultiplier,
-    }
-    const next = movementWithCollision(before, delta, PLAYER_RADIUS, scene.__roomGeometry)
+    const next = movementWithCollision(before, {
+      x: desired.x - before.x,
+      y: desired.y - before.y,
+    }, PLAYER_RADIUS, scene.__roomGeometry)
     scene.playerState.x = next.x
     scene.playerState.y = next.y
     scene.player?.setPosition?.(next.x, next.y)
@@ -561,7 +626,6 @@ export function installDungeonSpatial(scene, {
   function navigateEnemy(enemy, target, time, dt) {
     const geometry = scene.__roomGeometry
     if (!geometry || (scene.__hitStopUntil ?? 0) > time) return
-    const terrain = terrainAt(enemy, geometry)
     const directEnd = clipSegmentToSolids(enemy, target, geometry, 3)
     let destination = target
     if (directEnd.blocked) {
@@ -577,7 +641,7 @@ export function installDungeonSpatial(scene, {
     const dx = destination.x - enemy.x
     const dy = destination.y - enemy.y
     const distance = Math.hypot(dx, dy) || 1
-    const speed = enemy.speed * terrain.speedMultiplier
+    const speed = enemy.speed
     const next = movementWithCollision(enemy, { x: (dx / distance) * speed * dt, y: (dy / distance) * speed * dt }, enemy.hitRadius ?? ENEMY_RADIUS, geometry)
     enemy.x = next.x
     enemy.y = next.y
