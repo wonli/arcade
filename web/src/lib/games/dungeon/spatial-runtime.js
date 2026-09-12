@@ -2,7 +2,7 @@ import { rollAffixes } from './affixes.js'
 import { chooseEnvironmentAssets } from './environment-assets.js'
 import { chestRewardProfile, nearestInteractable } from './interactables.js'
 import { buildNavGrid, findPath, nextWaypoint } from './pathfinding.js'
-import { circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry, terrainAt } from './spatial.js'
+import { circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry } from './spatial.js'
 
 const PLAYER_RADIUS = 18
 const ENEMY_RADIUS = 15
@@ -32,11 +32,7 @@ function chooseEnvironmentAsset(assets, patterns) {
 export function selectDebtsEnvironmentAssets(manifest = {}) {
   const assets = normalizedAssets(manifest).filter((asset) => !asset.source || asset.source === 'debts')
   return {
-    obstacle: chooseEnvironmentAsset(assets, [
-      /(?:pillar|column|statue)/i,
-      /(?:crate|barrel|rock|boulder)/i,
-      /(?:bones|skull|grave|tomb)/i,
-    ]),
+    obstacle: chooseEnvironmentAsset(assets, [/(?:pillar|column|statue)/i, /(?:crate|barrel|rock|boulder)/i, /(?:bones|skull|grave|tomb)/i]),
     torch: chooseEnvironmentAsset(assets, [/(?:torch|brazier)/i, /(?:candle|lantern)/i, /(?:fire|flame)/i]),
     chest: chooseEnvironmentAsset(assets, [/(?:chest|coffer)/i, /(?:treasure|loot)/i]),
   }
@@ -82,19 +78,13 @@ export function spatialAnimation(kind, animations = {}) {
 }
 
 export function spatialSurfaceTint(kind) {
-  if (kind === 'floor' || kind === 'bridge' || kind === 'stairs' || kind === 'door' || kind === 'statue' || kind === 'coffin' || kind === 'object' || kind === 'plate' || kind === 'plate-trap' || kind === 'spikes' || kind === 'arches') return null
+  if (kind === 'floor' || kind === 'water' || kind === 'bridge' || kind === 'stairs' || kind === 'door' || kind === 'statue' || kind === 'coffin' || kind === 'object' || kind === 'plate' || kind === 'plate-trap' || kind === 'spikes' || kind === 'arches') return null
   if (kind === 'boundary' || kind === 'wall') return 0x667488
-  if (kind === 'water') return 0x7db5c8
   return 0xaeb5bd
 }
 
-function clamp01(value) {
-  return Math.max(0, Math.min(0.999999, value))
-}
-
-function rollRange([min, max], random) {
-  return min + Math.floor(clamp01(random()) * (max - min + 1))
-}
+function clamp01(value) { return Math.max(0, Math.min(0.999999, value)) }
+function rollRange([min, max], random) { return min + Math.floor(clamp01(random()) * (max - min + 1)) }
 
 function rollChestWeapon(profile, floor, random) {
   const roll = clamp01(random())
@@ -102,44 +92,21 @@ function rollChestWeapon(profile, floor, random) {
   if (roll < profile.epicChance) rarity = 'epic'
   else if (roll < profile.epicChance + profile.rareChance) rarity = 'rare'
   else if (roll < profile.epicChance + profile.rareChance + profile.uncommonChance) rarity = 'uncommon'
-  return {
-    type: 'weapon.dungeon_blade',
-    rarity,
-    damage: rollRange(RARITY_DAMAGE[rarity], random),
-    affixes: rollAffixes(floor, rarity, random),
-  }
+  return { type: 'weapon.dungeon_blade', rarity, damage: rollRange(RARITY_DAMAGE[rarity], random), affixes: rollAffixes(floor, rarity, random) }
 }
 
-function track(scene, object) {
-  return scene.trackArena?.(object) ?? object
-}
+function track(scene, object) { return scene.trackArena?.(object) ?? object }
 
 function textureAvailability(scene) {
   const exists = (key) => Boolean(scene.textures?.exists?.(key))
   return {
-    tilesetFloor: exists('dungeon-tileset-floor'),
-    tilesetFloorDecoration: exists('dungeon-tileset-floor-decoration'),
-    tilesetWall: exists('dungeon-tileset-wall'),
-    tilesetWater: exists('dungeon-tileset-water'),
-    tilesetWaterDetail: exists('dungeon-tileset-water-detail'),
-    tilesetObstacle: exists('dungeon-tileset-obstacle'),
-    tilesetTorch: exists('dungeon-tileset-torch'),
-    tilesetChest: exists('dungeon-tileset-chest'),
-    tilesetBridge: exists('dungeon-tileset-bridge'),
-    tilesetStairs: exists('dungeon-tileset-stairs'),
-    tilesetDoor: exists('dungeon-tileset-door'),
-    tilesetStatue: exists('dungeon-tileset-statue'),
-    tilesetCoffin: exists('dungeon-tileset-coffin'),
-    tilesetObject: exists('dungeon-tileset-object'),
-    tilesetTrapPlate: exists('dungeon-tileset-trap-plate'),
-    tilesetTrapSpikes: exists('dungeon-tileset-trap-spikes'),
-    tilesetCandles: exists('dungeon-tileset-candles'),
-    tilesetArches: exists('dungeon-tileset-arches'),
-    floor: exists('dungeon-floor'),
-    wall: exists('dungeon-wall'),
-    obstacle: exists('dungeon-obstacle'),
-    torch: exists('dungeon-torch'),
-    chest: exists('dungeon-chest'),
+    tilesetFloor: exists('dungeon-tileset-floor'), tilesetFloorDecoration: exists('dungeon-tileset-floor-decoration'), tilesetWall: exists('dungeon-tileset-wall'),
+    tilesetWater: exists('dungeon-tileset-water'), tilesetWaterDetail: exists('dungeon-tileset-water-detail'), tilesetObstacle: exists('dungeon-tileset-obstacle'),
+    tilesetTorch: exists('dungeon-tileset-torch'), tilesetChest: exists('dungeon-tileset-chest'), tilesetBridge: exists('dungeon-tileset-bridge'),
+    tilesetStairs: exists('dungeon-tileset-stairs'), tilesetDoor: exists('dungeon-tileset-door'), tilesetStatue: exists('dungeon-tileset-statue'),
+    tilesetCoffin: exists('dungeon-tileset-coffin'), tilesetObject: exists('dungeon-tileset-object'), tilesetTrapPlate: exists('dungeon-tileset-trap-plate'),
+    tilesetTrapSpikes: exists('dungeon-tileset-trap-spikes'), tilesetCandles: exists('dungeon-tileset-candles'), tilesetArches: exists('dungeon-tileset-arches'),
+    floor: exists('dungeon-floor'), wall: exists('dungeon-wall'), obstacle: exists('dungeon-obstacle'), torch: exists('dungeon-torch'), chest: exists('dungeon-chest'),
   }
 }
 
@@ -171,10 +138,7 @@ function animateOnce(scene, target, frames, terminalFrame = null) {
   let index = 0
   const advance = () => {
     if (target.active === false) return
-    if (index >= frames.length) {
-      target.setFrame?.(terminalFrame ?? frames.at(-1)?.tileId)
-      return
-    }
+    if (index >= frames.length) { target.setFrame?.(terminalFrame ?? frames.at(-1)?.tileId); return }
     const frame = frames[index++]
     target.setFrame?.(frame.tileId)
     scene.time.delayedCall(Math.max(16, Number(frame.duration) || 120), advance)
@@ -211,13 +175,8 @@ function frameFromSet(scene, role, index = 0) {
 }
 
 function renderAuthoredFloorSkin(scene, geometry, floorTexture, frame, skin) {
-  const inset = 48
-  const left = inset
-  const top = inset
-  const right = geometry.width - inset
-  const bottom = geometry.height - inset
-  const width = right - left
-  const height = bottom - top
+  const inset = 48, left = inset, top = inset, right = geometry.width - inset, bottom = geometry.height - inset
+  const width = right - left, height = bottom - top
   addTiledTexture(scene, left + width / 2, top + height / 2, width, height, floorTexture, 1, null, frame)
   const edge = skin?.autotile
   if (edge) {
@@ -249,10 +208,8 @@ function renderAuthoredFloorSkin(scene, geometry, floorTexture, frame, skin) {
 function renderFloorDecorations(scene, geometry, available) {
   const texture = spatialTextureKey('floor-decoration', available)
   const frames = scene.__dungeonEnvironmentDecorationFrames ?? []
-  if (!texture || !Array.isArray(frames) || !frames.length) return
-  const anchors = geometry.decorations?.length
-    ? geometry.decorations.filter((entry) => entry.kind === 'plate').map((entry) => [entry.x, entry.y])
-    : [[180, 132], [326, 204], [642, 144], [748, 360], [266, 410], [604, 432]]
+  if (!texture || !frames.length) return
+  const anchors = geometry.decorations?.length ? geometry.decorations.filter((entry) => entry.kind === 'plate').map((entry) => [entry.x, entry.y]) : [[180,132],[326,204],[642,144],[748,360],[266,410],[604,432]]
   for (let index = 0; index < Math.min(8, anchors.length); index++) {
     const [x, y] = anchors[index]
     if (circleHitsSolid({ x, y }, 16, geometry)) continue
@@ -261,15 +218,59 @@ function renderFloorDecorations(scene, geometry, available) {
   }
 }
 
-function renderWaterLip(scene, water, floorTexture, floorSkin) {
-  track(scene, scene.add.rectangle(water.x + water.width / 2, water.y + water.height / 2 + 8, water.width + 24, water.height + 28, 0x050608, 0.86).setDepth(1.55))
-  const edge = floorSkin?.autotile
-  if (!floorTexture || !edge) return
-  const size = 16
-  addTiledTexture(scene, water.x + water.width / 2, water.y - size / 2, water.width, size, floorTexture, 1.72, null, edge.bottom)
-  addTiledTexture(scene, water.x + water.width / 2, water.y + water.height + size / 2, water.width, size, floorTexture, 1.72, null, edge.top)
-  addTiledTexture(scene, water.x - size / 2, water.y + water.height / 2, size, water.height, floorTexture, 1.71, null, edge.right)
-  addTiledTexture(scene, water.x + water.width + size / 2, water.y + water.height / 2, size, water.height, floorTexture, 1.71, null, edge.left)
+function coastMask(column, row, columns, rows) {
+  return `${row > 0 ? 1 : 0}${column < columns - 1 ? 1 : 0}${row < rows - 1 ? 1 : 0}${column > 0 ? 1 : 0}`
+}
+
+function coastFramesFor(scene, mask) {
+  return scene.__dungeonEnvironmentWaterCoasts?.patterns?.[mask] ?? []
+}
+
+function renderAuthoredWater(scene, geometry, water, waterIndex, available, frames, animations) {
+  const waterTexture = spatialTextureKey('water', available)
+  if (!waterTexture) {
+    return track(scene, scene.add.rectangle(water.x + water.width / 2, water.y + water.height / 2, water.width, water.height, 0x174c63, 0.88).setDepth(2))
+  }
+
+  const baseFrame = spatialTextureFrame('water', frames)
+  const body = addTiledTexture(scene, water.x + water.width / 2, water.y + water.height / 2, water.width, water.height, waterTexture, 2, null, baseFrame)
+  body.setAlpha?.(1)
+
+  const coasts = scene.__dungeonEnvironmentWaterCoasts
+  const tileSize = Math.max(8, Number(coasts?.tileSize) || 16)
+  if (coasts?.patterns) {
+    const columns = Math.max(1, Math.ceil(water.width / tileSize))
+    const rows = Math.max(1, Math.ceil(water.height / tileSize))
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        if (row > 0 && row < rows - 1 && column > 0 && column < columns - 1) continue
+        const mask = coastMask(column, row, columns, rows)
+        const variants = coastFramesFor(scene, mask)
+        if (!variants.length) continue
+        const seed = Math.abs((geometry.seed ?? 0) + waterIndex * 97 + row * 31 + column * 17)
+        const frame = variants[seed % variants.length]
+        const x = water.x + column * tileSize + tileSize / 2
+        const y = water.y + row * tileSize + tileSize / 2
+        const coast = addScaledImage(scene, x, y, waterTexture, tileSize, 3.2, frame)
+        const animation = coasts.animations?.[String(frame)]
+        if (Array.isArray(animation) && animation.length > 1) animateTiledTexture(scene, coast, animation)
+      }
+    }
+  }
+
+  const detailTexture = spatialTextureKey('water-detail', available)
+  const detailAnimation = spatialAnimation('water-detail', animations)
+  if (detailTexture && detailAnimation) {
+    const inset = tileSize
+    const width = Math.max(tileSize, water.width - inset * 2)
+    const height = Math.max(tileSize, water.height - inset * 2)
+    if (width > tileSize && height > tileSize) {
+      const detail = addTiledTexture(scene, water.x + water.width / 2, water.y + water.height / 2, width, height, detailTexture, 2.7, null, detailAnimation[0]?.tileId)
+      detail.setAlpha?.(0.48)
+      animateTiledTexture(scene, detail, detailAnimation)
+    }
+  }
+  return body
 }
 
 function renderBridge(scene, bridge, available, index) {
@@ -279,9 +280,7 @@ function renderBridge(scene, bridge, available, index) {
   if (texture) {
     const tile = addTiledTexture(scene, bridge.x + bridge.width / 2, bridge.y + bridge.height / 2, bridge.width, bridge.height, texture, 5, null, frameFromSet(scene, 'bridge', index))
     if (!horizontal) tile.setAngle?.(90)
-  } else {
-    track(scene, scene.add.rectangle(bridge.x + bridge.width / 2, bridge.y + bridge.height / 2, bridge.width, bridge.height, 0x7c6953, 1).setDepth(5))
-  }
+  } else track(scene, scene.add.rectangle(bridge.x + bridge.width / 2, bridge.y + bridge.height / 2, bridge.width, bridge.height, 0x7c6953, 1).setDepth(5))
 }
 
 function renderFeatureProp(scene, entry, kind, available, index, { height = 36, depth = 6.5, shadow = true } = {}) {
@@ -332,35 +331,7 @@ function renderFloor(scene, geometry) {
   }
 
   renderFloorDecorations(scene, geometry, available)
-
-  for (let waterIndex = 0; waterIndex < geometry.water.length; waterIndex++) {
-    const water = geometry.water[waterIndex]
-    renderWaterLip(scene, water, floorTexture, floorSkin)
-    const waterTexture = spatialTextureKey('water', available)
-    const inset = 10
-    const waterX = water.x + inset
-    const waterY = water.y + inset
-    const waterWidth = Math.max(12, water.width - inset * 2)
-    const waterHeight = Math.max(12, water.height - inset * 2)
-    let body
-    if (waterTexture) {
-      const waterFrames = scene.__dungeonEnvironmentWaterFrames ?? []
-      const waterFrame = waterFrames.length ? waterFrames[waterIndex % waterFrames.length] : spatialTextureFrame('water', frames)
-      body = addTiledTexture(scene, waterX + waterWidth / 2, waterY + waterHeight / 2, waterWidth, waterHeight, waterTexture, 2, spatialSurfaceTint('water'), waterFrame)
-      body.setAlpha?.(0.92)
-    } else {
-      body = track(scene, scene.add.rectangle(waterX + waterWidth / 2, waterY + waterHeight / 2, waterWidth, waterHeight, 0x174c63, 0.72).setStrokeStyle(2, 0x3991a9, 0.62).setDepth(2))
-    }
-    const detailTexture = spatialTextureKey('water-detail', available)
-    const detailAnimation = spatialAnimation('water-detail', animations)
-    if (detailTexture && detailAnimation) {
-      const detail = addTiledTexture(scene, waterX + waterWidth / 2, waterY + waterHeight / 2, waterWidth, waterHeight, detailTexture, 3, null, detailAnimation[0]?.tileId)
-      detail.setAlpha?.(0.58)
-      animateTiledTexture(scene, detail, detailAnimation)
-    }
-    scene.tweens.add({ targets: body, alpha: 0.78, duration: 1200, yoyo: true, repeat: -1 })
-  }
-
+  for (let waterIndex = 0; waterIndex < geometry.water.length; waterIndex++) renderAuthoredWater(scene, geometry, geometry.water[waterIndex], waterIndex, available, frames, animations)
   renderGeneratedFeatures(scene, geometry, available)
 
   for (const solid of geometry.solids) {
@@ -368,17 +339,11 @@ function renderFloor(scene, geometry) {
     const isPillar = solid.kind === 'pillar'
     const texture = spatialTextureKey(solid.kind, available)
     const depth = isBoundary ? 4 : 6
-    if (isPillar) {
-      track(scene, scene.add.ellipse(solid.x + solid.width / 2 + 2, solid.y + solid.height + 5, Math.max(34, solid.width * 1.15), 15, 0x050607, 0.42).setDepth(depth - 1))
-    } else {
-      track(scene, scene.add.rectangle(solid.x + solid.width / 2 + (isBoundary ? 0 : 4), solid.y + solid.height / 2 + (isBoundary ? 0 : 6), solid.width, solid.height, 0x050607, isBoundary ? 0.34 : 0.42).setDepth(depth - 1))
-    }
+    if (isPillar) track(scene, scene.add.ellipse(solid.x + solid.width / 2 + 2, solid.y + solid.height + 5, Math.max(34, solid.width * 1.15), 15, 0x050607, 0.42).setDepth(depth - 1))
+    else track(scene, scene.add.rectangle(solid.x + solid.width / 2 + (isBoundary ? 0 : 4), solid.y + solid.height / 2 + (isBoundary ? 0 : 6), solid.width, solid.height, 0x050607, isBoundary ? 0.34 : 0.42).setDepth(depth - 1))
     if (texture) {
       const tileStack = spatialTileStack(solid.kind, stacks)
-      if (tileStack) {
-        addStackedTileProp(scene, solid.x + solid.width / 2, solid.y + solid.height + 2, texture, tileStack, Math.max(64, solid.height + 24), depth)
-        continue
-      }
+      if (tileStack) { addStackedTileProp(scene, solid.x + solid.width / 2, solid.y + solid.height + 2, texture, tileStack, Math.max(64, solid.height + 24), depth); continue }
       addTiledTexture(scene, solid.x + solid.width / 2, solid.y + solid.height / 2, Math.max(2, solid.width - 2), Math.max(2, solid.height - 2), texture, depth, spatialSurfaceTint(solid.kind), spatialTextureFrame(solid.kind, frames))
       continue
     }
@@ -408,17 +373,13 @@ function renderFloor(scene, geometry) {
 }
 
 function renderChest(scene, anchor, index) {
-  const x = anchor.x
-  const y = anchor.y
+  const x = anchor.x, y = anchor.y
   const available = textureAvailability(scene)
   const frames = scene.__dungeonEnvironmentFrames ?? {}
   const shadow = track(scene, scene.add.ellipse(x + 4, y + 12, 38, 15, 0x020304, 0.46).setDepth(8))
   const glow = track(scene, scene.add.circle(x, y, 28, 0xffcf68, 0.05).setDepth(10))
   const chestTexture = spatialTextureKey('chest', available)
-  let sprite = null
-  let base = null
-  let lid = null
-  let lock = null
+  let sprite = null, base = null, lid = null, lock = null
   if (chestTexture) sprite = addScaledImage(scene, x, y, chestTexture, 34, 13, spatialTextureFrame('chest', frames))
   else {
     base = track(scene, scene.add.rectangle(x, y + 4, 38, 24, 0x8b542c, 1).setStrokeStyle(2, 0xd5964e, 0.95).setDepth(12))
@@ -443,34 +404,25 @@ function openChestVisual(scene, chest) {
 
 function showChestPrompt(scene, chest, label) {
   if (chest?.prompt) return
-  chest.prompt = scene.add.text(chest.x, chest.y - 42, `[E] ${label('openChest')}`, {
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px', fontStyle: 'bold', color: '#ffd86b', stroke: '#08090b', strokeThickness: 4,
-  }).setOrigin(0.5).setDepth(36)
+  chest.prompt = scene.add.text(chest.x, chest.y - 42, `[E] ${label('openChest')}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px', fontStyle: 'bold', color: '#ffd86b', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(36)
 }
-
-function hideChestPrompt(chest) {
-  chest?.prompt?.destroy?.()
-  if (chest) chest.prompt = null
-}
+function hideChestPrompt(chest) { chest?.prompt?.destroy?.(); if (chest) chest.prompt = null }
 
 function nearestValidSpawn(geometry, position) {
-  let best = null
-  let distance = Infinity
+  let best = null, distance = Infinity
   for (const spawn of geometry.spawnPoints) {
     if (circleHitsSolid(spawn, ENEMY_RADIUS, geometry)) continue
     const nextDistance = Math.hypot(spawn.x - position.x, spawn.y - position.y)
     if (nextDistance >= distance) continue
-    best = spawn
-    distance = nextDistance
+    best = spawn; distance = nextDistance
   }
   return best
 }
 
 function queueEnvironmentTexture(scene, key, asset) {
   if (!asset?.path || scene.textures?.exists?.(key)) return false
-  if ((asset.frames ?? 1) > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) {
-    scene.load.spritesheet(key, asset.path, { frameWidth: asset.frameWidth, frameHeight: asset.frameHeight, endFrame: asset.frames - 1 })
-  } else scene.load.image(key, asset.path)
+  if ((asset.frames ?? 1) > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) scene.load.spritesheet(key, asset.path, { frameWidth: asset.frameWidth, frameHeight: asset.frameHeight, endFrame: asset.frames - 1 })
+  else scene.load.image(key, asset.path)
   return true
 }
 
@@ -492,6 +444,7 @@ async function loadEnvironmentTextures(scene) {
       scene.__dungeonEnvironmentFloorSkin = { autotile: selected.floor?.autotile ? { ...selected.floor.autotile } : null, detailFrames: Array.isArray(selected.floor?.detailFrames) ? [...selected.floor.detailFrames] : [] }
       scene.__dungeonEnvironmentDecorationFrames = Array.isArray(selected.floorDecoration?.frameset) ? [...selected.floorDecoration.frameset] : []
       scene.__dungeonEnvironmentWaterFrames = Array.isArray(selected.water?.coastFrames) ? [...selected.water.coastFrames] : []
+      scene.__dungeonEnvironmentWaterCoasts = selected.water?.coasts ? structuredClone(selected.water.coasts) : null
       scene.__dungeonEnvironmentTorchVariants = Array.isArray(selected.torch?.variants) ? [...selected.torch.variants] : []
       const queue = [
         ['dungeon-tileset-floor', selected.floor], ['dungeon-tileset-floor-decoration', selected.floorDecoration], ['dungeon-tileset-wall', selected.wall],
@@ -512,34 +465,20 @@ async function loadEnvironmentTextures(scene) {
     if (!queued) return false
     await new Promise((resolve) => { scene.load.once('complete', resolve); scene.load.start() })
     return true
-  } catch {
-    return false
-  }
+  } catch { return false }
 }
 
 function enemyIsFlying(enemy) {
   if (enemy?.flying || enemy?.airborne) return true
   return /(?:bat|dragon|ghost|wing|fly)/i.test(String(enemy?.type ?? enemy?.archetype ?? enemy?.id ?? ''))
 }
+function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry }
+function playerTrapAt(position, geometry) { return (geometry?.traps ?? []).find((trap) => Math.hypot(trap.x - position.x, trap.y - position.y) <= TRAP_RANGE) ?? null }
 
-function collisionGeometryForEnemy(enemy, geometry) {
-  return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry
-}
-
-function playerTrapAt(position, geometry) {
-  return (geometry?.traps ?? []).find((trap) => Math.hypot(trap.x - position.x, trap.y - position.y) <= TRAP_RANGE) ?? null
-}
-
-export function installDungeonSpatial(scene, {
-  getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }),
-  onEvent = () => {},
-  label = (key) => key,
-  random = Math.random,
-} = {}) {
+export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
   if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
   scene.__dungeonSpatialInstalled = true
-  let chests = []
-  let trapCooldownUntil = 0
+  let chests = [], trapCooldownUntil = 0
   const chestKey = scene.input.keyboard.addKey('E')
   const originalDrawArena = scene.drawArena.bind(scene)
   const originalUpdatePlayer = scene.updatePlayer.bind(scene)
@@ -556,10 +495,7 @@ export function installDungeonSpatial(scene, {
     chests = []
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
-    scene.__navGrids = {
-      ground: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'ground' }),
-      flying: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'flying' }),
-    }
+    scene.__navGrids = { ground: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'ground' }), flying: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'flying' }) }
     scene.__navGrid = scene.__navGrids.ground
     scene.spawnPoints = geometry.spawnPoints.map((entry) => [entry.x, entry.y])
     if (progress.roomRole !== 'rest') chests = geometry.chests.slice(0, 1).map((anchor, index) => renderChest(scene, anchor, index))
@@ -570,28 +506,20 @@ export function installDungeonSpatial(scene, {
       if (!circleHitsSolid(enemy, enemy.hitRadius, collisionGeometry)) continue
       const spawn = nearestValidSpawn(collisionGeometry, enemy)
       if (!spawn) continue
-      enemy.x = spawn.x
-      enemy.y = spawn.y
+      enemy.x = spawn.x; enemy.y = spawn.y
       enemy.visual?.setPosition?.(enemy.x, enemy.y)
-      enemy.navPath = []
-      enemy.navRefreshAt = 0
+      enemy.navPath = []; enemy.navRefreshAt = 0
     }
   }
 
   scene.drawArena = function drawSpatialArena() { refreshRoom() }
-
   scene.updatePlayer = function updateSpatialPlayer(dt) {
     const before = { x: scene.playerState.x, y: scene.playerState.y }
-    if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
-      scene.playerMoving = false
-      if (!scene.playerAttacking) scene.syncPlayerAnimation?.()
-      return
-    }
+    if ((scene.__hitStopUntil ?? 0) > scene.time.now) { scene.playerMoving = false; if (!scene.playerAttacking) scene.syncPlayerAnimation?.(); return }
     originalUpdatePlayer(dt)
     const desired = { x: scene.playerState.x, y: scene.playerState.y }
     const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
-    scene.playerState.x = next.x
-    scene.playerState.y = next.y
+    scene.playerState.x = next.x; scene.playerState.y = next.y
     scene.player?.setPosition?.(next.x, next.y)
     scene.updateHealthBar?.(scene.playerBar, next.x, next.y - 42, scene.playerState.hp, scene.playerState.maxHp)
     const trap = playerTrapAt(next, scene.__roomGeometry)
@@ -618,26 +546,20 @@ export function installDungeonSpatial(scene, {
       }
       destination = nextWaypoint(enemy.navPath, enemy, 20) ?? target
     } else enemy.navPath = []
-    const dx = destination.x - enemy.x
-    const dy = destination.y - enemy.y
-    const distance = Math.hypot(dx, dy) || 1
+    const dx = destination.x - enemy.x, dy = destination.y - enemy.y, distance = Math.hypot(dx, dy) || 1
     const next = movementWithCollision(enemy, { x: (dx / distance) * enemy.speed * dt, y: (dy / distance) * enemy.speed * dt }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
-    enemy.x = next.x
-    enemy.y = next.y
+    enemy.x = next.x; enemy.y = next.y
   }
 
   scene.moveEnemyTowardPlayer = function moveSpatialEnemy(enemy, time, dt) {
     navigateEnemy(enemy, scene.playerState, time, dt)
     const dx = scene.playerState.x - enemy.x
-    const distance = Math.hypot(dx, scene.playerState.y - enemy.y) || 1
-    scene.syncEnemyVisual(enemy, time, dx, distance)
+    scene.syncEnemyVisual(enemy, time, dx, Math.hypot(dx, scene.playerState.y - enemy.y) || 1)
   }
 
   scene.updateRangedEnemy = function updateSpatialRanged(enemy, time, dt) {
     if ((scene.__hitStopUntil ?? 0) > time) return
-    const dx = scene.playerState.x - enemy.x
-    const dy = scene.playerState.y - enemy.y
-    const distance = Math.hypot(dx, dy) || 1
+    const dx = scene.playerState.x - enemy.x, dy = scene.playerState.y - enemy.y, distance = Math.hypot(dx, dy) || 1
     const preferred = enemy.preferredRange || 180
     const collisionGeometry = collisionGeometryForEnemy(enemy, scene.__roomGeometry)
     const los = clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3)
@@ -650,12 +572,9 @@ export function installDungeonSpatial(scene, {
       const next = movementWithCollision(enemy, { x: (-dy / distance) * strafe, y: (dx / distance) * strafe }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
       enemy.x = next.x; enemy.y = next.y
     }
-    const nextDx = scene.playerState.x - enemy.x
-    const nextDy = scene.playerState.y - enemy.y
-    const nextDistance = Math.hypot(nextDx, nextDy) || 1
+    const nextDx = scene.playerState.x - enemy.x, nextDy = scene.playerState.y - enemy.y, nextDistance = Math.hypot(nextDx, nextDy) || 1
     scene.syncEnemyVisual(enemy, time, nextDx, nextDistance)
-    const clearShot = !clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3).blocked
-    if (clearShot && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
+    if (!clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3).blocked && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
       enemy.nextProjectileAt = time + enemy.projectileCooldown
       scene.fireEnemyProjectile(enemy)
     }
@@ -669,11 +588,7 @@ export function installDungeonSpatial(scene, {
       const next = { x: projectile.x + projectile.vx * dt, y: projectile.y + projectile.vy * dt }
       projectile.life -= dt
       const wallHit = circleHitsSolid(next, 5, projectileGeometry)
-      if (!wallHit) {
-        projectile.x = next.x; projectile.y = next.y
-        projectile.visual?.setPosition(projectile.x, projectile.y)
-        projectile.glow?.setPosition(projectile.x, projectile.y)
-      }
+      if (!wallHit) { projectile.x = next.x; projectile.y = next.y; projectile.visual?.setPosition(projectile.x, projectile.y); projectile.glow?.setPosition(projectile.x, projectile.y) }
       const playerHit = !wallHit && Math.hypot(projectile.x - scene.playerState.x, projectile.y - scene.playerState.y) <= 20
       const expired = projectile.life <= 0
       if (!wallHit && !playerHit && !expired) continue
@@ -687,8 +602,7 @@ export function installDungeonSpatial(scene, {
     originalUpdateBoss(enemy, time, dt)
     if (!scene.__roomGeometry) return
     const collisionGeometry = collisionGeometryForEnemy(enemy, scene.__roomGeometry)
-    const moved = { x: enemy.x - before.x, y: enemy.y - before.y }
-    const corrected = movementWithCollision(before, moved, enemy.hitRadius ?? 26, collisionGeometry)
+    const corrected = movementWithCollision(before, { x: enemy.x - before.x, y: enemy.y - before.y }, enemy.hitRadius ?? 26, collisionGeometry)
     const blocked = corrected.x !== enemy.x || corrected.y !== enemy.y
     enemy.x = corrected.x; enemy.y = corrected.y
     if (blocked && time < enemy.chargingUntil) enemy.chargingUntil = time
@@ -697,27 +611,20 @@ export function installDungeonSpatial(scene, {
 
   const updateInteraction = () => {
     const nearest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
-    for (const chest of chests) {
-      if (chest === nearest) showChestPrompt(scene, chest, label)
-      else hideChestPrompt(chest)
-    }
+    for (const chest of chests) { if (chest === nearest) showChestPrompt(scene, chest, label); else hideChestPrompt(chest) }
   }
   scene.events.on('update', updateInteraction)
 
   const openNearestChest = () => {
     const chest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
     if (!chest || chest.opened) return
-    openChestVisual(scene, chest)
-    hideChestPrompt(chest)
+    openChestVisual(scene, chest); hideChestPrompt(chest)
     const progress = getProgress() ?? {}
     const profile = chestRewardProfile(progress.roomRole ?? 'combat', progress.chapter ?? 1, Boolean(progress.fortuneActive))
     const floor = progress.floor ?? scene.floor ?? 1
     onEvent({ type: 'chestopen', floor, chapter: progress.chapter ?? 1, roomRole: progress.roomRole ?? 'combat' })
     scene.time.delayedCall(90, () => {
-      for (let index = 0; index < profile.dropCount; index++) {
-        const item = rollChestWeapon(profile, floor, random)
-        scene.spawnDrop(chest.x + (index - (profile.dropCount - 1) / 2) * 28, chest.y + 18, item)
-      }
+      for (let index = 0; index < profile.dropCount; index++) scene.spawnDrop(chest.x + (index - (profile.dropCount - 1) / 2) * 28, chest.y + 18, rollChestWeapon(profile, floor, random))
     })
   }
   chestKey.on('down', openNearestChest)
@@ -736,9 +643,6 @@ export function installDungeonSpatial(scene, {
 
   const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
   scene.__dungeonSpatial = api
-  loadEnvironmentTextures(scene).then((loaded) => {
-    if (!loaded || !scene.__roomGeometry) return
-    refreshRoom({ geometry: scene.__roomGeometry })
-  })
+  loadEnvironmentTextures(scene).then((loaded) => { if (loaded && scene.__roomGeometry) refreshRoom({ geometry: scene.__roomGeometry }) })
   return api
 }
