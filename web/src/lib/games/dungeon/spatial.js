@@ -60,9 +60,16 @@ const TEMPLATES = {
 let proceduralRunSeed = null
 let highestProceduralFloor = 0
 const proceduralCache = new Map()
+const explicitProceduralCache = new Map()
 
-function proceduralGeometry(floor, random) {
+function proceduralGeometry(floor, random, explicitRunSeed = null) {
   const normalizedFloor = Math.max(1, Math.floor(floor || 1))
+  if (explicitRunSeed != null && explicitRunSeed !== '') {
+    const runSeed = String(explicitRunSeed)
+    const key = `${runSeed}:${normalizedFloor}`
+    if (!explicitProceduralCache.has(key)) explicitProceduralCache.set(key, generateDungeonGeometry({ runSeed, floor: normalizedFloor }))
+    return structuredClone(explicitProceduralCache.get(key))
+  }
   if (proceduralRunSeed == null || (normalizedFloor === 1 && highestProceduralFloor > 1)) {
     const roll = typeof random === 'function' ? random() : Math.random()
     proceduralRunSeed = Math.max(1, Math.floor(Math.abs(Number(roll) || 0.5) * 0xffffffff))
@@ -74,8 +81,8 @@ function proceduralGeometry(floor, random) {
   return structuredClone(proceduralCache.get(normalizedFloor))
 }
 
-export function roomGeometry(template = null, floor = 1, random = Math.random) {
-  if (!(typeof template === 'string' && TEMPLATES[template])) return proceduralGeometry(floor, random)
+export function roomGeometry(template = null, floor = 1, random = Math.random, { runSeed = null } = {}) {
+  if (!(typeof template === 'string' && TEMPLATES[template])) return proceduralGeometry(floor, random, runSeed ?? random?.runSeed ?? null)
   const authored = TEMPLATES[template]
   return {
     name: template, width: WIDTH, height: HEIGHT,
@@ -104,8 +111,6 @@ function pointInRect(position, area) {
 export function circleHitsSolid(position, radius, geometry) {
   const solids = geometry?.solids ?? []
   if (solids.some((solid) => circleRectIntersects(position, radius, solid))) return true
-  // Subtract deck rectangles from water before testing the complete actor footprint.
-  // A center point on a bridge does not make the surrounding water walkable.
   for (const water of geometry?.water ?? []) {
     if (!circleRectIntersects(position, radius, water)) continue
     let pieces = [water]

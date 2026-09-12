@@ -57,3 +57,12 @@ test('bridge exemption covers only the deck, not an actor hanging over the side'
   assert.equal(circleHitsSolid({ x: 80, y: 52 }, 18, g), true)
   assert.equal(circleHitsSolid({ x: 36, y: 80 }, 18, g), false)
 })
+
+test('explicit run seed makes procedural geometry deterministic across clients', () => {
+  const first = roomGeometry(null, 4, () => 0.11, { runSeed: 'ROOM42' })
+  const second = roomGeometry(null, 4, () => 0.91, { runSeed: 'ROOM42' })
+  const otherRoom = roomGeometry(null, 4, () => 0.11, { runSeed: 'OTHER99' })
+
+  assert.deepEqual(second, first)
+  assert.notEqual(otherRoom.seed, first.seed)
+})

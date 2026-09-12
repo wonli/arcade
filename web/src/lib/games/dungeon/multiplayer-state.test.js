@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { multiplayerRole, createDungeonSnapshot, applyEnemySnapshot, shouldIncludeGeometry, snapshotSignature } from './multiplayer-state.js'
+
+import { applyRemotePlayerState, interpolateRemotePlayer, multiplayerRole, playerNetworkState } from './multiplayer-state.js'
 
 test('multiplayerRole identifies host and guest from room membership', () => {
   const room = { hostId: 'a', players: [{ id: 'a' }, { id: 'b' }] }
@@ -10,45 +11,51 @@ test('multiplayerRole identifies host and guest from room membership', () => {
   assert.equal(multiplayerRole({ hostId: 'a', players: [{ id: 'a' }] }, 'a'), 'waiting')
 })
 
-test('createDungeonSnapshot strips Phaser objects and only includes geometry when requested', () => {
-  const scene = {
-    floor: 3, floorCleared: false, runComplete: false,
-    playerState: { x: 10, y: 20, hp: 90, maxHp: 100, damage: 12, speed: 190 }, playerFacing: 'left', playerMoving: true,
-    enemies: [{ id: 'e1', x: 30, y: 40, hp: 5, maxHp: 10, archetype: 'fast', visual: { huge: true }, healthBar: {} }],
-    drops: [{ x: 50, y: 60, item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 8 }, visual: {} }],
-    portal: { x: 70, y: 80, unlockAt: 123, glow: {} },
-    __roomGeometry: { seed: 42, rooms: [{ x: 1 }] },
+test('player network state contains only player data and never world snapshots', () => {
+  const entity = {
+    id: 'p1',
+    state: {
+      x: 120, y: 240, hp: 88, maxHp: 115,
+      weapon: 'weapon.dungeon_blade', weaponRarity: 'rare', weaponDamage: 16,
+      weaponAffixes: [{ id: 'power', value: 0.2 }],
+    },
+    facing: 'left', moving: true, attacking: false,
   }
-  const peer = { x: 100, y: 110, hp: 80, maxHp: 100, damage: 13, speed: 190, facing: 'up', moving: false }
-  const compact = createDungeonSnapshot(scene, peer, { floor: 3 })
-  assert.equal(compact.geometry, undefined)
-  assert.deepEqual(compact.enemies[0], { id: 'e1', x: 30, y: 40, hp: 5, maxHp: 10, archetype: 'fast', elite: false, boss: false, phase: 1, scale: 1, tint: null, barOffset: 28 })
-  assert.equal(compact.drops[0].visual, undefined)
-  const full = createDungeonSnapshot(scene, peer, { floor: 3 }, { includeGeometry: true })
-  assert.equal(full.geometry.seed, 42)
+  const payload = playerNetworkState(entity)
+
+  assert.deepEqual(Object.keys(payload).sort(), [
+    'attacking', 'facing', 'hp', 'id', 'maxHp', 'moving', 'weapon', 'weaponAffixes', 'weaponDamage', 'weaponRarity', 'x', 'y',
+  ].sort())
+  assert.equal('geometry' in payload, false)
+  assert.equal('enemies' in payload, false)
+  assert.equal('drops' in payload, false)
+  assert.equal('portal' in payload, false)
+  assert.notEqual(payload.weaponAffixes, entity.state.weaponAffixes)
 })
 
-test('applyEnemySnapshot reconciles guest enemy visuals by authoritative id', () => {
-  const scene = {
-    enemies: [{ id: 'old', x: 0, y: 0, hp: 10, maxHp: 10, visual: { setVisible() {}, setPosition() {}, destroy() {} }, healthBar: {}, barOffset: 28 }],
-    spawnEnemy() { const enemy = { id: 'spawned', x: 0, y: 0, hp: 1, maxHp: 1, visual: { setVisible() {}, setPosition() {}, destroy() {} }, healthBar: {}, barOffset: 28 }; this.enemies.push(enemy); return enemy },
-    destroyHealthBar() {}, updateHealthBar() {},
-  }
-  applyEnemySnapshot(scene, [{ id: 'e1', x: 4, y: 5, hp: 7, maxHp: 9, archetype: 'fast' }, { id: 'e2', x: 8, y: 9, hp: 12, maxHp: 12, archetype: 'brute' }])
-  assert.equal(scene.enemies.length, 2)
-  assert.equal(scene.enemies[0].id, 'e1')
-  assert.equal(scene.enemies[1].x, 8)
-  applyEnemySnapshot(scene, [{ id: 'e1', x: 6, y: 7, hp: 6, maxHp: 9, archetype: 'fast' }])
-  assert.equal(scene.enemies.length, 1)
-  assert.equal(scene.enemies[0].id, 'e1')
+test('remote player state updates only the remote entity target and presentation state', () => {
+  const local = { id: 'p1', state: { x: 10, y: 20, hp: 100 }, facing: 'down', moving: false, attacking: false }
+  const remote = { id: 'p2', state: { x: 30, y: 40, hp: 100, maxHp: 100 }, targetX: 30, targetY: 40, facing: 'down', moving: false, attacking: false }
+  const localBefore = structuredClone(local)
+
+  assert.equal(applyRemotePlayerState(remote, { id: 'p2', x: 130, y: 140, hp: 75, maxHp: 100, facing: 'up', moving: true, attacking: true }), true)
+  assert.deepEqual(local, localBefore)
+  assert.equal(remote.state.x, 30)
+  assert.equal(remote.state.y, 40)
+  assert.equal(remote.targetX, 130)
+  assert.equal(remote.targetY, 140)
+  assert.equal(remote.state.hp, 75)
+  assert.equal(remote.facing, 'up')
+  assert.equal(remote.moving, true)
+  assert.equal(remote.attacking, true)
 })
 
-test('geometry and drop signatures are rate limited and deterministic', () => {
-  assert.equal(shouldIncludeGeometry(1), true)
-  assert.equal(shouldIncludeGeometry(3), true)
-  assert.equal(shouldIncludeGeometry(10), false)
-  assert.equal(shouldIncludeGeometry(19), false)
-  assert.equal(shouldIncludeGeometry(20), true)
-  const a = [{ x: 1, y: 2, item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 8 } }]
-  assert.equal(snapshotSignature(a), snapshotSignature(structuredClone(a)))
+test('remote interpolation approaches network target without teleporting normal updates', () => {
+  const remote = { state: { x: 0, y: 0 }, targetX: 100, targetY: 50 }
+  interpolateRemotePlayer(remote, 0.25)
+  assert.equal(remote.state.x, 25)
+  assert.equal(remote.state.y, 12.5)
+  interpolateRemotePlayer(remote, 1)
+  assert.equal(remote.state.x, 100)
+  assert.equal(remote.state.y, 50)
 })
