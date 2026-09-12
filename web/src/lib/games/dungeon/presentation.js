@@ -91,3 +91,13 @@ export function weaponHudModel(stats = {}, locale = 'en') {
     affixes: (stats.weaponAffixes ?? []).map((entry) => formatAffixLabel(entry, locale)),
   }
 }
+
+export function gameOverSummary(stats = {}, progress = {}) {
+  return {
+    floor: Math.max(1, Math.floor(progress.floor || 1)),
+    kills: Math.max(0, Math.floor(stats.kills || 0)),
+    weapon: Boolean(stats.weapon),
+    rarity: stats.weaponRarity ?? null,
+    damage: Math.max(0, Math.floor(stats.weaponDamage || 0)),
+  }
+}

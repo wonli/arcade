@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { combatVisualCue, formatAffixLabel, weaponComparisonModel, weaponHudModel } from './presentation.js'
+import { combatVisualCue, formatAffixLabel, gameOverSummary, weaponComparisonModel, weaponHudModel } from './presentation.js'
 
 test('affix labels format percentages and flat values bilingually', () => {
   assert.equal(formatAffixLabel({ id: 'attack_speed', value: 0.14 }, 'zh-CN'), '+14% 攻速')
@@ -31,6 +31,18 @@ test('weapon HUD model preserves base damage rarity and all equipped affixes', (
   assert.equal(model.damage, 11)
   assert.equal(model.affixes.length, 3)
   assert.ok(model.affixes[2].startsWith('★ Berserker'))
+})
+
+test('game over summary keeps the final floor, kills, and equipped weapon', () => {
+  const summary = gameOverSummary(
+    { kills: 27, weapon: 'weapon.dungeon_blade', weaponRarity: 'rare', weaponDamage: 9 },
+    { floor: 8 }
+  )
+  assert.deepEqual(summary, { floor: 8, kills: 27, weapon: true, rarity: 'rare', damage: 9 })
+})
+
+test('game over summary handles a run without a weapon', () => {
+  assert.deepEqual(gameOverSummary({ kills: 0 }, { floor: 1 }), { floor: 1, kills: 0, weapon: false, rarity: null, damage: 0 })
 })
 
 test('weapon comparison keeps ground weapon pending and marks comparable gains and losses', () => {
