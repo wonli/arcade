@@ -25,9 +25,12 @@ test('movement collision slides along an obstacle instead of entering it', () =>
   assert.equal(circleHitsSolid(next, 16, geometry), false)
 })
 
-test('water is traversable terrain with a slow multiplier', () => {
-  assert.deepEqual(terrainAt({ x: 540, y: 300 }, geometry), { type: 'water', speedMultiplier: 0.62, navCost: 2.4 })
+test('water is forbidden terrain and blocks movement', () => {
+  assert.deepEqual(terrainAt({ x: 540, y: 300 }, geometry), { type: 'water', speedMultiplier: 0, navCost: Infinity })
   assert.deepEqual(terrainAt({ x: 200, y: 200 }, geometry), { type: 'floor', speedMultiplier: 1, navCost: 1 })
+  const next = movementWithCollision({ x: 470, y: 300 }, { x: 80, y: 0 }, 16, geometry)
+  assert.ok(next.x < 484)
+  assert.equal(terrainAt(next, geometry).type, 'floor')
 })
 
 test('beam segments clip at the first solid wall', () => {
