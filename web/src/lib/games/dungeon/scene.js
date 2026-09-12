@@ -1,3 +1,4 @@
+import { placePlayerAtRoomSpawn, roomAnchor, safeEnemySpawn } from './room-anchors.js'
 import { createDungeonAmbient } from './ambient.js'
 import { affixSummary } from './affixes.js'
 import {
@@ -377,10 +378,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         this.clearEnemies()
         this.clearEnemyProjectiles()
         this.clearDrops()
-        this.playerState.x = WIDTH / 2
-        this.playerState.y = HEIGHT / 2
-        this.player.setPosition(this.playerState.x, this.playerState.y)
         this.drawArena()
+        placePlayerAtRoomSpawn(this)
       }
       const wave = floorWave(this.floor)
       for (let i = 0; i < wave.count; i++) this.spawnEnemy(i, { elite: i < wave.eliteCount })
@@ -392,9 +391,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     spawnEnemy(index = 0, { elite = false } = {}) {
       const point = this.spawnPoints[index % Math.max(1, this.spawnPoints.length)] || [72, 72]
       const spread = elite ? 0 : 28
-      const x = Phaser.Math.Clamp(point[0] + (Math.random() - 0.5) * spread, 72, WIDTH - 72)
-      const y = Phaser.Math.Clamp(point[1] + (Math.random() - 0.5) * spread, 72, HEIGHT - 72)
+      const desiredX = Phaser.Math.Clamp(point[0] + (Math.random() - 0.5) * spread, 72, WIDTH - 72)
+      const desiredY = Phaser.Math.Clamp(point[1] + (Math.random() - 0.5) * spread, 72, HEIGHT - 72)
       const archetype = enemyArchetype(this.floor, Math.random, { elite })
+      const { x, y } = safeEnemySpawn(this.__roomGeometry, { x: desiredX, y: desiredY }, archetype.boss ? 26 : 15)
       const visual = this.makeActor(x, y, 'enemy', archetype.type).setDepth(elite ? 12 : 10)
       visual.setScale(visual.scaleX * archetype.scale, visual.scaleY * archetype.scale)
       const tint = elite ? 0xffd86b : null
@@ -930,8 +930,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     openPortal() {
       if (this.portal || this.dead || this.runComplete || this.floor >= 5) return
-      const x = WIDTH / 2
-      const y = HEIGHT - TILE * 1.7
+      const { x, y } = roomAnchor(this.__roomGeometry, 'exit')
       const glow = this.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
       const ring = this.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
       const core = this.add.circle(x, y, 16, 0x70ff9f, 0.42).setDepth(10)

@@ -1,3 +1,4 @@
+import { placePlayerAtRoomSpawn, roomAnchor } from './room-anchors.js'
 import { rollAffixes } from './affixes.js'
 import { advanceProgress, createRunProgress, difficultyProfile, roomRoleAt } from './progression.js'
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
@@ -101,8 +102,7 @@ export function installInfiniteDungeon(scene, {
 
   const openInfinitePortal = () => {
     if (scene.portal || scene.dead) return
-    const x = 480
-    const y = 600 - 48 * 1.7
+    const { x, y } = roomAnchor(scene.__roomGeometry, 'exit')
     const glow = scene.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
     const ring = scene.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
     const core = scene.add.circle(x, y, 16, 0x70ff9f, 0.42).setDepth(10)
@@ -121,8 +121,7 @@ export function installInfiniteDungeon(scene, {
   }
 
   const spawnRestRoom = () => {
-    const x = 480
-    const y = 300
+    const { x, y } = roomAnchor(scene.__roomGeometry, 'rest')
     const objects = []
     const glow = scene.add.circle(x, y, 56, 0xffc66d, 0.08).setDepth(8)
     const fire = scene.add.circle(x, y + 5, 18, 0xff9e52, 0.5).setStrokeStyle(3, 0xffd27c, 0.9).setDepth(9)
@@ -189,10 +188,8 @@ export function installInfiniteDungeon(scene, {
       scene.clearEnemies()
       scene.clearEnemyProjectiles()
       originalClearDrops()
-      scene.playerState.x = 480
-      scene.playerState.y = 300
-      scene.player.setPosition(scene.playerState.x, scene.playerState.y)
       scene.drawArena()
+      placePlayerAtRoomSpawn(scene)
     }
 
     if (role === 'rest') {

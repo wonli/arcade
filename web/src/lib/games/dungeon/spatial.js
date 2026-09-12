@@ -104,9 +104,28 @@ function pointInRect(position, area) {
 export function circleHitsSolid(position, radius, geometry) {
   const solids = geometry?.solids ?? []
   if (solids.some((solid) => circleRectIntersects(position, radius, solid))) return true
-  const onBridge = (geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))
-  if (onBridge) return false
-  return (geometry?.water ?? []).some((water) => circleRectIntersects(position, radius, water))
+  // Subtract deck rectangles from water before testing the complete actor footprint.
+  // A center point on a bridge does not make the surrounding water walkable.
+  for (const water of geometry?.water ?? []) {
+    if (!circleRectIntersects(position, radius, water)) continue
+    let pieces = [water]
+    for (const bridge of geometry?.bridges ?? []) {
+      pieces = pieces.flatMap((area) => {
+        const x = Math.max(area.x, bridge.x), y = Math.max(area.y, bridge.y)
+        const right = Math.min(area.x + area.width, bridge.x + bridge.width)
+        const bottom = Math.min(area.y + area.height, bridge.y + bridge.height)
+        if (x >= right || y >= bottom) return [area]
+        return [
+          { x: area.x, y: area.y, width: area.width, height: y - area.y },
+          { x: area.x, y: bottom, width: area.width, height: area.y + area.height - bottom },
+          { x: area.x, y, width: x - area.x, height: bottom - y },
+          { x: right, y, width: area.x + area.width - right, height: bottom - y },
+        ].filter((part) => part.width > 0 && part.height > 0)
+      })
+    }
+    if (pieces.some((area) => circleRectIntersects(position, radius, area))) return true
+  }
+  return false
 }
 
 export function movementWithCollision(from, delta, radius, geometry) {

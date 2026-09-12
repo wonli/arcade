@@ -50,3 +50,10 @@ test('every room template keeps player start, portal, and enemy spawn anchors cl
     }
   }
 })
+
+test('bridge exemption covers only the deck, not an actor hanging over the side', () => {
+  const g = { solids: [], water: [{ x: 40, y: 0, width: 80, height: 160 }], bridges: [{ x: 16, y: 48, width: 128, height: 64 }] }
+  assert.equal(circleHitsSolid({ x: 80, y: 80 }, 18, g), false)
+  assert.equal(circleHitsSolid({ x: 80, y: 52 }, 18, g), true)
+  assert.equal(circleHitsSolid({ x: 36, y: 80 }, 18, g), false)
+})

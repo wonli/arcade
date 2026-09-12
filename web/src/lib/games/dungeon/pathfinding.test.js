@@ -60,3 +60,10 @@ test('flying astar may cross water', () => {
 test('hasRoute reuses astar connectivity checks', () => {
   assert.equal(hasRoute(geometry, { x: 24, y: 24 }, { x: 216, y: 168 }, { cellSize: 48 }), true)
 })
+
+test('ground navigation blocks cells whose actor radius overlaps a shoreline', () => {
+  const geometry = { width: 128, height: 128, solids: [], bridges: [], water: [{ x: 64, y: 0, width: 64, height: 128 }] }
+  const grid = buildNavGrid(geometry, { cellSize: 16, actorRadius: 18 })
+  assert.equal(grid.cells.get('3,3').blocked, true)
+  assert.equal(grid.cells.get('2,3').blocked, false)
+})

@@ -1,3 +1,5 @@
+import { queueDungeon3Textures, renderDungeon3Terrain } from './dungeon3-renderer.js'
+import { placePlayerAtRoomSpawn, safeEnemySpawn } from './room-anchors.js'
 import { rollAffixes } from './affixes.js'
 import { chooseEnvironmentAssets } from './environment-assets.js'
 import { chestRewardProfile, nearestInteractable } from './interactables.js'
@@ -321,7 +323,8 @@ function renderFloor(scene, geometry) {
   const floorSkin = scene.__dungeonEnvironmentFloorSkin ?? null
   const floorTexture = spatialTextureKey('floor', available)
 
-  if (floorTexture) renderAuthoredFloorSkin(scene, geometry, floorTexture, spatialTextureFrame('floor', frames), floorSkin)
+  if (geometry.grid) renderDungeon3Terrain(scene, geometry)
+  else if (floorTexture) renderAuthoredFloorSkin(scene, geometry, floorTexture, spatialTextureFrame('floor', frames), floorSkin)
   else {
     for (let y = tile; y < geometry.height - tile; y += tile) for (let x = tile; x < geometry.width - tile; x += tile) {
       const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
@@ -330,11 +333,14 @@ function renderFloor(scene, geometry) {
     }
   }
 
-  renderFloorDecorations(scene, geometry, available)
-  for (let waterIndex = 0; waterIndex < geometry.water.length; waterIndex++) renderAuthoredWater(scene, geometry, geometry.water[waterIndex], waterIndex, available, frames, animations)
-  renderGeneratedFeatures(scene, geometry, available)
+  if (!geometry.grid) {
+    renderFloorDecorations(scene, geometry, available)
+    for (let waterIndex = 0; waterIndex < geometry.water.length; waterIndex++) renderAuthoredWater(scene, geometry, geometry.water[waterIndex], waterIndex, available, frames, animations)
+    renderGeneratedFeatures(scene, geometry, available)
+  }
 
   for (const solid of geometry.solids) {
+    if (geometry.grid) continue
     const isBoundary = solid.kind === 'boundary'
     const isPillar = solid.kind === 'pillar'
     const texture = spatialTextureKey(solid.kind, available)
@@ -408,17 +414,6 @@ function showChestPrompt(scene, chest, label) {
 }
 function hideChestPrompt(chest) { chest?.prompt?.destroy?.(); if (chest) chest.prompt = null }
 
-function nearestValidSpawn(geometry, position) {
-  let best = null, distance = Infinity
-  for (const spawn of geometry.spawnPoints) {
-    if (circleHitsSolid(spawn, ENEMY_RADIUS, geometry)) continue
-    const nextDistance = Math.hypot(spawn.x - position.x, spawn.y - position.y)
-    if (nextDistance >= distance) continue
-    best = spawn; distance = nextDistance
-  }
-  return best
-}
-
 function queueEnvironmentTexture(scene, key, asset) {
   if (!asset?.path || scene.textures?.exists?.(key)) return false
   if ((asset.frames ?? 1) > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) scene.load.spritesheet(key, asset.path, { frameWidth: asset.frameWidth, frameHeight: asset.frameHeight, endFrame: asset.frames - 1 })
@@ -454,7 +449,8 @@ async function loadEnvironmentTextures(scene) {
         ['dungeon-tileset-coffin', selected.coffin], ['dungeon-tileset-object', selected.objectDecoration], ['dungeon-tileset-trap-plate', selected.trapPlate],
         ['dungeon-tileset-trap-spikes', selected.trapSpikes], ['dungeon-tileset-candles', selected.candles], ['dungeon-tileset-arches', selected.arches],
       ]
-      const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean)
+      const gridQueued = queueDungeon3Textures(scene)
+      const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean) || gridQueued
       if (!queued) return true
       await new Promise((resolve) => { scene.load.once('complete', resolve); scene.load.start() })
       return true
@@ -495,6 +491,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     chests = []
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
+    if (!fixedGeometry) placePlayerAtRoomSpawn(scene)
     scene.__navGrids = { ground: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'ground' }), flying: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'flying' }) }
     scene.__navGrid = scene.__navGrids.ground
     scene.spawnPoints = geometry.spawnPoints.map((entry) => [entry.x, entry.y])
@@ -504,7 +501,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
       enemy.hitRadius = enemy.boss ? 26 : ENEMY_RADIUS
       const collisionGeometry = collisionGeometryForEnemy(enemy, geometry)
       if (!circleHitsSolid(enemy, enemy.hitRadius, collisionGeometry)) continue
-      const spawn = nearestValidSpawn(collisionGeometry, enemy)
+      const spawn = safeEnemySpawn(collisionGeometry, enemy, enemy.hitRadius)
       if (!spawn) continue
       enemy.x = spawn.x; enemy.y = spawn.y
       enemy.visual?.setPosition?.(enemy.x, enemy.y)

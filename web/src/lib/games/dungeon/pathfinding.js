@@ -28,7 +28,7 @@ export function buildNavGrid(geometry, { cellSize = 48, actorRadius = 14, profil
       const terrain = terrainAt(position, geometry)
       const onBridge = pointOnBridge(position, geometry)
       const blockedBySolid = hardBlocked(position, actorRadius, geometry)
-      const blockedByWater = profile !== 'flying' && terrain.type === 'water' && !onBridge
+      const blockedByWater = profile !== 'flying' && circleHitsSolid(position, actorRadius, geometry)
       const blocked = blockedBySolid || blockedByWater
       const terrainType = onBridge ? 'bridge' : terrain.type
       const terrainCost = profile === 'flying' && terrain.type === 'water' ? 1 : terrain.navCost
@@ -43,7 +43,7 @@ export function buildNavGrid(geometry, { cellSize = 48, actorRadius = 14, profil
       })
     }
   }
-  return { width, height, cellSize, actorRadius, profile, cells }
+  return { width, height, cellSize, actorRadius, profile, cells, collisionGeometry: profile === 'flying' ? { ...geometry, water: [] } : geometry }
 }
 
 export function navCostAt(grid, cell) {
@@ -113,6 +113,16 @@ export function findPath(grid, start, goal) {
       const neighborKey = key(nx, ny)
       const neighbor = grid.cells.get(neighborKey)
       if (!neighbor || neighbor.blocked || !Number.isFinite(neighbor.cost)) continue
+      // Adjacent cell centers can straddle a narrow obstacle. Verify the edge too.
+      if (grid.collisionGeometry) {
+        const steps = Math.ceil(grid.cellSize / 4)
+        let blockedEdge = false
+        for (let i = 1; i < steps; i++) {
+          const position = { x: current.x + (neighbor.x - current.x) * i / steps, y: current.y + (neighbor.y - current.y) * i / steps }
+          if (circleHitsSolid(position, grid.actorRadius, grid.collisionGeometry)) { blockedEdge = true; break }
+        }
+        if (blockedEdge) continue
+      }
       const tentative = (gScore.get(currentKey) ?? Infinity) + neighbor.cost
       if (tentative >= (gScore.get(neighborKey) ?? Infinity)) continue
       cameFrom.set(neighborKey, currentKey)
