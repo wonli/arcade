@@ -25,6 +25,14 @@ test('selects a complete environment from the dedicated dungeon tileset', () => 
   assert.notEqual(assets.floor.frame, assets.wall.frame)
 })
 
+test('uses visible floor tiles and multi-tile authored regions for environment objects', () => {
+  const assets = chooseEnvironmentAssets(manifest)
+  assert.notEqual(assets.floor.frame, 0)
+  assert.deepEqual(assets.obstacle.region, { x: 16, y: 160, width: 32, height: 48 })
+  assert.deepEqual(assets.torch.region, { x: 16, y: 0, width: 48, height: 48 })
+  assert.deepEqual(assets.chest.region, { x: 0, y: 0, width: 32, height: 32 })
+})
+
 test('never falls back to Debts environment when the dedicated tileset is present', () => {
   const assets = chooseEnvironmentAssets({
     assets: [
