@@ -45,6 +45,7 @@ export function spatialTextureKey(kind, available = {}) {
   if (kind === 'floor') return available.tilesetFloor ? 'dungeon-tileset-floor' : available.floor ? 'dungeon-floor' : null
   if (kind === 'boundary' || kind === 'wall') return available.tilesetWall ? 'dungeon-tileset-wall' : available.wall ? 'dungeon-wall' : null
   if (kind === 'water') return available.tilesetWater ? 'dungeon-tileset-water' : null
+  if (kind === 'water-detail') return available.tilesetWaterDetail ? 'dungeon-tileset-water-detail' : null
   if (kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall') return available.tilesetObstacle ? 'dungeon-tileset-obstacle' : available.obstacle ? 'dungeon-obstacle' : null
   if (kind === 'torch') return available.tilesetTorch ? 'dungeon-tileset-torch' : available.torch ? 'dungeon-torch' : null
   if (kind === 'chest') return available.tilesetChest ? 'dungeon-tileset-chest' : available.chest ? 'dungeon-chest' : null
@@ -60,6 +61,11 @@ export function spatialTextureFrame(kind, frames = {}) {
 export function spatialTileStack(kind, stacks = {}) {
   if (kind !== 'pillar') return null
   return Array.isArray(stacks.obstacle) && stacks.obstacle.length ? stacks.obstacle : null
+}
+
+export function spatialAnimation(kind, animations = {}) {
+  if (kind !== 'water-detail') return null
+  return Array.isArray(animations.waterDetail) && animations.waterDetail.length ? animations.waterDetail : null
 }
 
 export function spatialSurfaceTint(kind) {
@@ -101,6 +107,7 @@ function textureAvailability(scene) {
     tilesetFloor: exists('dungeon-tileset-floor'),
     tilesetWall: exists('dungeon-tileset-wall'),
     tilesetWater: exists('dungeon-tileset-water'),
+    tilesetWaterDetail: exists('dungeon-tileset-water-detail'),
     tilesetObstacle: exists('dungeon-tileset-obstacle'),
     tilesetTorch: exists('dungeon-tileset-torch'),
     tilesetChest: exists('dungeon-tileset-chest'),
@@ -116,6 +123,20 @@ function addTiledTexture(scene, x, y, width, height, key, depth, tint = null, fr
   const tile = track(scene, scene.add.tileSprite(x, y, Math.max(1, width), Math.max(1, height), key, frame ?? undefined).setDepth(depth))
   if (tint != null) tile.setTint?.(tint)
   return tile
+}
+
+function animateTiledTexture(scene, target, frames) {
+  if (!target || !Array.isArray(frames) || frames.length < 2 || !scene.time?.delayedCall) return target
+  let index = 0
+  const advance = () => {
+    if (target.active === false) return
+    const frame = frames[index % frames.length]
+    target.setFrame?.(frame.tileId)
+    index = (index + 1) % frames.length
+    scene.time.delayedCall(Math.max(16, Number(frame.duration) || 150), advance)
+  }
+  advance()
+  return target
 }
 
 function addScaledImage(scene, x, y, key, targetHeight, depth, frame = null) {
@@ -147,6 +168,7 @@ function renderFloor(scene, geometry) {
   const available = textureAvailability(scene)
   const frames = scene.__dungeonEnvironmentFrames ?? {}
   const stacks = scene.__dungeonEnvironmentStacks ?? {}
+  const animations = scene.__dungeonEnvironmentAnimations ?? {}
   const floorTexture = spatialTextureKey('floor', available)
 
   if (floorTexture) {
@@ -197,9 +219,28 @@ function renderFloor(scene, geometry) {
         0.62,
       ).setStrokeStyle(2, 0x3991a9, 0.52).setDepth(2))
     }
+
+    const detailTexture = spatialTextureKey('water-detail', available)
+    const detailAnimation = spatialAnimation('water-detail', animations)
+    if (detailTexture && detailAnimation) {
+      const detail = addTiledTexture(
+        scene,
+        water.x + water.width / 2,
+        water.y + water.height / 2,
+        water.width,
+        water.height,
+        detailTexture,
+        3,
+        null,
+        detailAnimation[0]?.tileId,
+      )
+      detail.setAlpha?.(0.58)
+      animateTiledTexture(scene, detail, detailAnimation)
+    }
+
     scene.tweens.add({ targets: body, alpha: 0.76, duration: 1200, yoyo: true, repeat: -1 })
     for (let y = water.y + 18; y < water.y + water.height; y += 30) {
-      const ripple = track(scene, scene.add.rectangle(water.x + water.width / 2, y, Math.max(30, water.width - 26), 2, 0x69bed0, 0.18).setDepth(3))
+      const ripple = track(scene, scene.add.rectangle(water.x + water.width / 2, y, Math.max(30, water.width - 26), 2, 0x69bed0, 0.18).setDepth(4))
       scene.tweens.add({ targets: ripple, x: ripple.x + 9, alpha: 0.34, duration: 900 + (y % 3) * 120, yoyo: true, repeat: -1 })
     }
   }
@@ -372,10 +413,16 @@ async function loadEnvironmentTextures(scene) {
           .filter(([, asset]) => Array.isArray(asset?.tileStack) && asset.tileStack.length)
           .map(([kind, asset]) => [kind, [...asset.tileStack]]),
       )
+      scene.__dungeonEnvironmentAnimations = Object.fromEntries(
+        Object.entries(selected)
+          .filter(([, asset]) => Array.isArray(asset?.animation) && asset.animation.length)
+          .map(([kind, asset]) => [kind, asset.animation.map((entry) => ({ ...entry }))]),
+      )
       const queue = [
         ['dungeon-tileset-floor', selected.floor],
         ['dungeon-tileset-wall', selected.wall],
         ['dungeon-tileset-water', selected.water],
+        ['dungeon-tileset-water-detail', selected.waterDetail],
         ['dungeon-tileset-obstacle', selected.obstacle],
         ['dungeon-tileset-torch', selected.torch],
         ['dungeon-tileset-chest', selected.chest],
