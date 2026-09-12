@@ -124,7 +124,7 @@
           })
         }
         installDungeonSpatial(scene, {
-          getProgress: () => progress,
+          getProgress: () => scene.__infiniteDungeon?.getProgress?.() ?? progress,
           onEvent,
           label: (key) => t(key),
         })
