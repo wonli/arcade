@@ -6,14 +6,17 @@
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { createComparisonCard } from '$lib/games/dungeon/comparison-runtime.js'
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
+  import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
+  import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
+  import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
   const messages = {
     'zh-CN': {
-      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能 · E 换装', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', chapter: '章节', room: '房间', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '装备{rarity}地牢之刃，基础伤害 +{damage}。', pickupPotion: '喝下生命药水，恢复 {heal} 点生命。', dropWeapon: '{rarity}装备掉落！', dropPotion: '生命药水掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。', floorTitle: '第 {floor} 层', floorClear: '本层已清空', floorStart: '进入第 {floor} 层。', portal: '出口已开启，进入绿色传送门。', dungeonBlade: '地牢之刃', rarityCommon: '普通', rarityUncommon: '精良', rarityRare: '稀有', rarityEpic: '史诗', current: '当前装备', ground: '地上装备', equip: '装备', emptyWeapon: '未装备武器', combat: '战斗', elite: '精英', rest: '休息', boss: '首领', restTitle: '篝火休息', restComplete: '休整完成 · 出口已开启', restRecover: '恢复 50% 最大生命', restTemper: '强化当前武器', restFortune: '下一战利品品质提升', restEntered: '发现休息层，靠近篝火选择奖励。', restChoice: '已选择：{choice}'
+      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能 · E 交互/换装', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', chapter: '章节', room: '房间', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Dungeon + Pixel VFX assets', pickupWeapon: '装备{rarity}地牢之刃，基础伤害 +{damage}。', pickupPotion: '喝下生命药水，恢复 {heal} 点生命。', dropWeapon: '{rarity}装备掉落！', dropPotion: '生命药水掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。', floorTitle: '第 {floor} 层', floorClear: '本层已清空', floorStart: '进入第 {floor} 层。', portal: '出口已开启，进入绿色传送门。', dungeonBlade: '地牢之刃', rarityCommon: '普通', rarityUncommon: '精良', rarityRare: '稀有', rarityEpic: '史诗', current: '当前装备', ground: '地上装备', equip: '装备', emptyWeapon: '未装备武器', combat: '战斗', elite: '精英', rest: '休息', boss: '首领', restTitle: '篝火休息', restComplete: '休整完成 · 出口已开启', restRecover: '恢复 50% 最大生命', restTemper: '强化当前武器', restFortune: '下一战利品品质提升', restEntered: '发现休息层，靠近篝火选择奖励。', restChoice: '已选择：{choice}', openChest: '打开宝箱', chestOpened: '宝箱开启！'
     },
     en: {
-      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space skill · E equip', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', chapter: 'Chapter', room: 'Room', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion: 'Health potion restored {heal} HP.', dropWeapon: '{rarity} equipment dropped!', dropPotion: 'Health potion dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.', floorTitle: 'FLOOR {floor}', floorClear: 'FLOOR CLEAR', floorStart: 'Entered floor {floor}.', portal: 'Exit portal opened. Step into the green portal.', dungeonBlade: 'Dungeon Blade', rarityCommon: 'Common', rarityUncommon: 'Uncommon', rarityRare: 'Rare', rarityEpic: 'Epic', current: 'Equipped', ground: 'Ground Item', equip: 'Equip', emptyWeapon: 'No weapon equipped', combat: 'Combat', elite: 'Elite', rest: 'Rest', boss: 'Boss', restTitle: 'REST CAMP', restComplete: 'Rest complete · exit opened', restRecover: 'Recover 50% max HP', restTemper: 'Temper current weapon', restFortune: 'Improve next loot quality', restEntered: 'Rest floor found. Approach the camp to choose.', restChoice: 'Selected: {choice}'
+      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space skill · E interact/equip', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', chapter: 'Chapter', room: 'Room', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Dungeon + Pixel VFX assets', pickupWeapon: '{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion: 'Health potion restored {heal} HP.', dropWeapon: '{rarity} equipment dropped!', dropPotion: 'Health potion dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.', floorTitle: 'FLOOR {floor}', floorClear: 'FLOOR CLEAR', floorStart: 'Entered floor {floor}.', portal: 'Exit portal opened. Step into the green portal.', dungeonBlade: 'Dungeon Blade', rarityCommon: 'Common', rarityUncommon: 'Uncommon', rarityRare: 'Rare', rarityEpic: 'Epic', current: 'Equipped', ground: 'Ground Item', equip: 'Equip', emptyWeapon: 'No weapon equipped', combat: 'Combat', elite: 'Elite', rest: 'Rest', boss: 'Boss', restTitle: 'REST CAMP', restComplete: 'Rest complete · exit opened', restRecover: 'Recover 50% max HP', restTemper: 'Temper current weapon', restFortune: 'Improve next loot quality', restEntered: 'Rest floor found. Approach the camp to choose.', restChoice: 'Selected: {choice}', openChest: 'Open Chest', chestOpened: 'Chest opened!'
     }
   }
 
@@ -23,7 +26,7 @@
   let error = ''
   let locale = 'en'
   let stats = { hp: 100, maxHp: 100, damage: 10, kills: 0, weapon: null, weaponRarity: null, weaponDamage: 0, weaponAffixes: [] }
-  let progress = { floor: 1, chapter: 1, chapterFloor: 1, chapterLength: 4, roomRole: 'combat' }
+  let progress = { floor: 1, chapter: 1, chapterFloor: 1, chapterLength: 4, roomRole: 'combat', fortuneActive: false }
   let eventText = ''
 
   const t = (key, values = {}) => {
@@ -57,6 +60,7 @@
     if (event.type === 'portal') eventText = t('portal')
     if (event.type === 'rest') eventText = t('restEntered')
     if (event.type === 'restchoice') eventText = t('restChoice', { choice: t(`rest${event.choice[0].toUpperCase()}${event.choice.slice(1)}`) })
+    if (event.type === 'chestopen') eventText = t('chestOpened')
   }
 
   onMount(async () => {
@@ -64,11 +68,13 @@
     locale = saved || (navigator.language?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en')
 
     try {
-      const [Phaser, response] = await Promise.all([
+      const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
         loadPhaser(),
         fetch('/assets/debts/manifest.json').catch(() => null),
+        fetch('/assets/vfx/manifest.json').catch(() => null),
       ])
-      const manifest = response?.ok ? await response.json() : { png: [] }
+      const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
+      const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
       const assets = chooseDungeonAssets(manifest)
       game = createDungeonGame({
         Phaser,
@@ -92,6 +98,7 @@
           return
         }
         installAffixVisuals(scene)
+        installDungeonVfx(scene, vfxManifest)
         if (!scene.__comparisonCard) {
           scene.__comparisonCard = createComparisonCard(scene, {
             getLocale: () => locale,
@@ -103,17 +110,25 @@
           })
         }
         installPickupInteraction(scene, { onSelection(next) { scene.__comparisonCard?.setSelection(next) } })
-        installInfiniteDungeon(scene, {
-          onProgress(next) { progress = next },
+        if (!scene.__infiniteDungeon) {
+          scene.__infiniteDungeon = installInfiniteDungeon(scene, {
+            onProgress(next) { progress = next },
+            onEvent,
+            label: (key) => {
+              const map = {
+                floor: 'floor', chapter: 'chapter', floorClear: 'floorClear', restTitle: 'restTitle', restComplete: 'restComplete',
+                'rest.recover': 'restRecover', 'rest.temper': 'restTemper', 'rest.fortune': 'restFortune',
+              }
+              return t(map[key] ?? key)
+            },
+          })
+        }
+        installDungeonSpatial(scene, {
+          getProgress: () => progress,
           onEvent,
-          label: (key) => {
-            const map = {
-              floor: 'floor', chapter: 'chapter', floorClear: 'floorClear', restTitle: 'restTitle', restComplete: 'restComplete',
-              'rest.recover': 'restRecover', 'rest.temper': 'restTemper', 'rest.fortune': 'restFortune',
-            }
-            return t(map[key] ?? key)
-          },
+          label: (key) => t(key),
         })
+        installDungeonAttackRuntime(scene)
       }
       installRuntime()
       ready = true
