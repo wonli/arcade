@@ -22,14 +22,16 @@ const manifest = {
     { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
-    { path: '/assets/debts/Environment/Pillar.png', width: 16, height: 24, frames: 1, frameWidth: 16, frameHeight: 24, source: 'debts' },
-    { path: '/assets/debts/Environment/Torch.png', width: 16, height: 24, frames: 1, frameWidth: 16, frameHeight: 24, source: 'debts' },
-    { path: '/assets/debts/Items/Chest.png', width: 24, height: 20, frames: 1, frameWidth: 24, frameHeight: 20, source: 'debts' },
     { path: '/assets/debts/Items/Sword.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/dungeon-tileset/Tiled_files/walls_floor.png', width: 272, height: 416, frames: 442, frameWidth: 16, frameHeight: 16, columns: 17, rows: 26, source: 'dungeon-tileset', kind: 'wall' },
+    { path: '/assets/dungeon-tileset/Tiled_files/Water_coasts_animation.png', width: 464, height: 512, frames: 928, frameWidth: 16, frameHeight: 16, columns: 29, rows: 32, source: 'dungeon-tileset', kind: 'water' },
+    { path: '/assets/dungeon-tileset/Tiled_files/Arches_columns.png', width: 320, height: 224, frames: 280, frameWidth: 16, frameHeight: 16, columns: 20, rows: 14, source: 'dungeon-tileset', kind: 'obstacle' },
+    { path: '/assets/dungeon-tileset/Tiled_files/torches.png', width: 224, height: 288, frames: 252, frameWidth: 16, frameHeight: 16, columns: 14, rows: 18, source: 'dungeon-tileset', kind: 'torch' },
+    { path: '/assets/dungeon-tileset/Tiled_files/chest_lever.png', width: 192, height: 176, frames: 132, frameWidth: 16, frameHeight: 16, columns: 12, rows: 11, source: 'dungeon-tileset', kind: 'chest' },
   ],
 }
 
-test('prefers the RPG player and resolves distinct enemy role assets', () => {
+test('prefers the RPG player and keeps enemies on Debts assets', () => {
   const assets = chooseDungeonAssets(manifest)
   assert.equal(assets.player.source, 'rpg-main-character')
   assert.equal(assets.player.down.walk.path, '/assets/rpg-main-character/_down walk.png')
@@ -39,16 +41,18 @@ test('prefers the RPG player and resolves distinct enemy role assets', () => {
   assert.equal(assets.enemies.ranged.path, '/assets/debts/Characters/Wizard.png')
   assert.notEqual(assets.enemies.skeleton.path, assets.enemies.fast.path)
   assert.notEqual(assets.enemies.ranged.path, assets.enemies.brute.path)
-  assert.equal(assets.floor.source, 'debts')
-  assert.equal(assets.wall.source, 'debts')
   assert.equal(assets.weapon.source, 'debts')
 })
 
-test('keeps dungeon floor and wall on distinct authored assets', () => {
+test('uses the dedicated tileset for every environment role', () => {
   const assets = chooseDungeonAssets(manifest)
-  assert.equal(assets.floor.path, '/assets/debts/Tiles/BrickFloor.png')
-  assert.equal(assets.wall.path, '/assets/debts/Tiles/StoneWall.png')
-  assert.notEqual(assets.floor.path, assets.wall.path)
+  for (const key of ['floor', 'wall', 'water', 'obstacle', 'torch', 'chest']) {
+    assert.equal(assets[key].source, 'dungeon-tileset')
+  }
+  assert.equal(assets.floor.path, '/assets/dungeon-tileset/Tiled_files/walls_floor.png')
+  assert.equal(assets.wall.path, '/assets/dungeon-tileset/Tiled_files/walls_floor.png')
+  assert.equal(assets.floor.frame, 0)
+  assert.notEqual(assets.floor.frame, assets.wall.frame)
 })
 
 test('resolves movement into four player directions', () => {
