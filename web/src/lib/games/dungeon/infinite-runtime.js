@@ -18,8 +18,13 @@ export function encounterPlan(progress) {
   }
 }
 
-function promoteEquipment(item, floor, random) {
-  if (!item?.type?.startsWith('weapon.') || random() >= 0.42) return item
+export function lootPromotionChance(floor = 1, fortuneActive = false) {
+  const depthChance = Math.min(0.35, Math.max(0, floor - 5) * 0.008)
+  return Math.min(0.76, depthChance + (fortuneActive ? 0.34 : 0))
+}
+
+function promoteEquipment(item, floor, fortuneActive, random) {
+  if (!item?.type?.startsWith('weapon.') || random() >= lootPromotionChance(floor, fortuneActive)) return item
   const index = RARITIES.indexOf(item.rarity)
   if (index < 0 || index >= RARITIES.length - 1) return item
   const rarity = RARITIES[index + 1]
@@ -100,8 +105,8 @@ export function installInfiniteDungeon(scene, {
 
   scene.openPortal = openInfinitePortal
 
-  scene.spawnDrop = function spawnDropWithFortune(x, y, item) {
-    const next = fortuneActive ? promoteEquipment(item, progress.floor, random) : item
+  scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
+    const next = promoteEquipment(item, progress.floor, fortuneActive, random)
     originalSpawnDrop(x, y, next)
   }
 
