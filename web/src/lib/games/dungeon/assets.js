@@ -1,6 +1,7 @@
 const WIZARD_FRAME_WIDTH = 26
 const WIZARD_FRAME_HEIGHT = 18
 const WIZARD_ANIMATION_FRAMES = 4
+const DRAGON_ANIMATION_FRAMES = 6
 const RPG_FRAME_SIZE = 64
 const DUNGEON_TILE_SIZE = 16
 
@@ -41,6 +42,13 @@ export function describeDungeonAsset(path, width, height) {
       frames: Math.min(WIZARD_ANIMATION_FRAMES, Math.floor(width / WIZARD_FRAME_WIDTH)),
       frameWidth: WIZARD_FRAME_WIDTH,
       frameHeight: WIZARD_FRAME_HEIGHT,
+    }
+  }
+
+  if (/dragon/i.test(path) && width % DRAGON_ANIMATION_FRAMES === 0) {
+    const frameWidth = width / DRAGON_ANIMATION_FRAMES
+    if (frameWidth >= 4 && frameWidth <= height * 1.5) {
+      return { frames: DRAGON_ANIMATION_FRAMES, frameWidth, frameHeight: height }
     }
   }
 

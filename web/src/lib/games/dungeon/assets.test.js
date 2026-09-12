@@ -17,6 +17,13 @@ test('keeps regular four-frame creature sheets on their natural frame size', () 
   )
 })
 
+test('describes the Debts dragon strip as six 71x90 animation frames', () => {
+  assert.deepEqual(
+    describeDungeonAsset('/assets/debts/Characters/Dragon.png', 426, 90),
+    { frames: 6, frameWidth: 71, frameHeight: 90 },
+  )
+})
+
 test('describes RPG main character idle and walk sheets as one four-frame row', () => {
   assert.deepEqual(
     describeRpgMainCharacterAsset('/assets/rpg-main-character/_down walk.png', 256, 128),
