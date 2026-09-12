@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { circleHitsSolid, clipSegmentToSolids, movementWithCollision, terrainAt } from './spatial.js'
+import { ROOM_TEMPLATES, circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry, terrainAt } from './spatial.js'
 
 const geometry = {
   width: 960,
@@ -35,4 +35,15 @@ test('beam segments clip at the first solid wall', () => {
   assert.ok(clipped.x >= 280 && clipped.x <= 285)
   assert.equal(clipped.y, 264)
   assert.equal(clipped.blocked, true)
+})
+
+test('every room template keeps player start, portal, and enemy spawn anchors clear', () => {
+  for (const template of ROOM_TEMPLATES) {
+    const room = roomGeometry(template, 1, () => 0)
+    assert.equal(circleHitsSolid({ x: 480, y: 300 }, 18, room), false, `${template} blocks player start`)
+    assert.equal(circleHitsSolid({ x: 480, y: 518 }, 18, room), false, `${template} blocks portal`)
+    for (const spawn of room.spawnPoints) {
+      assert.equal(circleHitsSolid(spawn, 15, room), false, `${template} blocks spawn ${spawn.x},${spawn.y}`)
+    }
+  }
 })
