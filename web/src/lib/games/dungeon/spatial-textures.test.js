@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialTextureKey } from './spatial-runtime.js'
+import { spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 
 const allTextures = {
@@ -25,4 +25,11 @@ test('wall-shaped room solids are classified as walls while pillars stay props',
   assert.ok(pillars.every((solid) => solid.kind === 'pillar'))
   assert.ok(wallShaped.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-wall'))
   assert.ok(pillars.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-obstacle'))
+})
+
+test('pillars render from the authored vertical tile stack', () => {
+  const stacks = { obstacle: [188, 208, 228, 248] }
+  assert.deepEqual(spatialTileStack('pillar', stacks), [188, 208, 228, 248])
+  assert.equal(spatialTileStack('wall', stacks), null)
+  assert.equal(spatialTileStack('boundary', stacks), null)
 })
