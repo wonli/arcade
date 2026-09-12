@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor, pickupIntent } from './scene.js'
+import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor } from './scene.js'
+import { pickupIntent } from './pickup.js'
 
 const manifest = {
   assets: [
