@@ -40,6 +40,7 @@ const tiledManifest = {
       },
       layers: {
         Floor: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
+        floor1_details: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [4216, 4218, 4219, 4233, 4234, 0] }] },
         Walls: {
           chunks: [{
             x: 0,
@@ -55,6 +56,7 @@ const tiledManifest = {
       layerGroups: {
         floor2_dark: [{ chunks: [{ x: 0, y: 0, width: 6, height: 3, gids: [4190,4191,4191,4191,4191,4192,4207,4208,4208,4208,4208,4209,4224,4225,4225,4225,4225,4226] }] }],
         Floor1_dark: [],
+        floor1_details: [{ chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [4216, 4218, 4219, 4233, 4234, 0] }] }],
       },
     },
   },
@@ -90,15 +92,16 @@ test('uses visible fallback tiles and authored prop composition without Tiled me
   assert.equal(assets.chest.frame, 0)
 })
 
-test('uses Dungeon3 dark floor center instead of the flat base tile and keeps authored edges', () => {
+test('keeps the opaque Floor base and layers authored dark edges and sparse details above it', () => {
   const assets = chooseEnvironmentAssets(tiledManifest)
-  assert.equal(assets.floor.frame, 393)
-  assert.equal(assets.floor.authoredBy, 'Dungeon3/floor2_dark')
+  assert.equal(assets.floor.frame, 138)
+  assert.equal(assets.floor.authoredBy, 'Dungeon3/Floor')
   assert.deepEqual(assets.floor.autotile, {
     topLeft: 375, top: 376, topRight: 377,
     left: 392, center: 393, right: 394,
     bottomLeft: 409, bottom: 410, bottomRight: 411,
   })
+  assert.deepEqual(assets.floor.detailFrames, [401, 403, 404, 418, 419])
 })
 
 test('derives water frames while preserving an authored multi-tile wall motif', () => {
@@ -145,7 +148,7 @@ test('ignores Tiled transform flags when counting authored surface tiles', () =>
   const transformed = structuredClone(tiledManifest)
   transformed.tiledMaps.Dungeon3.layers.Floor.chunks[0].gids = [2147487601, 2147487601, 3953]
   const assets = chooseEnvironmentAssets(transformed)
-  assert.equal(assets.floor.frame, 393)
+  assert.equal(assets.floor.frame, 138)
 })
 
 test('never falls back to Debts environment when the dedicated tileset is present', () => {
