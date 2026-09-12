@@ -15,12 +15,44 @@ const RARITY_DAMAGE = {
   epic: [9, 12],
 }
 
-export function spatialTextureKey(kind, available = {}) {
-  if (kind === 'floor') return available.floor ? 'dungeon-floor' : null
-  if (kind === 'boundary' || kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall' || kind === 'wall') {
-    return available.wall ? 'dungeon-wall' : null
+function normalizedAssets(manifest = {}) {
+  return Array.isArray(manifest.assets) ? manifest.assets : []
+}
+
+function chooseEnvironmentAsset(assets, patterns) {
+  for (const pattern of patterns) {
+    const found = assets.find((asset) => asset?.path && pattern.test(asset.path) && (asset.frames ?? 1) === 1)
+    if (found) return found
   }
   return null
+}
+
+export function selectDebtsEnvironmentAssets(manifest = {}) {
+  const assets = normalizedAssets(manifest).filter((asset) => !asset.source || asset.source === 'debts')
+  return {
+    obstacle: chooseEnvironmentAsset(assets, [
+      /(?:pillar|column|statue)/i,
+      /(?:crate|barrel|rock|boulder)/i,
+      /(?:bones|skull|grave|tomb)/i,
+    ]),
+    torch: chooseEnvironmentAsset(assets, [/(?:torch|brazier)/i, /(?:candle|lantern)/i, /(?:fire|flame)/i]),
+    chest: chooseEnvironmentAsset(assets, [/(?:chest|coffer)/i, /(?:treasure|loot)/i]),
+  }
+}
+
+export function spatialTextureKey(kind, available = {}) {
+  if (kind === 'floor') return available.floor ? 'dungeon-floor' : null
+  if (kind === 'boundary' || kind === 'wall') return available.wall ? 'dungeon-wall' : null
+  if (kind === 'pillar' || kind === 'broken-wall' || kind === 'pillar-wall') return available.obstacle ? 'dungeon-obstacle' : null
+  if (kind === 'torch') return available.torch ? 'dungeon-torch' : null
+  if (kind === 'chest') return available.chest ? 'dungeon-chest' : null
+  return null
+}
+
+export function spatialSurfaceTint(kind) {
+  if (kind === 'floor') return 0xb49a82
+  if (kind === 'boundary' || kind === 'wall') return 0x667488
+  return 0xaeb5bd
 }
 
 function clamp01(value) {
@@ -53,6 +85,9 @@ function textureAvailability(scene) {
   return {
     floor: Boolean(scene.textures?.exists?.('dungeon-floor')),
     wall: Boolean(scene.textures?.exists?.('dungeon-wall')),
+    obstacle: Boolean(scene.textures?.exists?.('dungeon-obstacle')),
+    torch: Boolean(scene.textures?.exists?.('dungeon-torch')),
+    chest: Boolean(scene.textures?.exists?.('dungeon-chest')),
   }
 }
 
@@ -60,6 +95,13 @@ function addTiledTexture(scene, x, y, width, height, key, depth, tint = null) {
   const tile = track(scene, scene.add.tileSprite(x, y, Math.max(1, width), Math.max(1, height), key).setDepth(depth))
   if (tint != null) tile.setTint?.(tint)
   return tile
+}
+
+function addScaledImage(scene, x, y, key, targetHeight, depth) {
+  const image = track(scene, scene.add.image(x, y, key).setDepth(depth))
+  const sourceHeight = image.height || targetHeight
+  image.setScale?.(targetHeight / Math.max(1, sourceHeight))
+  return image
 }
 
 function renderFloor(scene, geometry) {
@@ -78,14 +120,14 @@ function renderFloor(scene, geometry) {
       geometry.height - tile * 2,
       floorTexture,
       1,
-      0xb9bec4,
+      spatialSurfaceTint('floor'),
     )
   } else {
     for (let y = tile; y < geometry.height - tile; y += tile) {
       for (let x = tile; x < geometry.width - tile; x += tile) {
-        const shade = ((x / tile + y / tile) % 2 === 0) ? 0x171b21 : 0x14181e
+        const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
         background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
-        background.lineStyle(1, 0x252b34, 0.5).strokeRect(x, y, tile, tile)
+        background.lineStyle(1, 0x3a312a, 0.55).strokeRect(x, y, tile, tile)
       }
     }
   }
@@ -116,7 +158,7 @@ function renderFloor(scene, geometry) {
       solid.width,
       solid.height,
       0x050607,
-      isBoundary ? 0.3 : 0.38,
+      isBoundary ? 0.34 : 0.42,
     ).setDepth(depth - 1))
 
     if (texture) {
@@ -128,13 +170,13 @@ function renderFloor(scene, geometry) {
         Math.max(2, solid.height - 2),
         texture,
         depth,
-        isBoundary ? 0x9ca4ad : 0xb7bec6,
+        spatialSurfaceTint(solid.kind),
       )
       continue
     }
 
-    const color = isBoundary ? 0x242a33 : solid.kind === 'pillar' ? 0x313844 : 0x292f39
-    const edge = isBoundary ? 0x414b57 : 0x56616f
+    const color = isBoundary ? 0x303b49 : solid.kind === 'pillar' ? 0x555d66 : 0x48515c
+    const edge = isBoundary ? 0x708095 : 0x8b949f
     track(scene, scene.add.rectangle(
       solid.x + solid.width / 2,
       solid.y + solid.height / 2,
@@ -147,6 +189,13 @@ function renderFloor(scene, geometry) {
 
   for (const torch of geometry.torches) {
     const glow = track(scene, scene.add.circle(torch.x, torch.y, 42, 0xff8a3d, 0.08).setDepth(7))
+    const torchTexture = spatialTextureKey('torch', available)
+    if (torchTexture) {
+      const sprite = addScaledImage(scene, torch.x, torch.y + 2, torchTexture, 34, 9)
+      scene.tweens.add({ targets: glow, alpha: 0.2, scale: 1.22, duration: 780 + Math.random() * 220, yoyo: true, repeat: -1 })
+      scene.tweens.add({ targets: sprite, y: sprite.y - 1, duration: 460 + Math.random() * 120, yoyo: true, repeat: -1 })
+      continue
+    }
     const outer = track(scene, scene.add.circle(torch.x, torch.y - 3, 9, 0xff7b35, 0.62).setDepth(8))
     const core = track(scene, scene.add.circle(torch.x, torch.y - 5, 4, 0xffe39a, 0.96).setDepth(9))
     track(scene, scene.add.rectangle(torch.x, torch.y + 10, 5, 18, 0x7e5638, 1).setDepth(7))
@@ -158,19 +207,33 @@ function renderFloor(scene, geometry) {
 function renderChest(scene, anchor, index) {
   const x = anchor.x
   const y = anchor.y
+  const available = textureAvailability(scene)
   const shadow = track(scene, scene.add.ellipse(x + 4, y + 12, 38, 15, 0x020304, 0.46).setDepth(8))
-  const base = track(scene, scene.add.rectangle(x, y + 4, 38, 24, 0x8b542c, 1).setStrokeStyle(2, 0xd5964e, 0.95).setDepth(12))
-  const lid = track(scene, scene.add.rectangle(x, y - 9, 40, 14, 0xb36b34, 1).setStrokeStyle(2, 0xf0b35f, 0.95).setDepth(13))
-  const lock = track(scene, scene.add.rectangle(x, y + 2, 7, 10, 0xffd86b, 1).setDepth(14))
   const glow = track(scene, scene.add.circle(x, y, 28, 0xffcf68, 0.05).setDepth(10))
+  const chestTexture = spatialTextureKey('chest', available)
+  let sprite = null
+  let base = null
+  let lid = null
+  let lock = null
+  if (chestTexture) {
+    sprite = addScaledImage(scene, x, y, chestTexture, 34, 13)
+  } else {
+    base = track(scene, scene.add.rectangle(x, y + 4, 38, 24, 0x8b542c, 1).setStrokeStyle(2, 0xd5964e, 0.95).setDepth(12))
+    lid = track(scene, scene.add.rectangle(x, y - 9, 40, 14, 0xb36b34, 1).setStrokeStyle(2, 0xf0b35f, 0.95).setDepth(13))
+    lock = track(scene, scene.add.rectangle(x, y + 2, 7, 10, 0xffd86b, 1).setDepth(14))
+  }
   scene.tweens.add({ targets: glow, alpha: 0.14, scale: 1.15, duration: 900, yoyo: true, repeat: -1 })
-  return { id: `chest-${index}`, x, y, opened: false, visuals: { shadow, base, lid, lock, glow }, prompt: null }
+  return { id: `chest-${index}`, x, y, opened: false, visuals: { shadow, sprite, base, lid, lock, glow }, prompt: null }
 }
 
 function openChestVisual(scene, chest) {
   chest.opened = true
   chest.visuals.lock?.setVisible(false)
-  scene.tweens.add({ targets: chest.visuals.lid, y: chest.y - 23, angle: -8, duration: 160, ease: 'Back.Out' })
+  if (chest.visuals.sprite) {
+    scene.tweens.add({ targets: chest.visuals.sprite, y: chest.y - 5, angle: -4, duration: 160, ease: 'Back.Out' })
+  } else {
+    scene.tweens.add({ targets: chest.visuals.lid, y: chest.y - 23, angle: -8, duration: 160, ease: 'Back.Out' })
+  }
   scene.tweens.add({ targets: chest.visuals.glow, alpha: 0.55, scale: 1.7, duration: 220, yoyo: true, onComplete: () => chest.visuals.glow?.setAlpha?.(0.08) })
   scene.__dungeonVfx?.sparkle?.(chest.x, chest.y - 22, { width: 52, height: 52, depth: 28 })
 }
@@ -205,6 +268,30 @@ function nearestValidSpawn(geometry, position) {
   return best
 }
 
+async function loadDebtsEnvironmentTextures(scene) {
+  if (typeof fetch !== 'function' || scene.__debtsEnvironmentLoadStarted) return false
+  scene.__debtsEnvironmentLoadStarted = true
+  try {
+    const response = await fetch('/assets/debts/manifest.json')
+    if (!response.ok) return false
+    const selected = selectDebtsEnvironmentAssets(await response.json())
+    const queue = [
+      ['dungeon-obstacle', selected.obstacle],
+      ['dungeon-torch', selected.torch],
+      ['dungeon-chest', selected.chest],
+    ].filter(([key, asset]) => asset?.path && !scene.textures?.exists?.(key))
+    if (!queue.length) return false
+    for (const [key, asset] of queue) scene.load.image(key, asset.path)
+    await new Promise((resolve) => {
+      scene.load.once('complete', resolve)
+      scene.load.start()
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function installDungeonSpatial(scene, {
   getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }),
   onEvent = () => {},
@@ -222,10 +309,10 @@ export function installDungeonSpatial(scene, {
   const originalUpdateEnemyProjectiles = scene.updateEnemyProjectiles.bind(scene)
   const originalUpdateBoss = scene.updateBoss.bind(scene)
 
-  const refreshRoom = () => {
+  const refreshRoom = ({ geometry: fixedGeometry = null } = {}) => {
     const progress = getProgress() ?? {}
     const floor = progress.floor ?? scene.floor ?? 1
-    const geometry = roomGeometry(null, floor, random)
+    const geometry = fixedGeometry ?? roomGeometry(null, floor, random)
     scene.clearArena()
     for (const chest of chests) hideChestPrompt(chest)
     chests = []
@@ -423,5 +510,9 @@ export function installDungeonSpatial(scene, {
 
   const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
   scene.__dungeonSpatial = api
+  loadDebtsEnvironmentTextures(scene).then((loaded) => {
+    if (!loaded || !scene.__roomGeometry) return
+    refreshRoom({ geometry: scene.__roomGeometry })
+  })
   return api
 }
