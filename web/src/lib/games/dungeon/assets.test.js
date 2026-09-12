@@ -49,6 +49,18 @@ test('spatial renderer keeps floor walls and obstacles on distinct texture roles
   assert.equal(runtime.spatialTextureKey('floor', { floor: false, wall: true, obstacle: true }), null)
 })
 
+test('spatial renderer selects individual frames from authored environment sheets', async () => {
+  const runtime = await import('./spatial-runtime.js')
+  assert.equal(typeof runtime.spatialTextureFrame, 'function')
+  const frames = { floor: 0, wall: 18, water: 4, obstacle: 7, torch: 12, chest: 3 }
+  assert.equal(runtime.spatialTextureFrame('floor', frames), 0)
+  assert.equal(runtime.spatialTextureFrame('boundary', frames), 18)
+  assert.equal(runtime.spatialTextureFrame('pillar', frames), 7)
+  assert.equal(runtime.spatialTextureFrame('water', frames), 4)
+  assert.equal(runtime.spatialTextureFrame('torch', frames), 12)
+  assert.equal(runtime.spatialTextureFrame('chest', frames), 3)
+})
+
 test('floor walls and obstacles have deliberately different visual tones', async () => {
   const runtime = await import('./spatial-runtime.js')
   assert.equal(typeof runtime.spatialSurfaceTint, 'function')
