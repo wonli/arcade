@@ -83,6 +83,91 @@ function representativeTile(map, layerName, tilesetName) {
   return rankedTiles(map, layerName, tilesetName, 1)[0] ?? null
 }
 
+function layerCells(layers) {
+  const cells = new Map()
+  for (const layer of layers) {
+    for (const chunk of layer?.chunks ?? []) {
+      const width = Number(chunk?.width) || 0
+      const height = Number(chunk?.height) || 0
+      const startX = Number(chunk?.x) || 0
+      const startY = Number(chunk?.y) || 0
+      const gids = chunk?.gids ?? []
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const gid = rawTileGid(gids[y * width + x])
+          if (gid) cells.set(`${startX + x},${startY + y}`, gid)
+        }
+      }
+    }
+  }
+  return cells
+}
+
+function authoredWaterCoasts(map) {
+  const tileset = map?.tilesets?.Water_coasts_animation
+  if (!tileset) return null
+  const firstGid = Number(tileset.firstGid) || 0
+  const tileCount = Number(tileset.tileCount) || 0
+  if (!firstGid || !tileCount) return null
+  const lastGid = firstGid + tileCount
+  const waterCells = layerCells(layerCandidates(map, 'Water'))
+  if (!waterCells.size) return null
+
+  const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+  const weights = new Map()
+  const priorities = [
+    ['Floor', 100],
+    ['Floor2', 10],
+    ['Floor3', 1],
+  ]
+  for (const [layerName, priority] of priorities) {
+    for (const layer of layerCandidates(map, layerName)) {
+      for (const chunk of layer?.chunks ?? []) {
+        const width = Number(chunk?.width) || 0
+        const height = Number(chunk?.height) || 0
+        const startX = Number(chunk?.x) || 0
+        const startY = Number(chunk?.y) || 0
+        const gids = chunk?.gids ?? []
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const gid = rawTileGid(gids[y * width + x])
+            if (gid < firstGid || gid >= lastGid) continue
+            const cellX = startX + x
+            const cellY = startY + y
+            if (!waterCells.has(`${cellX},${cellY}`)) continue
+            const mask = directions.map(([dx, dy]) => waterCells.has(`${cellX + dx},${cellY + dy}`) ? '1' : '0').join('')
+            if (mask === '1111') continue
+            const tileId = gid - firstGid
+            if (!weights.has(mask)) weights.set(mask, new Map())
+            const bucket = weights.get(mask)
+            bucket.set(tileId, (bucket.get(tileId) ?? 0) + priority)
+          }
+        }
+      }
+    }
+  }
+
+  const patterns = {}
+  for (const [mask, bucket] of weights.entries()) {
+    patterns[mask] = [...bucket.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      .map(([tileId]) => tileId)
+  }
+  const usedFrames = new Set(Object.values(patterns).flat())
+  const animations = {}
+  for (const frame of usedFrames) {
+    const animation = tileset.animations?.[String(frame)]
+    if (Array.isArray(animation) && animation.length) animations[String(frame)] = animation.map((entry) => ({ ...entry }))
+  }
+
+  return {
+    tileSize: Number(tileset.tileWidth) || 16,
+    patterns,
+    animations,
+    underwaterFrames: rankedTiles(map, 'Walls_under_water', 'Water_coasts_animation', 12),
+  }
+}
+
 function wallCell(map, gid) {
   const raw = rawTileGid(gid)
   if (!raw) return null
@@ -164,6 +249,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const authoredFloor = representativeTile(dungeon3, 'Floor', 'walls_floor')
   const waterFrames = rankedTiles(dungeon3, 'Water', 'Water_coasts_animation', 12)
   const authoredWater = waterFrames[0] ?? null
+  const waterCoasts = authoredWaterCoasts(dungeon3)
   const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
   const wallMotif = authoredWallMotif(dungeon3)
   const floorAutotile = authoredFloorAutotile(dungeon3)
@@ -186,7 +272,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
     pathPlate: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96, 65, 5], { authoredBy: 'Dungeon3/plates1' }),
     bridge: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96], { authoredBy: 'Dungeon3/plates1' }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
-    water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water', coastFrames: waterFrames }),
+    water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water', coastFrames: waterFrames, ...(waterCoasts ? { coasts: waterCoasts } : {}) }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation ? null : withFrame(waterDetail, authoredWaterDetail, { authoredBy: 'Dungeon3/Water_details', animation: waterDetailAnimation.map((entry) => ({ ...entry })) }),
     obstacle: withTileStack(obstacle, [188, 208, 228, 248], { rotation: 90 }),
     arches: withFrameset(obstacle, used('Arches_columns', [76, 77, 96, 97, 116, 117], 10)),
