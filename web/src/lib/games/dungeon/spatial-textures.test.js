@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { spatialTextureKey } from './spatial-runtime.js'
+import { roomGeometry } from './spatial.js'
 
 const allTextures = {
   tilesetFloor: true,
@@ -12,10 +13,16 @@ const allTextures = {
   tilesetChest: true,
 }
 
-test('wall-shaped solids use the wall tileset instead of repeating a column prop', () => {
-  assert.equal(spatialTextureKey('boundary', allTextures), 'dungeon-tileset-wall')
-  assert.equal(spatialTextureKey('wall', allTextures), 'dungeon-tileset-wall')
-  assert.equal(spatialTextureKey('broken-wall', allTextures), 'dungeon-tileset-wall')
-  assert.equal(spatialTextureKey('pillar-wall', allTextures), 'dungeon-tileset-wall')
-  assert.equal(spatialTextureKey('pillar', allTextures), 'dungeon-tileset-obstacle')
+test('wall-shaped room solids are classified as walls while pillars stay props', () => {
+  const room = roomGeometry('cross-hall', 1, () => 0)
+  const authored = room.solids.filter((solid) => solid.kind !== 'boundary')
+  const wallShaped = authored.filter((solid) => solid.width > 50 || solid.height > 50)
+  const pillars = authored.filter((solid) => solid.width <= 50 && solid.height <= 50)
+
+  assert.ok(wallShaped.length > 0)
+  assert.ok(wallShaped.every((solid) => solid.kind === 'wall'))
+  assert.ok(pillars.length > 0)
+  assert.ok(pillars.every((solid) => solid.kind === 'pillar'))
+  assert.ok(wallShaped.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-wall'))
+  assert.ok(pillars.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-obstacle'))
 })
