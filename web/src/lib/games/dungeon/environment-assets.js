@@ -30,13 +30,13 @@ function withRenderableRegion(asset, region, frame) {
   }
 }
 
-function withTileStack(asset, tileStack) {
-  return asset ? { ...asset, frame: tileStack[0] ?? 0, tileStack: [...tileStack] } : null
+function withTileStack(asset, tileStack, extra = {}) {
+  return asset ? { ...asset, frame: tileStack[0] ?? 0, tileStack: [...tileStack], ...extra } : null
 }
 
 function rawTileGid(value) {
   // Tiled stores horizontal / vertical / diagonal transform flags in the high bits.
-  return (Number(value) >>> 0) & 0x0fffffff
+  return (Number(value) >>> 0) & 0x1fffffff
 }
 
 function representativeTile(map, layerName, tilesetName) {
@@ -71,6 +71,50 @@ function representativeTile(map, layerName, tilesetName) {
   return selected?.tileId ?? null
 }
 
+function wallCell(map, gid) {
+  const raw = rawTileGid(gid)
+  if (!raw) return null
+  for (const [name, tileset] of Object.entries(map?.tilesets ?? {})) {
+    const first = Number(tileset?.firstGid) || 0
+    const count = Number(tileset?.tileCount) || 0
+    if (!first || raw < first || (count > 0 && raw >= first + count)) continue
+    if (name === 'walls_floor') return { texture: 'wall', frame: raw - first }
+    if (name === 'Arches_columns') return { texture: 'obstacle', frame: raw - first }
+  }
+  return null
+}
+
+function authoredWallMotif(map) {
+  const layer = map?.layers?.Walls
+  if (!layer || !Array.isArray(layer.chunks)) return null
+
+  // Dungeon3 contains a deliberately composed two-row wall sample mixing walls_floor with
+  // Arches_columns. Prefer a compact mixed run over the large repeated filler block.
+  let best = null
+  for (const chunk of layer.chunks) {
+    const width = Number(chunk?.width) || 0
+    const height = Number(chunk?.height) || 0
+    const gids = chunk?.gids ?? []
+    if (!width || !height || gids.length < width) continue
+    for (let y = 0; y < height - 1; y++) {
+      for (let x = 0; x < width; x++) {
+        for (let length = 4; length <= Math.min(8, width - x); length++) {
+          const top = gids.slice(y * width + x, y * width + x + length)
+          const bottom = gids.slice((y + 1) * width + x, (y + 1) * width + x + length)
+          if (top.some((gid) => !rawTileGid(gid)) || bottom.some((gid) => !rawTileGid(gid))) continue
+          const cells = [...top, ...bottom].map((gid) => wallCell(map, gid))
+          if (cells.some((cell) => !cell)) continue
+          const textures = new Set(cells.map((cell) => cell.texture))
+          if (!textures.has('wall') || !textures.has('obstacle')) continue
+          const candidate = { width: length, height: 2, cells }
+          if (!best || candidate.width > best.width) best = candidate
+        }
+      }
+    }
+  }
+  return best
+}
+
 export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
@@ -82,9 +126,9 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const dungeon3 = manifest?.tiledMaps?.Dungeon3
 
   const authoredFloor = representativeTile(dungeon3, 'Floor', 'walls_floor')
-  const authoredWall = representativeTile(dungeon3, 'Walls', 'walls_floor')
   const authoredWater = representativeTile(dungeon3, 'Water', 'Water_coasts_animation')
   const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
+  const wallMotif = authoredWallMotif(dungeon3)
   const waterDetailAnimation = authoredWaterDetail == null
     ? null
     : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
@@ -92,7 +136,8 @@ export function chooseEnvironmentAssets(manifest = {}) {
   return {
     // Fall back to previously verified frames when a stripped/test manifest has no Tiled metadata.
     floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor' }),
-    wall: withFrame(wallsFloor, authoredWall ?? 30, authoredWall == null ? {} : { authoredBy: 'Dungeon3/Walls' }),
+    // A wall is an authored multi-tile motif; frame 30 remains only the safe single-tile fallback.
+    wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation
       ? null
@@ -101,8 +146,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
           animation: waterDetailAnimation.map((entry) => ({ ...entry })),
         }),
     // Arches_columns is a real Tiled sheet. One pillar is four authored 16px tiles stacked vertically.
-    obstacle: withTileStack(obstacle, [188, 208, 228, 248]),
-    // These two sheets start on their authored object boundaries, so the existing sprite-sheet loader can re-slice them.
+    obstacle: withTileStack(obstacle, [188, 208, 228, 248], { rotation: 90 }),
     torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0),
     chest: withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0),
   }
