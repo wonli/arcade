@@ -8,11 +8,12 @@
   function selectGame(value) {
     game = value
     if (game === 'gomoku') players = 2
+    if (game === 'dungeon') players = 1
   }
 
   function createRoom() {
     if (game === 'dungeon') {
-      goto('/dungeon')
+      goto(players === 2 ? '/dungeon/coop' : '/dungeon')
       return
     }
     if (game === 'snake' || game === 'drawguess') {
@@ -24,7 +25,11 @@
 
   function joinRoom() {
     const code = roomCode.trim().toLowerCase()
-    if (!code || game === 'dungeon') return
+    if (!code) return
+    if (game === 'dungeon') {
+      if (players === 2) goto(`/dungeon/coop?room=${code}`)
+      return
+    }
     goto(`/room/${code}/${game}`)
   }
 
@@ -41,11 +46,12 @@
     if (game === 'tetris') return players === 1 ? 'Solo practice. Just you and the stack.' : 'Your board. Their board. One survives.'
     if (game === 'snake') return '1–8 players. One arena. Host starts.'
     if (game === 'drawguess') return '2–8 players. Draw badly. Guess loudly.'
+    if (players === 2) return 'Two players. One shared dungeon. Loot and survive together.'
     return 'WASD. Auto attacks. Loot everywhere. Go deeper.'
   }
 
   function createLabel() {
-    if (game === 'dungeon') return 'Enter the Dungeon'
+    if (game === 'dungeon') return players === 2 ? 'Create 2 player Dungeon' : 'Enter the Dungeon'
     if (game === 'snake') return 'Create Snake Arena'
     if (game === 'drawguess') return 'Create Draw & Guess'
     if (game === 'gomoku') return 'Start 2 player Gomoku'
@@ -53,7 +59,7 @@
   }
 
   function helper() {
-    if (game === 'dungeon') return 'Combat prototype · solo · WASD + Space · gear upgrades immediately.'
+    if (game === 'dungeon') return players === 2 ? 'Create a shared run, copy the invite, and start when your teammate joins.' : 'Solo run · WASD + Space · gear upgrades immediately.'
     if (game === 'snake') return 'Create a lobby, invite up to 7 friends, then the host starts the arena.'
     if (game === 'drawguess') return 'Create a lobby, invite friends, then take turns drawing and guessing.'
     if (players === 2) return 'Create a room, share the invite, and the game starts when your friend joins.'
@@ -75,12 +81,12 @@
       <button class:active={game === 'tetris'} onclick={() => selectGame('tetris')}><span>02</span><strong>Tetris Battle</strong><small>Clear lines. Send garbage.</small></button>
       <button class:active={game === 'snake'} onclick={() => selectGame('snake')}><span>03</span><strong>Snake Arena</strong><small>1–8 players · Host starts</small></button>
       <button class:active={game === 'drawguess'} onclick={() => selectGame('drawguess')}><span>04</span><strong>Draw & Guess</strong><small>2–8 players · Host starts</small></button>
-      <button class:active={game === 'dungeon'} onclick={() => selectGame('dungeon')}><span>05</span><strong>Endless Dungeon</strong><small>Solo · Combat prototype</small></button>
+      <button class:active={game === 'dungeon'} onclick={() => selectGame('dungeon')}><span>05</span><strong>Endless Dungeon</strong><small>Solo / 2 player Co-op</small></button>
     </div>
 
     <div class="home-game"><h1>{title()}</h1><p>{description()}</p></div>
 
-    {#if game === 'tetris'}
+    {#if game === 'tetris' || game === 'dungeon'}
       <div class="mode-picker" aria-label="Choose player mode">
         <button class:active={players === 1} onclick={() => (players = 1)}><strong>1 PLAYER</strong><small>Start instantly</small></button>
         <button class:active={players === 2} onclick={() => (players = 2)}><strong>2 PLAYERS</strong><small>Invite a friend</small></button>
@@ -89,7 +95,7 @@
 
     <button class="create" onclick={createRoom}>{createLabel()}</button>
 
-    {#if game !== 'dungeon'}
+    {#if game !== 'dungeon' || players === 2}
       <div class="divider"><span>or join</span></div>
       <div class="join">
         <input bind:value={roomCode} maxlength="6" autocomplete="off" placeholder="ROOM CODE" aria-label="Room code" onkeydown={(event) => event.key === 'Enter' && joinRoom()} />
