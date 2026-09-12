@@ -75,6 +75,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
   const water = prefer(dedicated, [/\/Tiled_files\/Water_coasts_animation\.png$/i, /water.*coast/i], 'water')
+  const waterDetail = prefer(dedicated, [/\/Tiled_files\/water_details_animation\.png$/i])
   const obstacle = prefer(dedicated, [/\/Tiled_files\/Arches_columns\.png$/i, /arches.*columns/i], 'obstacle')
   const torch = prefer(dedicated, [/\/Tiled_files\/torches\.png$/i, /torches\.png$/i], 'torch')
   const chest = prefer(dedicated, [/\/Tiled_files\/chest_lever\.png$/i, /chest.*lever/i], 'chest')
@@ -83,12 +84,22 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const authoredFloor = representativeTile(dungeon3, 'Floor', 'walls_floor')
   const authoredWall = representativeTile(dungeon3, 'Walls', 'walls_floor')
   const authoredWater = representativeTile(dungeon3, 'Water', 'Water_coasts_animation')
+  const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
+  const waterDetailAnimation = authoredWaterDetail == null
+    ? null
+    : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
 
   return {
     // Fall back to previously verified frames when a stripped/test manifest has no Tiled metadata.
     floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor' }),
     wall: withFrame(wallsFloor, authoredWall ?? 30, authoredWall == null ? {} : { authoredBy: 'Dungeon3/Walls' }),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
+    waterDetail: authoredWaterDetail == null || !waterDetailAnimation
+      ? null
+      : withFrame(waterDetail, authoredWaterDetail, {
+          authoredBy: 'Dungeon3/Water_details',
+          animation: waterDetailAnimation.map((entry) => ({ ...entry })),
+        }),
     // Arches_columns is a real Tiled sheet. One pillar is four authored 16px tiles stacked vertically.
     obstacle: withTileStack(obstacle, [188, 208, 228, 248]),
     // These two sheets start on their authored object boundaries, so the existing sprite-sheet loader can re-slice them.
