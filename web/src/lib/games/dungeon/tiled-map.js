@@ -1,3 +1,8 @@
+const FLIP_X = 0x80000000
+const FLIP_Y = 0x40000000
+const FLIP_DIAGONAL = 0x20000000
+const GID_MASK = 0x1fffffff
+
 function decodeXml(value = '') {
   return value
     .replaceAll('&quot;', '"')
@@ -99,8 +104,7 @@ export function parseTiledMap(xml = '') {
   const tilesetList = parseTilesets(xml)
   const tilesets = Object.fromEntries(tilesetList.map((entry) => [entry.name, entry]))
 
-  const resolveGid = (gid) => {
-    const value = int(gid)
+  const resolveBaseGid = (value) => {
     if (value <= 0) return null
     let selected = null
     for (const tileset of tilesetList) {
@@ -113,6 +117,24 @@ export function parseTiledMap(xml = '') {
     return { tileset: selected.name, tileId }
   }
 
+  const decodeGid = (gid) => {
+    const raw = int(gid) >>> 0
+    const value = (raw & GID_MASK) >>> 0
+    const resolved = resolveBaseGid(value)
+    if (!resolved) return null
+    return {
+      ...resolved,
+      flipX: Boolean(raw & FLIP_X),
+      flipY: Boolean(raw & FLIP_Y),
+      flipDiagonal: Boolean(raw & FLIP_DIAGONAL),
+    }
+  }
+
+  const resolveGid = (gid) => {
+    const decoded = decodeGid(gid)
+    return decoded ? { tileset: decoded.tileset, tileId: decoded.tileId } : null
+  }
+
   return {
     version: mapAttrs.version ?? null,
     tiledVersion: mapAttrs.tiledversion ?? null,
@@ -123,5 +145,6 @@ export function parseTiledMap(xml = '') {
     tilesets,
     layers: parseLayers(xml),
     resolveGid,
+    decodeGid,
   }
 }
