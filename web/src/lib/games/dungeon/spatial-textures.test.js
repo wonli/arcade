@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialAnimation, spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
+import { spatialAnimation, spatialSurfaceTint, spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 import { parseTiledMap } from './tiled-map.js'
 
@@ -34,6 +34,10 @@ test('pillars render from the authored vertical tile stack', () => {
   assert.deepEqual(spatialTileStack('pillar', stacks), [188, 208, 228, 248])
   assert.equal(spatialTileStack('wall', stacks), null)
   assert.equal(spatialTileStack('boundary', stacks), null)
+})
+
+test('authored floor keeps its original palette instead of being multiplied brown', () => {
+  assert.equal(spatialSurfaceTint('floor'), null)
 })
 
 test('preserves duplicate Tiled layers instead of overwriting floor2_dark', () => {
