@@ -1,6 +1,47 @@
 import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwindAttack } from './attacks.js'
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
+import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
+
+function createImpactAudio(windowImpl = globalThis.window) {
+  let context = null
+  const ensure = () => {
+    const AudioContext = windowImpl?.AudioContext || windowImpl?.webkitAudioContext
+    if (!AudioContext) return null
+    context ??= new AudioContext()
+    if (context.state === 'suspended') context.resume?.().catch?.(() => {})
+    return context
+  }
+  const play = (options = {}) => {
+    const ctx = ensure()
+    if (!ctx) return
+    const profile = hitSoundProfile(options)
+    const now = ctx.currentTime
+    const master = ctx.createGain()
+    master.gain.setValueAtTime(options.gain ?? profile.gain, now)
+    master.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
+    master.connect(ctx.destination)
+
+    const high = ctx.createOscillator()
+    high.type = 'triangle'
+    high.frequency.setValueAtTime(profile.highFrequency, now)
+    high.frequency.exponentialRampToValueAtTime(Math.max(70, profile.highFrequency * 0.55), now + profile.duration)
+    high.connect(master)
+    high.start(now); high.stop(now + profile.duration)
+
+    const lowGain = ctx.createGain()
+    lowGain.gain.setValueAtTime(options.killed ? (options.elite ? 1 : 0.85) : options.critical ? 0.55 : 0.28, now)
+    lowGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
+    lowGain.connect(master)
+    const low = ctx.createOscillator()
+    low.type = 'sine'
+    low.frequency.setValueAtTime(profile.lowFrequency, now)
+    low.frequency.exponentialRampToValueAtTime(Math.max(42, profile.lowFrequency * 0.62), now + profile.duration)
+    low.connect(lowGain)
+    low.start(now); low.stop(now + profile.duration)
+  }
+  return { play, close: () => context?.close?.().catch?.(() => {}) }
+}
 
 export function installDungeonAttackRuntime(scene, { random = Math.random } = {}) {
   if (!scene || scene.__dungeonAttackRuntimeInstalled) return scene?.__dungeonAttackRuntime ?? null
@@ -9,6 +50,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
   const originalApplyWeaponProcs = scene.applyWeaponProcs.bind(scene)
+  const audio = createImpactAudio()
 
   scene.slash = function spatialSlash(target) {
     if (!target || target.hp <= 0) return
@@ -24,13 +66,24 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     originalDamageEnemy(enemy, damage, critical, 0, context)
     if (enemy.hp >= beforeHp) return
 
+    const killed = enemy.hp <= 0
+    const elite = Boolean(enemy.elite || enemy.boss)
     const feedback = hitFeedback({ critical, boss: enemy.boss, damage })
-    scene.__dungeonVfx?.impact?.(impactX, impactY, { critical, explosion: context?.source === 'corpse_burst' })
+    scene.__dungeonVfx?.impact?.(impactX, impactY, { critical: critical || (elite && killed), explosion: killed || context?.source === 'corpse_burst' })
+    if (context?.direct || critical || killed) audio.play({ damage, critical, killed, elite })
 
-    const meaningfulStop = context?.direct || critical
+    if (enemy.visual?.setTintFill && enemy.visual?.clearTint) {
+      enemy.visual.setTintFill(critical || elite ? 0xffe18a : 0xffffff)
+      scene.time?.delayedCall?.(feedback.flashMs, () => {
+        if (enemy.hp > 0 && enemy.visual?.active !== false) enemy.visual.clearTint()
+      })
+    }
+
+    const meaningfulStop = context?.direct || critical || killed
     if (meaningfulStop) {
-      scene.__hitStopUntil = Math.max(scene.__hitStopUntil ?? 0, scene.time.now + feedback.hitStopMs)
-      scene.cameras?.main?.shake?.(feedback.flashMs, feedback.shake)
+      const killBonus = killed ? (elite ? 22 : 12) : 0
+      scene.__hitStopUntil = Math.max(scene.__hitStopUntil ?? 0, scene.time.now + feedback.hitStopMs + killBonus)
+      scene.cameras?.main?.shake?.(feedback.flashMs, feedback.shake * (killed ? (elite ? 1.55 : 1.25) : 1))
     }
 
     if (enemy.hp > 0 && knockback > 0) {
@@ -54,24 +107,14 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       const attack = piercingAttack(scene.playerState, scene.playerFacing, 390, 34, scene.__roomGeometry)
       scene.__dungeonVfx?.beam?.(attack)
       const targets = targetsInBeam(attack, scene.enemies).filter((enemy) => enemy !== primary)
-      for (const target of targets) {
-        scene.damageEnemy(target, Math.max(1, Math.round(damage * 0.72)), false, 14, {
-          direct: false,
-          canProc: false,
-          source: 'piercing',
-        })
-      }
+      for (const target of targets) scene.damageEnemy(target, Math.max(1, Math.round(damage * 0.72)), false, 14, { direct: false, canProc: false, source: 'piercing' })
     }
 
     if (effects.chain > 0 && random() < effects.chain) {
       const target = secondaryTarget(primary, scene.enemies, 165)
       if (target) {
         scene.effectLine(primary, target, 0x7bc5ff, 3)
-        scene.damageEnemy(target, Math.max(1, Math.round(damage * 0.56)), false, 8, {
-          direct: false,
-          canProc: false,
-          source: 'chain',
-        })
+        scene.damageEnemy(target, Math.max(1, Math.round(damage * 0.56)), false, 8, { direct: false, canProc: false, source: 'chain' })
       }
     }
 
@@ -80,11 +123,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       segments.forEach((segment, index) => {
         scene.__dungeonVfx?.lightning?.(segment.from, segment.to, { primary: index === 0 })
         if (index === 0) return
-        scene.damageEnemy(segment.to, Math.max(1, Math.round(damage * 0.68)), false, 6, {
-          direct: false,
-          canProc: false,
-          source: 'thunder',
-        })
+        scene.damageEnemy(segment.to, Math.max(1, Math.round(damage * 0.68)), false, 6, { direct: false, canProc: false, source: 'thunder' })
       })
     }
 
@@ -93,11 +132,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       scene.__dungeonVfx?.whirlwind?.(attack)
       for (const enemy of targetsInCircle(attack, scene.enemies)) {
         if (enemy === primary) continue
-        scene.damageEnemy(enemy, Math.max(1, Math.round(damage * 0.5)), false, 16, {
-          direct: false,
-          canProc: false,
-          source: 'whirlwind',
-        })
+        scene.damageEnemy(enemy, Math.max(1, Math.round(damage * 0.5)), false, 16, { direct: false, canProc: false, source: 'whirlwind' })
       }
     }
   }
@@ -106,13 +141,16 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     scene.slash = originalSlash
     scene.damageEnemy = originalDamageEnemy
     scene.applyWeaponProcs = originalApplyWeaponProcs
+    audio.close()
   })
 
   const api = {
+    playImpactSound(options) { audio.play(options) },
     restore() {
       scene.slash = originalSlash
       scene.damageEnemy = originalDamageEnemy
       scene.applyWeaponProcs = originalApplyWeaponProcs
+      audio.close()
     },
   }
   scene.__dungeonAttackRuntime = api
