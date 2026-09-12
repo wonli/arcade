@@ -25,14 +25,13 @@ test('selects a complete environment from the dedicated dungeon tileset', () => 
   assert.notEqual(assets.floor.frame, assets.wall.frame)
 })
 
-test('uses visible floor and complete stone wall tiles with renderable multi-tile props', () => {
+test('uses visible floor and complete stone wall tiles with authored prop composition', () => {
   const assets = chooseEnvironmentAssets(manifest)
   assert.equal(assets.floor.frame, 311)
   assert.equal(assets.wall.frame, 30)
-  assert.deepEqual(assets.obstacle.region, { x: 128, y: 144, width: 16, height: 64 })
   assert.equal(assets.obstacle.frameWidth, 16)
-  assert.equal(assets.obstacle.frameHeight, 64)
-  assert.equal(assets.obstacle.frame, 42)
+  assert.equal(assets.obstacle.frameHeight, 16)
+  assert.deepEqual(assets.obstacle.tileStack, [188, 208, 228, 248])
   assert.deepEqual(assets.torch.region, { x: 0, y: 0, width: 48, height: 48 })
   assert.equal(assets.torch.frameWidth, 48)
   assert.equal(assets.torch.frameHeight, 48)
