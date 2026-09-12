@@ -51,7 +51,7 @@ export function formatAffixLabel(entry, locale = 'en') {
 
 function compareAffixes(entries = [], otherEntries = [], locale = 'en', side = 'candidate') {
   const other = new Map(otherEntries.map((entry) => [entry.id, entry]))
-  return entries.map((entry) => {
+  return entries.map((entry, index) => {
     const previous = other.get(entry.id)
     let direction = side === 'candidate' ? 'new' : 'lost'
     if (previous) {
@@ -59,8 +59,8 @@ function compareAffixes(entries = [], otherEntries = [], locale = 'en', side = '
       else if ((entry.value ?? 0) < (previous.value ?? 0)) direction = 'down'
       else direction = 'same'
     }
-    return { ...entry, label: formatAffixLabel(entry, locale), build: BUILD.has(entry.id), direction }
-  })
+    return { ...entry, label: formatAffixLabel(entry, locale), build: BUILD.has(entry.id), direction, _index: index }
+  }).sort((a, b) => Number(b.build) - Number(a.build) || a._index - b._index).map(({ _index, ...entry }) => entry)
 }
 
 export function weaponComparisonModel(current, candidate, locale = 'en') {
