@@ -27,18 +27,5 @@ jobs:
       - name: Test project
         run: make test
 
-      - name: Upload dungeon tileset sheets
-        uses: actions/upload-artifact@v4
-        with:
-          name: dungeon-tileset-sheets
-          path: |
-            web/static/assets/dungeon-tileset/**/Tiled_files/walls_floor.png
-            web/static/assets/dungeon-tileset/**/Tiled_files/Water_coasts_animation.png
-            web/static/assets/dungeon-tileset/**/Tiled_files/Arches_columns.png
-            web/static/assets/dungeon-tileset/**/Tiled_files/torches.png
-            web/static/assets/dungeon-tileset/**/Tiled_files/chest_lever.png
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Build project
         run: make build
