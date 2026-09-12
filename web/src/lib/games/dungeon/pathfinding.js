@@ -4,7 +4,19 @@ function key(x, y) {
   return `${x},${y}`
 }
 
-export function buildNavGrid(geometry, { cellSize = 48, actorRadius = 14 } = {}) {
+function pointInRect(position, area) {
+  return position.x >= area.x && position.x <= area.x + area.width && position.y >= area.y && position.y <= area.y + area.height
+}
+
+function pointOnBridge(position, geometry) {
+  return (geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))
+}
+
+function hardBlocked(position, actorRadius, geometry) {
+  return circleHitsSolid(position, actorRadius, { ...geometry, water: [] })
+}
+
+export function buildNavGrid(geometry, { cellSize = 48, actorRadius = 14, profile = 'ground' } = {}) {
   const width = Math.max(1, Math.ceil((geometry?.width ?? 960) / cellSize))
   const height = Math.max(1, Math.ceil((geometry?.height ?? 600) / cellSize))
   const cells = new Map()
@@ -12,20 +24,26 @@ export function buildNavGrid(geometry, { cellSize = 48, actorRadius = 14 } = {})
     for (let cellX = 0; cellX < width; cellX++) {
       const x = Math.min((geometry?.width ?? width * cellSize) - 1, cellX * cellSize + cellSize / 2)
       const y = Math.min((geometry?.height ?? height * cellSize) - 1, cellY * cellSize + cellSize / 2)
-      const blocked = circleHitsSolid({ x, y }, actorRadius, geometry)
-      const terrain = terrainAt({ x, y }, geometry)
+      const position = { x, y }
+      const terrain = terrainAt(position, geometry)
+      const onBridge = pointOnBridge(position, geometry)
+      const blockedBySolid = hardBlocked(position, actorRadius, geometry)
+      const blockedByWater = profile !== 'flying' && terrain.type === 'water' && !onBridge
+      const blocked = blockedBySolid || blockedByWater
+      const terrainType = onBridge ? 'bridge' : terrain.type
+      const terrainCost = profile === 'flying' && terrain.type === 'water' ? 1 : terrain.navCost
       cells.set(key(cellX, cellY), {
         cellX,
         cellY,
         x,
         y,
         blocked,
-        terrain: terrain.type,
-        cost: blocked ? Infinity : terrain.navCost,
+        terrain: terrainType,
+        cost: blocked ? Infinity : (onBridge ? 1 : terrainCost),
       })
     }
   }
-  return { width, height, cellSize, actorRadius, cells }
+  return { width, height, cellSize, actorRadius, profile, cells }
 }
 
 export function navCostAt(grid, cell) {
@@ -104,6 +122,11 @@ export function findPath(grid, start, goal) {
     }
   }
   return []
+}
+
+export function hasRoute(geometry, start, goal, options = {}) {
+  const grid = buildNavGrid(geometry, { ...options, profile: options.profile ?? 'ground' })
+  return findPath(grid, start, goal).length > 0
 }
 
 export function nextWaypoint(path, position, tolerance = 18) {
