@@ -24,10 +24,6 @@ const manifest = {
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Items/Sword.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/dungeon-tileset/Tiled_files/walls_floor.png', width: 272, height: 416, frames: 442, frameWidth: 16, frameHeight: 16, columns: 17, rows: 26, source: 'dungeon-tileset', kind: 'wall' },
-    { path: '/assets/dungeon-tileset/Tiled_files/Water_coasts_animation.png', width: 464, height: 512, frames: 928, frameWidth: 16, frameHeight: 16, columns: 29, rows: 32, source: 'dungeon-tileset', kind: 'water' },
-    { path: '/assets/dungeon-tileset/Tiled_files/Arches_columns.png', width: 320, height: 224, frames: 280, frameWidth: 16, frameHeight: 16, columns: 20, rows: 14, source: 'dungeon-tileset', kind: 'obstacle' },
-    { path: '/assets/dungeon-tileset/Tiled_files/torches.png', width: 224, height: 288, frames: 252, frameWidth: 16, frameHeight: 16, columns: 14, rows: 18, source: 'dungeon-tileset', kind: 'torch' },
-    { path: '/assets/dungeon-tileset/Tiled_files/chest_lever.png', width: 192, height: 176, frames: 132, frameWidth: 16, frameHeight: 16, columns: 12, rows: 11, source: 'dungeon-tileset', kind: 'chest' },
   ],
 }
 
@@ -44,15 +40,12 @@ test('prefers the RPG player and keeps enemies on Debts assets', () => {
   assert.equal(assets.weapon.source, 'debts')
 })
 
-test('uses the dedicated tileset for every environment role', () => {
+test('scene bootstrap keeps simple Debts surfaces while spatial runtime owns the authored tileset', () => {
   const assets = chooseDungeonAssets(manifest)
-  for (const key of ['floor', 'wall', 'water', 'obstacle', 'torch', 'chest']) {
-    assert.equal(assets[key].source, 'dungeon-tileset')
-  }
-  assert.equal(assets.floor.path, '/assets/dungeon-tileset/Tiled_files/walls_floor.png')
-  assert.equal(assets.wall.path, '/assets/dungeon-tileset/Tiled_files/walls_floor.png')
-  assert.equal(assets.floor.frame, 0)
-  assert.notEqual(assets.floor.frame, assets.wall.frame)
+  assert.equal(assets.floor.source, 'debts')
+  assert.equal(assets.wall.source, 'debts')
+  assert.equal(assets.floor.path, '/assets/debts/Tiles/BrickFloor.png')
+  assert.equal(assets.wall.path, '/assets/debts/Tiles/StoneWall.png')
 })
 
 test('resolves movement into four player directions', () => {
