@@ -19,3 +19,8 @@ test('keeps useful dimensions and rejects unrelated pngs', () => {
   })
   assert.equal(classifyVfxAsset('/assets/vfx/readme_preview.png', 800, 600), null)
 })
+
+test('rejects combat vfx whose source image has no alpha channel', () => {
+  assert.equal(classifyVfxAsset('/assets/vfx/free/laser_black_background.png', 256, 32, { hasAlpha: false }), null)
+  assert.equal(classifyVfxAsset('/assets/vfx/free/laser_transparent.png', 256, 32, { hasAlpha: true }).kind, 'beam')
+})
