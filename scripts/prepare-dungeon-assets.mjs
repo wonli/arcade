@@ -120,6 +120,10 @@ for (const pack of packs) {
   const packAssets = walk(pack, pack.output).sort((a, b) => a.path.localeCompare(b.path))
   assets.push(...packAssets)
   console.log(`Prepared ${packAssets.length} ${pack.source} PNG assets`)
+  if (pack.source === 'dungeon-tileset') {
+    console.log('Dungeon tileset inventory:')
+    for (const asset of packAssets) console.log(`  ${asset.width}x${asset.height}\t${asset.kind ?? '-'}\t${asset.path}`)
+  }
 }
 
 const manifest = {
