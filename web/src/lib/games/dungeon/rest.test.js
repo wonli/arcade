@@ -35,6 +35,17 @@ test('temper falls back to base weapon damage when no basic affix exists', () =>
   assert.equal(result.playerState.weaponDamage, 6)
 })
 
+test('temper still grants value before the first weapon is found', () => {
+  const player = {
+    hp: 100, maxHp: 100, damage: 10,
+    baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
+    equippedWeapon: null,
+  }
+  const result = applyRestChoice(player, 'temper', () => 0)
+  assert.equal(result.playerState.baseStats.damage, 11)
+  assert.equal(result.playerState.damage, 11)
+})
+
 test('fortune waits through non-combat rooms then consumes exactly once', () => {
   const activated = applyRestChoice({ hp: 100, maxHp: 100 }, 'fortune')
   assert.equal(activated.fortunePending, true)
