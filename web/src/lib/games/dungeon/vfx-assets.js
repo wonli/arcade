@@ -8,9 +8,10 @@ const RULES = [
   ['slash', /(slash|sword|impact|hit|cut)/i],
 ]
 
-export function classifyVfxAsset(path, width, height) {
+export function classifyVfxAsset(path, width, height, { hasAlpha = true } = {}) {
   const normalized = String(path || '').replaceAll('\\', '/')
   if (!/\.png$/i.test(normalized)) return null
+  if (!hasAlpha) return null
   if (/(preview|thumbnail|sheet[_ -]?guide|readme)/i.test(normalized)) return null
   const matched = RULES.find(([, pattern]) => pattern.test(normalized))
   if (!matched) return null
