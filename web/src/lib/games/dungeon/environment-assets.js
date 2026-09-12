@@ -30,6 +30,10 @@ function withRenderableRegion(asset, region, frame) {
   }
 }
 
+function withTileStack(asset, tileStack) {
+  return asset ? { ...asset, frame: tileStack[0] ?? 0, tileStack: [...tileStack] } : null
+}
+
 export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
@@ -44,9 +48,9 @@ export function chooseEnvironmentAssets(manifest = {}) {
     // Frame 18 is a shaded corner fragment. Frame 30 is a complete stone block and tiles cleanly in either axis.
     wall: withFrame(wallsFloor, 30),
     water: withFrame(water, 0),
-    // Re-slice prop sheets on their authored multi-cell boundaries. The existing loader can then render
-    // a complete prop frame without special-case texture code in the spatial renderer.
-    obstacle: withRenderableRegion(obstacle, { x: 128, y: 128, width: 32, height: 64 }, 24),
+    // Arches_columns is a real Tiled sheet. One pillar is four authored 16px tiles stacked vertically.
+    obstacle: withTileStack(obstacle, [188, 208, 228, 248]),
+    // These two sheets start on their authored object boundaries, so the existing sprite-sheet loader can re-slice them.
     torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0),
     chest: withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0),
   }
