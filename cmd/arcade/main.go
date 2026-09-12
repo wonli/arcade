@@ -28,7 +28,9 @@ func main() {
 	})
 
 	router := ws.NewRouter().Use(middlewares.Recovery())
-	arcadeserver.NewActions(arcade.NewService()).Register(router)
+	actions := arcadeserver.NewActions(arcade.NewService())
+	actions.Register(router)
+	actions.RegisterDungeon(router)
 
 	frontend.Register(engine)
 
