@@ -13,6 +13,23 @@ const manifest = {
   ],
 }
 
+const tiledManifest = {
+  ...manifest,
+  tiledMaps: {
+    Dungeon3: {
+      tilesets: {
+        Water_coasts_animation: { name: 'Water_coasts_animation', firstGid: 1, tileCount: 928 },
+        walls_floor: { name: 'walls_floor', firstGid: 3815, tileCount: 442 },
+      },
+      layers: {
+        Floor: { chunks: [{ gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
+        Walls: { chunks: [{ gids: [3850, 3851, 3851, 3851, 3852, 3851, 0] }] },
+        Water: { chunks: [{ gids: [0, 872, 872, 872, 872, 0] }] },
+      },
+    },
+  },
+}
+
 test('selects a complete environment from the dedicated dungeon tileset', () => {
   const assets = chooseEnvironmentAssets(manifest)
   assert.equal(assets.floor.source, 'dungeon-tileset')
@@ -25,7 +42,7 @@ test('selects a complete environment from the dedicated dungeon tileset', () => 
   assert.notEqual(assets.floor.frame, assets.wall.frame)
 })
 
-test('uses visible floor and complete stone wall tiles with authored prop composition', () => {
+test('uses visible fallback tiles and authored prop composition without Tiled metadata', () => {
   const assets = chooseEnvironmentAssets(manifest)
   assert.equal(assets.floor.frame, 311)
   assert.equal(assets.wall.frame, 30)
@@ -40,6 +57,23 @@ test('uses visible floor and complete stone wall tiles with authored prop compos
   assert.equal(assets.chest.frameWidth, 32)
   assert.equal(assets.chest.frameHeight, 32)
   assert.equal(assets.chest.frame, 0)
+})
+
+test('derives representative floor wall and water frames from Dungeon3 authored layers', () => {
+  const assets = chooseEnvironmentAssets(tiledManifest)
+  assert.equal(assets.floor.frame, 138)
+  assert.equal(assets.wall.frame, 36)
+  assert.equal(assets.water.frame, 871)
+  assert.equal(assets.floor.authoredBy, 'Dungeon3/Floor')
+  assert.equal(assets.wall.authoredBy, 'Dungeon3/Walls')
+  assert.equal(assets.water.authoredBy, 'Dungeon3/Water')
+})
+
+test('ignores Tiled transform flags when counting authored surface tiles', () => {
+  const transformed = structuredClone(tiledManifest)
+  transformed.tiledMaps.Dungeon3.layers.Floor.chunks[0].gids = [2147487601, 2147487601, 3953]
+  const assets = chooseEnvironmentAssets(transformed)
+  assert.equal(assets.floor.frame, 138)
 })
 
 test('never falls back to Debts environment when the dedicated tileset is present', () => {
