@@ -270,7 +270,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
     floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor', ...(floorAutotile ? { autotile: floorAutotile } : {}), ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}) }),
     floorDecoration: plates && floorDecorationFrames.length ? { ...plates, frame: floorDecorationFrames[0], frameset: floorDecorationFrames, authoredBy: 'Dungeon3/plates1' } : null,
     pathPlate: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96, 65, 5], { authoredBy: 'Dungeon3/plates1' }),
-    bridge: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96], { authoredBy: 'Dungeon3/plates1' }),
+    bridge: withFrameset(obstacle, [135, 136, 137, 138, 154, 155, 156, 157, 158, 176, 177, 178, 197, 217, 237], { authoredBy: 'Dungeon3/Objects2 Arches_columns bridge/platform tiles' }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water', coastFrames: waterFrames, ...(waterCoasts ? { coasts: waterCoasts } : {}) }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation ? null : withFrame(waterDetail, authoredWaterDetail, { authoredBy: 'Dungeon3/Water_details', animation: waterDetailAnimation.map((entry) => ({ ...entry })) }),
