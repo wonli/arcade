@@ -35,14 +35,19 @@ function withTileStack(asset, tileStack, extra = {}) {
 }
 
 function rawTileGid(value) {
-  // Tiled stores horizontal / vertical / diagonal transform flags in the high bits.
   return (Number(value) >>> 0) & 0x1fffffff
 }
 
+function layerCandidates(map, layerName) {
+  const grouped = map?.layerGroups?.[layerName]
+  if (Array.isArray(grouped) && grouped.length) return grouped
+  return map?.layers?.[layerName] ? [map.layers[layerName]] : []
+}
+
 function representativeTile(map, layerName, tilesetName) {
-  const layer = map?.layers?.[layerName]
+  const layers = layerCandidates(map, layerName)
   const tileset = map?.tilesets?.[tilesetName]
-  if (!layer || !tileset || !Array.isArray(layer.chunks)) return null
+  if (!layers.length || !tileset) return null
 
   const firstGid = Number(tileset.firstGid) || 0
   const tileCount = Number(tileset.tileCount) || 0
@@ -51,14 +56,16 @@ function representativeTile(map, layerName, tilesetName) {
 
   const counts = new Map()
   let order = 0
-  for (const chunk of layer.chunks) {
-    for (const encoded of chunk?.gids ?? []) {
-      const gid = rawTileGid(encoded)
-      if (gid < firstGid || gid >= lastGid) continue
-      const tileId = gid - firstGid
-      const current = counts.get(tileId)
-      if (current) current.count += 1
-      else counts.set(tileId, { count: 1, order: order++ })
+  for (const layer of layers) {
+    for (const chunk of layer?.chunks ?? []) {
+      for (const encoded of chunk?.gids ?? []) {
+        const gid = rawTileGid(encoded)
+        if (gid < firstGid || gid >= lastGid) continue
+        const tileId = gid - firstGid
+        const current = counts.get(tileId)
+        if (current) current.count += 1
+        else counts.set(tileId, { count: 1, order: order++ })
+      }
     }
   }
 
@@ -87,9 +94,6 @@ function wallCell(map, gid) {
 function authoredWallMotif(map) {
   const layer = map?.layers?.Walls
   if (!layer || !Array.isArray(layer.chunks)) return null
-
-  // Dungeon3 contains a deliberately composed two-row wall sample mixing walls_floor with
-  // Arches_columns. Prefer a compact mixed run over the large repeated filler block.
   let best = null
   for (const chunk of layer.chunks) {
     const width = Number(chunk?.width) || 0
@@ -115,6 +119,28 @@ function authoredWallMotif(map) {
   return best
 }
 
+function authoredFloorAutotile(map) {
+  const first = Number(map?.tilesets?.walls_floor?.firstGid) || 0
+  if (!first) return null
+  const used = new Set()
+  for (const name of ['floor2_dark', 'Floor1_dark']) {
+    for (const layer of layerCandidates(map, name)) {
+      for (const chunk of layer?.chunks ?? []) {
+        for (const encoded of chunk?.gids ?? []) used.add(rawTileGid(encoded))
+      }
+    }
+  }
+  // These nine GIDs form the authored 3x3 dark-floor edge family visible throughout Dungeon3.
+  const gids = [4190, 4191, 4192, 4207, 4208, 4209, 4224, 4225, 4226]
+  if (!gids.slice(3).every((gid) => used.has(gid))) return null
+  const frame = (gid) => gid - first
+  return {
+    topLeft: frame(4190), top: frame(4191), topRight: frame(4192),
+    left: frame(4207), center: frame(4208), right: frame(4209),
+    bottomLeft: frame(4224), bottom: frame(4225), bottomRight: frame(4226),
+  }
+}
+
 export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
@@ -129,14 +155,16 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const authoredWater = representativeTile(dungeon3, 'Water', 'Water_coasts_animation')
   const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
   const wallMotif = authoredWallMotif(dungeon3)
+  const floorAutotile = authoredFloorAutotile(dungeon3)
   const waterDetailAnimation = authoredWaterDetail == null
     ? null
     : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
 
   return {
-    // Fall back to previously verified frames when a stripped/test manifest has no Tiled metadata.
-    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor' }),
-    // A wall is an authored multi-tile motif; frame 30 remains only the safe single-tile fallback.
+    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : {
+      authoredBy: 'Dungeon3/Floor',
+      ...(floorAutotile ? { autotile: floorAutotile } : {}),
+    }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation
@@ -145,7 +173,6 @@ export function chooseEnvironmentAssets(manifest = {}) {
           authoredBy: 'Dungeon3/Water_details',
           animation: waterDetailAnimation.map((entry) => ({ ...entry })),
         }),
-    // Arches_columns is a real Tiled sheet. One pillar is four authored 16px tiles stacked vertically.
     obstacle: withTileStack(obstacle, [188, 208, 228, 248], { rotation: 90 }),
     torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0),
     chest: withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0),
