@@ -140,6 +140,23 @@ function authoredFloorAutotile(map) {
   }
 }
 
+function authoredFloorDetails(map) {
+  const first = Number(map?.tilesets?.walls_floor?.firstGid) || 0
+  const count = Number(map?.tilesets?.walls_floor?.tileCount) || 0
+  if (!first) return []
+  const last = count > 0 ? first + count : Number.POSITIVE_INFINITY
+  const frames = new Set()
+  for (const layer of layerCandidates(map, 'floor1_details')) {
+    for (const chunk of layer?.chunks ?? []) {
+      for (const encoded of chunk?.gids ?? []) {
+        const gid = rawTileGid(encoded)
+        if (gid >= first && gid < last) frames.add(gid - first)
+      }
+    }
+  }
+  return [...frames].sort((a, b) => a - b)
+}
+
 export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
@@ -155,17 +172,16 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
   const wallMotif = authoredWallMotif(dungeon3)
   const floorAutotile = authoredFloorAutotile(dungeon3)
+  const floorDetailFrames = authoredFloorDetails(dungeon3)
   const waterDetailAnimation = authoredWaterDetail == null
     ? null
     : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
 
-  const floorFrame = floorAutotile?.center ?? authoredFloor ?? 311
-  const floorAuthoredBy = floorAutotile ? 'Dungeon3/floor2_dark' : authoredFloor == null ? null : 'Dungeon3/Floor'
-
   return {
-    floor: withFrame(wallsFloor, floorFrame, {
-      ...(floorAuthoredBy ? { authoredBy: floorAuthoredBy } : {}),
+    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : {
+      authoredBy: 'Dungeon3/Floor',
       ...(floorAutotile ? { autotile: floorAutotile } : {}),
+      ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}),
     }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
