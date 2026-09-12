@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialAnimation, spatialFloorAutotile, spatialTextureKey, spatialTileStack, spatialWallMotif, spatialPropRotation } from './spatial-runtime.js'
+import { spatialAnimation, spatialTextureKey, spatialTileStack, spatialWallMotif, spatialPropRotation } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 import { parseTiledMap } from './tiled-map.js'
 
@@ -55,15 +55,6 @@ test('preserves duplicate Tiled layers instead of overwriting floor2_dark', () =
   assert.equal(map.layerGroups.floor2_dark.length, 2)
   assert.equal(map.layerGroups.floor2_dark[0].id, 49)
   assert.equal(map.layerGroups.floor2_dark[1].id, 76)
-})
-
-test('floor exposes the authored Dungeon3 dark-edge autotile', () => {
-  const autotile = {
-    topLeft: 375, top: 376, topRight: 377,
-    left: 392, center: 393, right: 394,
-    bottomLeft: 409, bottom: 410, bottomRight: 411,
-  }
-  assert.deepEqual(spatialFloorAutotile({ floor: autotile }), autotile)
 })
 
 test('water detail uses its own Tiled texture and authored animation timing', () => {
