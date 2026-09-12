@@ -115,6 +115,7 @@ function serializableTiledMap(parsed, path) {
     tileHeight: parsed.tileHeight,
     tilesets: parsed.tilesets,
     layers: parsed.layers,
+    layerGroups: parsed.layerGroups,
   }
 }
 
