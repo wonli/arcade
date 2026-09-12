@@ -4,6 +4,8 @@ import { canRetreatFromFloor, restoreChestState, restoreDropState, snapshotFloor
 
 const PLAYER_RADIUS = 18
 const PORTAL_CLEARANCE = 44
+const PORTAL_TRIGGER_RADIUS = 34
+const PORTAL_REARM_RADIUS = 48
 
 function destroyBackPortal(portal) {
   if (!portal) return
@@ -82,7 +84,13 @@ function placeAfterRestore(scene, direction) {
   scene.updateHealthBar?.(scene.playerBar, position.x, position.y - 42, scene.playerState.hp, scene.playerState.maxHp)
 }
 
-export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}) {
+function defaultConfirmRetreat() {
+  const confirm = globalThis?.confirm
+  if (typeof confirm !== 'function') return false
+  return confirm('返回上一层？\nReturn to the previous floor?')
+}
+
+export function installDungeonBacktracking(scene, { onProgress = () => {}, confirmRetreat = defaultConfirmRetreat } = {}) {
   if (!scene || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
   scene.__dungeonBacktrackingInstalled = true
 
@@ -93,6 +101,8 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
   let currentState = null
   let backtracked = false
   let backPortal = null
+  let retreatPromptOpen = false
+  let retreatPromptDismissed = false
 
   const visibleProgress = () => backtracked && previousState ? previousState.progress : originalGetProgress()
   scene.__infiniteDungeon.getProgress = visibleProgress
@@ -102,6 +112,8 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
   const removeBackPortal = () => {
     destroyBackPortal(backPortal)
     backPortal = null
+    retreatPromptOpen = false
+    retreatPromptDismissed = false
   }
 
   const refreshBackPortal = () => {
@@ -166,7 +178,20 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
     const available = canRetreatFromFloor(scene)
     if (backPortal.visible !== available) setBackPortalVisible(backPortal, available)
     if (!available || (scene.time?.now ?? 0) < backPortal.unlockAt) return
-    if (Math.hypot(scene.playerState.x - backPortal.x, scene.playerState.y - backPortal.y) <= 34) retreat()
+
+    const distance = Math.hypot(scene.playerState.x - backPortal.x, scene.playerState.y - backPortal.y)
+    if (distance > PORTAL_REARM_RADIUS) retreatPromptDismissed = false
+    if (distance > PORTAL_TRIGGER_RADIUS || retreatPromptOpen || retreatPromptDismissed) return
+
+    retreatPromptOpen = true
+    let confirmed = false
+    try {
+      confirmed = confirmRetreat?.() === true
+    } finally {
+      retreatPromptOpen = false
+    }
+    if (confirmed) retreat()
+    else retreatPromptDismissed = true
   }
   scene.events?.on?.('update', updateBackPortal)
 

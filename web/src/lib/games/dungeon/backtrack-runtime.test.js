@@ -94,6 +94,76 @@ test('forward portal from backtracked floor returns to cached deeper floor witho
   assert.equal(scene.__infiniteDungeon.getProgress().floor, 2)
 })
 
+test('back portal asks for confirmation before returning to the previous floor', () => {
+  const { scene, update } = makeScene()
+  let prompts = 0
+  const runtime = installDungeonBacktracking(scene, {
+    confirmRetreat() {
+      prompts++
+      return false
+    },
+  })
+
+  scene.advanceFloor()
+  scene.time.now = 2000
+  scene.playerState.x = 120
+  scene.playerState.y = 184
+  update()
+
+  assert.equal(prompts, 1)
+  assert.equal(scene.floor, 2)
+  assert.equal(runtime.getVisibleProgress().floor, 2)
+})
+
+test('cancelled backtrack confirmation stays dismissed until the player leaves the portal', () => {
+  const { scene, update } = makeScene()
+  let prompts = 0
+  installDungeonBacktracking(scene, {
+    confirmRetreat() {
+      prompts++
+      return false
+    },
+  })
+
+  scene.advanceFloor()
+  scene.time.now = 2000
+  scene.playerState.x = 120
+  scene.playerState.y = 184
+  update()
+  update()
+  assert.equal(prompts, 1)
+
+  scene.playerState.x = 220
+  scene.playerState.y = 184
+  update()
+
+  scene.playerState.x = 120
+  scene.playerState.y = 184
+  update()
+  assert.equal(prompts, 2)
+})
+
+test('confirming the backtrack prompt returns to the previous floor', () => {
+  const { scene, update } = makeScene()
+  let prompts = 0
+  installDungeonBacktracking(scene, {
+    confirmRetreat() {
+      prompts++
+      return true
+    },
+  })
+
+  scene.advanceFloor()
+  scene.time.now = 2000
+  scene.playerState.x = 120
+  scene.playerState.y = 184
+  update()
+
+  assert.equal(prompts, 1)
+  assert.equal(scene.floor, 1)
+  assert.equal(scene.__infiniteDungeon.getProgress().floor, 1)
+})
+
 test('restored drops bypass rerolling so old equipment keeps its exact damage', () => {
   const item = { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 31, affixes: [] }
   const scene = { __restoringFloor: true, floor: 30, __dungeonSpatial: { getChests: () => [] } }
