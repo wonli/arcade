@@ -47,3 +47,21 @@ test('resolves global gids back to a tileset and local tile id', () => {
   assert.deepEqual(map.resolveGid(44), { tileset: 'Water_coasts_animation', tileId: 43 })
   assert.equal(map.resolveGid(0), null)
 })
+
+test('decodes Tiled transform flags before resolving a gid', () => {
+  const map = parseTiledMap(sample)
+  const horizontal3816 = 0x80000000 + 3816
+  const vertical3816 = 0x40000000 + 3816
+  const diagonal3816 = 0x20000000 + 3816
+
+  assert.deepEqual(map.decodeGid(horizontal3816), {
+    tileset: 'walls_floor', tileId: 1, flipX: true, flipY: false, flipDiagonal: false,
+  })
+  assert.deepEqual(map.decodeGid(vertical3816), {
+    tileset: 'walls_floor', tileId: 1, flipX: false, flipY: true, flipDiagonal: false,
+  })
+  assert.deepEqual(map.decodeGid(diagonal3816), {
+    tileset: 'walls_floor', tileId: 1, flipX: false, flipY: false, flipDiagonal: true,
+  })
+  assert.deepEqual(map.resolveGid(horizontal3816), { tileset: 'walls_floor', tileId: 1 })
+})
