@@ -53,6 +53,18 @@ function pngSize(file) {
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
 }
 
+function inferVfxFrames(width, height) {
+  if (width > height && width % height === 0) {
+    const frames = width / height
+    if (frames >= 2 && frames <= 32) return { frames, frameWidth: height, frameHeight: height }
+  }
+  if (height > width && height % width === 0) {
+    const frames = height / width
+    if (frames >= 2 && frames <= 32) return { frames, frameWidth: width, frameHeight: width }
+  }
+  return { frames: 1, frameWidth: width, frameHeight: height }
+}
+
 function walk(pack, dir) {
   const files = []
   for (const name of readdirSync(dir)) {
@@ -97,7 +109,7 @@ function walkVfx(pack, dir) {
     const path = pack.publicBase + relative(pack.output, full).split('\\').join('/')
     const classified = classifyVfxAsset(path, size.width, size.height)
     if (!classified) continue
-    files.push({ ...classified, source: pack.source })
+    files.push({ ...classified, source: pack.source, ...inferVfxFrames(size.width, size.height) })
   }
   return files
 }
