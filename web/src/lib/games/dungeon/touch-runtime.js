@@ -1,4 +1,5 @@
 import { clampJoystickVector } from '../touch/joystick.js'
+import { installDungeonPerf } from './perf-runtime.js'
 
 export { joystickVector } from '../touch/joystick.js'
 
@@ -61,7 +62,9 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   }
 
   scene.__dungeonTouchInput = api
+  const perf = installDungeonPerf(scene)
   scene.events?.once?.('shutdown', () => {
+    perf?.destroy?.()
     api.stopMove()
     if (scene.updatePlayer === updatePlayerWithTouch) scene.updatePlayer = originalUpdatePlayer
     if (scene.trySkill === trySkillWithTouch) scene.trySkill = originalTrySkill
