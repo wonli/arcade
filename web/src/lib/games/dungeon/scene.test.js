@@ -22,6 +22,9 @@ const manifest = {
     { path: '/assets/debts/Creatures/Slime.png', width: 64, height: 16, frames: 4, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/BrickFloor.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
     { path: '/assets/debts/Tiles/StoneWall.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
+    { path: '/assets/debts/Environment/Pillar.png', width: 16, height: 24, frames: 1, frameWidth: 16, frameHeight: 24, source: 'debts' },
+    { path: '/assets/debts/Environment/Torch.png', width: 16, height: 24, frames: 1, frameWidth: 16, frameHeight: 24, source: 'debts' },
+    { path: '/assets/debts/Items/Chest.png', width: 24, height: 20, frames: 1, frameWidth: 24, frameHeight: 20, source: 'debts' },
     { path: '/assets/debts/Items/Sword.png', width: 16, height: 16, frames: 1, frameWidth: 16, frameHeight: 16, source: 'debts' },
   ],
 }
@@ -39,6 +42,17 @@ test('prefers the RPG player and resolves distinct enemy role assets', () => {
   assert.equal(assets.floor.source, 'debts')
   assert.equal(assets.wall.source, 'debts')
   assert.equal(assets.weapon.source, 'debts')
+})
+
+test('keeps floor wall and obstacle visuals on distinct authored assets', () => {
+  const assets = chooseDungeonAssets(manifest)
+  assert.equal(assets.floor.path, '/assets/debts/Tiles/BrickFloor.png')
+  assert.equal(assets.wall.path, '/assets/debts/Tiles/StoneWall.png')
+  assert.equal(assets.obstacle.path, '/assets/debts/Environment/Pillar.png')
+  assert.equal(assets.torch.path, '/assets/debts/Environment/Torch.png')
+  assert.equal(assets.chest.path, '/assets/debts/Items/Chest.png')
+  assert.notEqual(assets.floor.path, assets.wall.path)
+  assert.notEqual(assets.wall.path, assets.obstacle.path)
 })
 
 test('resolves movement into four player directions', () => {
