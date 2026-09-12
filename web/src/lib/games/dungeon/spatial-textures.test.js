@@ -7,26 +7,49 @@ import { parseTiledMap } from './tiled-map.js'
 
 const allTextures = {
   tilesetFloor: true,
+  tilesetFloorDecoration: true,
   tilesetWall: true,
   tilesetWater: true,
   tilesetWaterDetail: true,
   tilesetObstacle: true,
   tilesetTorch: true,
   tilesetChest: true,
+  tilesetBridge: true,
+  tilesetStairs: true,
+  tilesetDoor: true,
+  tilesetStatue: true,
+  tilesetCoffin: true,
+  tilesetObject: true,
+  tilesetTrapPlate: true,
+  tilesetTrapSpikes: true,
+  tilesetCandles: true,
+  tilesetArches: true,
 }
 
-test('wall-shaped room solids are classified as walls while pillars stay props', () => {
+test('wall-shaped legacy room solids are classified as walls while pillars stay props', () => {
   const room = roomGeometry('cross-hall', 1, () => 0)
   const authored = room.solids.filter((solid) => solid.kind !== 'boundary')
   const wallShaped = authored.filter((solid) => solid.width > 50 || solid.height > 50)
   const pillars = authored.filter((solid) => solid.width <= 50 && solid.height <= 50)
-
   assert.ok(wallShaped.length > 0)
   assert.ok(wallShaped.every((solid) => solid.kind === 'wall'))
   assert.ok(pillars.length > 0)
   assert.ok(pillars.every((solid) => solid.kind === 'pillar'))
   assert.ok(wallShaped.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-wall'))
   assert.ok(pillars.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-obstacle'))
+})
+
+test('procedural feature roles map to dedicated Dungeon3 textures', () => {
+  assert.equal(spatialTextureKey('bridge', allTextures), 'dungeon-tileset-bridge')
+  assert.equal(spatialTextureKey('stairs', allTextures), 'dungeon-tileset-stairs')
+  assert.equal(spatialTextureKey('door', allTextures), 'dungeon-tileset-door')
+  assert.equal(spatialTextureKey('statue', allTextures), 'dungeon-tileset-statue')
+  assert.equal(spatialTextureKey('coffin', allTextures), 'dungeon-tileset-coffin')
+  assert.equal(spatialTextureKey('object', allTextures), 'dungeon-tileset-object')
+  assert.equal(spatialTextureKey('plate-trap', allTextures), 'dungeon-tileset-trap-plate')
+  assert.equal(spatialTextureKey('spikes', allTextures), 'dungeon-tileset-trap-spikes')
+  assert.equal(spatialTextureKey('candles', allTextures), 'dungeon-tileset-candles')
+  assert.equal(spatialTextureKey('arches', allTextures), 'dungeon-tileset-arches')
 })
 
 test('pillars render from the authored vertical tile stack', () => {
