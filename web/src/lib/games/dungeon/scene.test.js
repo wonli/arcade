@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor } from './scene.js'
+import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor, pickupIntent } from './scene.js'
 
 const manifest = {
   assets: [
@@ -46,6 +46,12 @@ test('resolves movement into four player directions', () => {
   assert.equal(directionFromInput(-1, 0, 'down'), 'left')
   assert.equal(directionFromInput(1, 0, 'left'), 'right')
   assert.equal(directionFromInput(0, 0, 'right'), 'right')
+})
+
+test('weapon drops require confirmation while potions remain automatic', () => {
+  assert.equal(pickupIntent({ type: 'weapon.dungeon_blade' }), 'confirm')
+  assert.equal(pickupIntent({ type: 'consumable.health_potion' }), 'auto')
+  assert.equal(pickupIntent(null), 'ignore')
 })
 
 test('rarity presentation makes rare loot visually stronger', () => {
