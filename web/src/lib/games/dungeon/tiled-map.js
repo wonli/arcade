@@ -71,6 +71,7 @@ function parseCsv(value = '') {
 
 function parseLayers(xml = '') {
   const layers = {}
+  const layerGroups = {}
   for (const match of xml.matchAll(/<layer\b([^>]*)>([\s\S]*?)<\/layer>/g)) {
     const attrs = attributes(match[1])
     const body = match[2]
@@ -92,9 +93,13 @@ function parseLayers(xml = '') {
     if (!chunks.length) {
       chunks.push({ x: 0, y: 0, width: int(attrs.width), height: int(attrs.height), gids: parseCsv(dataMatch[2]) })
     }
-    if (attrs.name) layers[attrs.name] = { id: int(attrs.id), width: int(attrs.width), height: int(attrs.height), chunks }
+    if (!attrs.name) continue
+    const layer = { id: int(attrs.id), width: int(attrs.width), height: int(attrs.height), chunks }
+    layers[attrs.name] = layer
+    if (!layerGroups[attrs.name]) layerGroups[attrs.name] = []
+    layerGroups[attrs.name].push(layer)
   }
-  return layers
+  return { layers, layerGroups }
 }
 
 export function parseTiledMap(xml = '') {
@@ -103,6 +108,7 @@ export function parseTiledMap(xml = '') {
   const mapAttrs = attributes(mapMatch[1])
   const tilesetList = parseTilesets(xml)
   const tilesets = Object.fromEntries(tilesetList.map((entry) => [entry.name, entry]))
+  const parsedLayers = parseLayers(xml)
 
   const resolveBaseGid = (value) => {
     if (value <= 0) return null
@@ -143,7 +149,8 @@ export function parseTiledMap(xml = '') {
     tileWidth: int(mapAttrs.tilewidth),
     tileHeight: int(mapAttrs.tileheight),
     tilesets,
-    layers: parseLayers(xml),
+    layers: parsedLayers.layers,
+    layerGroups: parsedLayers.layerGroups,
     resolveGid,
     decodeGid,
   }
