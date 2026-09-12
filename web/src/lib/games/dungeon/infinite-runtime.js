@@ -23,6 +23,15 @@ export function lootPromotionChance(floor = 1, fortuneActive = false) {
   return Math.min(0.76, depthChance + (fortuneActive ? 0.34 : 0))
 }
 
+export function progressSnapshot(progress, fortunePending = false, fortuneActive = false) {
+  return {
+    ...progress,
+    roomRole: roomRoleAt(progress),
+    fortunePending,
+    fortuneActive,
+  }
+}
+
 function promoteEquipment(item, floor, fortuneActive, random) {
   if (!item?.type?.startsWith('weapon.') || random() >= lootPromotionChance(floor, fortuneActive)) return item
   const index = RARITIES.indexOf(item.rarity)
@@ -79,7 +88,8 @@ export function installInfiniteDungeon(scene, {
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
 
-  const publish = () => onProgress({ ...progress, roomRole: roomRoleAt(progress), fortunePending, fortuneActive })
+  const snapshot = () => progressSnapshot(progress, fortunePending, fortuneActive)
+  const publish = () => onProgress(snapshot())
 
   const destroyRest = () => {
     if (!restRuntime) return
@@ -146,6 +156,7 @@ export function installInfiniteDungeon(scene, {
       if (result.fortunePending) fortunePending = true
       scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
       scene.emitStats?.()
+      publish()
       onEvent({ type: 'restchoice', choice, floor: progress.floor, chapter: progress.chapter })
       for (const text of choiceTexts) text.destroy()
       title.setText(label('restComplete'))
@@ -167,6 +178,13 @@ export function installInfiniteDungeon(scene, {
     scene.floorCleared = false
     scene.floorKills = 0
     scene.destroyPortal()
+
+    const role = roomRoleAt(progress)
+    progress = { ...progress, roomRole: role }
+    const fortune = consumeFortune(fortunePending, role)
+    fortuneActive = fortune.active
+    fortunePending = fortune.remaining
+
     if (!initial) {
       scene.clearEnemies()
       scene.clearEnemyProjectiles()
@@ -176,12 +194,6 @@ export function installInfiniteDungeon(scene, {
       scene.player.setPosition(scene.playerState.x, scene.playerState.y)
       scene.drawArena()
     }
-
-    const role = roomRoleAt(progress)
-    progress = { ...progress, roomRole: role }
-    const fortune = consumeFortune(fortunePending, role)
-    fortuneActive = fortune.active
-    fortunePending = fortune.remaining
 
     if (role === 'rest') {
       spawnRestRoom()
@@ -239,7 +251,7 @@ export function installInfiniteDungeon(scene, {
   })
 
   return {
-    getProgress: () => ({ ...progress }),
+    getProgress: snapshot,
     destroy: destroyRest,
   }
 }
