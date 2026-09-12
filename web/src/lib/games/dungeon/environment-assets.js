@@ -14,24 +14,19 @@ function withFrame(asset, frame, extra = {}) {
   return asset ? { ...asset, frame, ...extra } : null
 }
 
-function withRenderableRegion(asset, region, frame) {
+function withRenderableRegion(asset, region, frame, extra = {}) {
   if (!asset) return null
   const columns = Math.floor(asset.width / region.width)
   const rows = Math.floor(asset.height / region.height)
-  return {
-    ...asset,
-    region,
-    frame,
-    frameWidth: region.width,
-    frameHeight: region.height,
-    columns,
-    rows,
-    frames: columns * rows,
-  }
+  return { ...asset, region, frame, frameWidth: region.width, frameHeight: region.height, columns, rows, frames: columns * rows, ...extra }
 }
 
 function withTileStack(asset, tileStack, extra = {}) {
   return asset ? { ...asset, frame: tileStack[0] ?? 0, tileStack: [...tileStack], ...extra } : null
+}
+
+function withFrameset(asset, frameset, extra = {}) {
+  return asset && frameset?.length ? { ...asset, frame: frameset[0], frameset: [...frameset], ...extra } : null
 }
 
 function rawTileGid(value) {
@@ -44,16 +39,13 @@ function layerCandidates(map, layerName) {
   return map?.layers?.[layerName] ? [map.layers[layerName]] : []
 }
 
-function rankedTiles(map, layerName, tilesetName, limit = Infinity) {
-  const layers = layerCandidates(map, layerName)
+function rankedTilesFromLayers(map, layers, tilesetName, limit = Infinity) {
   const tileset = map?.tilesets?.[tilesetName]
   if (!layers.length || !tileset) return []
-
   const firstGid = Number(tileset.firstGid) || 0
   const tileCount = Number(tileset.tileCount) || 0
   const lastGid = tileCount > 0 ? firstGid + tileCount : Number.POSITIVE_INFINITY
   if (firstGid <= 0) return []
-
   const counts = new Map()
   let order = 0
   for (const layer of layers) {
@@ -68,12 +60,23 @@ function rankedTiles(map, layerName, tilesetName, limit = Infinity) {
       }
     }
   }
-
   return [...counts.entries()]
     .map(([tileId, entry]) => ({ tileId, ...entry }))
     .sort((a, b) => b.count - a.count || a.order - b.order)
     .slice(0, limit)
     .map((entry) => entry.tileId)
+}
+
+function rankedTiles(map, layerName, tilesetName, limit = Infinity) {
+  return rankedTilesFromLayers(map, layerCandidates(map, layerName), tilesetName, limit)
+}
+
+function rankedTilesEverywhere(map, tilesetName, limit = Infinity) {
+  const unique = new Set()
+  const layers = []
+  for (const layer of Object.values(map?.layers ?? {})) if (layer && !unique.has(layer)) { unique.add(layer); layers.push(layer) }
+  for (const group of Object.values(map?.layerGroups ?? {})) for (const layer of group ?? []) if (layer && !unique.has(layer)) { unique.add(layer); layers.push(layer) }
+  return rankedTilesFromLayers(map, layers, tilesetName, limit)
 }
 
 function representativeTile(map, layerName, tilesetName) {
@@ -98,24 +101,18 @@ function authoredWallMotif(map) {
   if (!layer || !Array.isArray(layer.chunks)) return null
   let best = null
   for (const chunk of layer.chunks) {
-    const width = Number(chunk?.width) || 0
-    const height = Number(chunk?.height) || 0
-    const gids = chunk?.gids ?? []
+    const width = Number(chunk?.width) || 0, height = Number(chunk?.height) || 0, gids = chunk?.gids ?? []
     if (!width || !height || gids.length < width) continue
-    for (let y = 0; y < height - 1; y++) {
-      for (let x = 0; x < width; x++) {
-        for (let length = 4; length <= Math.min(8, width - x); length++) {
-          const top = gids.slice(y * width + x, y * width + x + length)
-          const bottom = gids.slice((y + 1) * width + x, (y + 1) * width + x + length)
-          if (top.some((gid) => !rawTileGid(gid)) || bottom.some((gid) => !rawTileGid(gid))) continue
-          const cells = [...top, ...bottom].map((gid) => wallCell(map, gid))
-          if (cells.some((cell) => !cell)) continue
-          const textures = new Set(cells.map((cell) => cell.texture))
-          if (!textures.has('wall') || !textures.has('obstacle')) continue
-          const candidate = { width: length, height: 2, cells }
-          if (!best || candidate.width > best.width) best = candidate
-        }
-      }
+    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width; x++) for (let length = 4; length <= Math.min(8, width - x); length++) {
+      const top = gids.slice(y * width + x, y * width + x + length)
+      const bottom = gids.slice((y + 1) * width + x, (y + 1) * width + x + length)
+      if (top.some((gid) => !rawTileGid(gid)) || bottom.some((gid) => !rawTileGid(gid))) continue
+      const cells = [...top, ...bottom].map((gid) => wallCell(map, gid))
+      if (cells.some((cell) => !cell)) continue
+      const textures = new Set(cells.map((cell) => cell.texture))
+      if (!textures.has('wall') || !textures.has('obstacle')) continue
+      const candidate = { width: length, height: 2, cells }
+      if (!best || candidate.width > best.width) best = candidate
     }
   }
   return best
@@ -125,21 +122,11 @@ function authoredFloorAutotile(map) {
   const first = Number(map?.tilesets?.walls_floor?.firstGid) || 0
   if (!first) return null
   const used = new Set()
-  for (const name of ['floor2_dark', 'Floor1_dark']) {
-    for (const layer of layerCandidates(map, name)) {
-      for (const chunk of layer?.chunks ?? []) {
-        for (const encoded of chunk?.gids ?? []) used.add(rawTileGid(encoded))
-      }
-    }
-  }
+  for (const name of ['floor2_dark', 'Floor1_dark']) for (const layer of layerCandidates(map, name)) for (const chunk of layer?.chunks ?? []) for (const encoded of chunk?.gids ?? []) used.add(rawTileGid(encoded))
   const gids = [4190, 4191, 4192, 4207, 4208, 4209, 4224, 4225, 4226]
   if (!gids.slice(3).every((gid) => used.has(gid))) return null
   const frame = (gid) => gid - first
-  return {
-    topLeft: frame(4190), top: frame(4191), topRight: frame(4192),
-    left: frame(4207), center: frame(4208), right: frame(4209),
-    bottomLeft: frame(4224), bottom: frame(4225), bottomRight: frame(4226),
-  }
+  return { topLeft: frame(4190), top: frame(4191), topRight: frame(4192), left: frame(4207), center: frame(4208), right: frame(4209), bottomLeft: frame(4224), bottom: frame(4225), bottomRight: frame(4226) }
 }
 
 function authoredFloorDetails(map) {
@@ -148,13 +135,9 @@ function authoredFloorDetails(map) {
   if (!first) return []
   const last = count > 0 ? first + count : Number.POSITIVE_INFINITY
   const frames = new Set()
-  for (const layer of layerCandidates(map, 'floor1_details')) {
-    for (const chunk of layer?.chunks ?? []) {
-      for (const encoded of chunk?.gids ?? []) {
-        const gid = rawTileGid(encoded)
-        if (gid >= first && gid < last) frames.add(gid - first)
-      }
-    }
+  for (const layer of layerCandidates(map, 'floor1_details')) for (const chunk of layer?.chunks ?? []) for (const encoded of chunk?.gids ?? []) {
+    const gid = rawTileGid(encoded)
+    if (gid >= first && gid < last) frames.add(gid - first)
   }
   return [...frames].sort((a, b) => a - b)
 }
@@ -166,40 +149,56 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const waterDetail = prefer(dedicated, [/\/Tiled_files\/water_details_animation\.png$/i])
   const obstacle = prefer(dedicated, [/\/Tiled_files\/Arches_columns\.png$/i, /arches.*columns/i], 'obstacle')
   const plates = prefer(dedicated, [/\/Tiled_files\/plates\.png$/i])
-  const torch = prefer(dedicated, [/\/Tiled_files\/torches\.png$/i, /torches\.png$/i], 'torch')
-  const chest = prefer(dedicated, [/\/Tiled_files\/chest_lever\.png$/i, /chest.*lever/i], 'chest')
+  const stairs = prefer(dedicated, [/\/Tiled_files\/stairs\.png$/i])
+  const doors = prefer(dedicated, [/\/Tiled_files\/doors\.png$/i])
+  const statue = prefer(dedicated, [/\/Tiled_files\/Statue_fire\.png$/i])
+  const coffin = prefer(dedicated, [/\/Tiled_files\/coffins\.png$/i])
+  const objectDecoration = prefer(dedicated, [/\/Tiled_files\/other_objects\.png$/i])
+  const trapPlate = prefer(dedicated, [/\/Tiled_files\/plate_trap\.png$/i])
+  const trapSpikes = prefer(dedicated, [/\/Tiled_files\/Spikes\.png$/i])
+  const torch = prefer(dedicated, [/\/Tiled_files\/torches\.png$/i], 'torch')
+  const candles = prefer(dedicated, [/\/Tiled_files\/candles\.png$/i])
+  const chest = prefer(dedicated, [/\/Tiled_files\/chest_lever\.png$/i], 'chest')
   const dungeon3 = manifest?.tiledMaps?.Dungeon3
 
   const authoredFloor = representativeTile(dungeon3, 'Floor', 'walls_floor')
-  const authoredWater = representativeTile(dungeon3, 'Water', 'Water_coasts_animation')
+  const waterFrames = rankedTiles(dungeon3, 'Water', 'Water_coasts_animation', 12)
+  const authoredWater = waterFrames[0] ?? null
   const authoredWaterDetail = representativeTile(dungeon3, 'Water_details', 'Water_detilazation')
   const wallMotif = authoredWallMotif(dungeon3)
   const floorAutotile = authoredFloorAutotile(dungeon3)
   const floorDetailFrames = authoredFloorDetails(dungeon3)
-  const floorDecorationFrames = rankedTiles(dungeon3, 'plates1', 'plates', 6)
-  const waterDetailAnimation = authoredWaterDetail == null
-    ? null
-    : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
+  const floorDecorationFrames = rankedTiles(dungeon3, 'plates1', 'plates', 8)
+  const waterDetailAnimation = authoredWaterDetail == null ? null : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
+  const used = (name, fallback, limit = 8) => {
+    const frames = rankedTilesEverywhere(dungeon3, name, limit)
+    return frames.length ? frames : fallback
+  }
+
+  const chestSprite = withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0, {
+    animation: [0, 1, 2, 3, 4, 5].map((tileId) => ({ tileId, duration: tileId === 5 ? 220 : 120 })),
+    openFrame: 5,
+  })
 
   return {
-    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : {
-      authoredBy: 'Dungeon3/Floor',
-      ...(floorAutotile ? { autotile: floorAutotile } : {}),
-      ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}),
-    }),
-    floorDecoration: plates && floorDecorationFrames.length
-      ? { ...plates, frame: floorDecorationFrames[0], frameset: floorDecorationFrames, authoredBy: 'Dungeon3/plates1' }
-      : null,
+    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor', ...(floorAutotile ? { autotile: floorAutotile } : {}), ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}) }),
+    floorDecoration: plates && floorDecorationFrames.length ? { ...plates, frame: floorDecorationFrames[0], frameset: floorDecorationFrames, authoredBy: 'Dungeon3/plates1' } : null,
+    pathPlate: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96, 65, 5], { authoredBy: 'Dungeon3/plates1' }),
+    bridge: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96], { authoredBy: 'Dungeon3/plates1' }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
-    water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
-    waterDetail: authoredWaterDetail == null || !waterDetailAnimation
-      ? null
-      : withFrame(waterDetail, authoredWaterDetail, {
-          authoredBy: 'Dungeon3/Water_details',
-          animation: waterDetailAnimation.map((entry) => ({ ...entry })),
-        }),
+    water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water', coastFrames: waterFrames }),
+    waterDetail: authoredWaterDetail == null || !waterDetailAnimation ? null : withFrame(waterDetail, authoredWaterDetail, { authoredBy: 'Dungeon3/Water_details', animation: waterDetailAnimation.map((entry) => ({ ...entry })) }),
     obstacle: withTileStack(obstacle, [188, 208, 228, 248], { rotation: 90 }),
-    torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0),
-    chest: withRenderableRegion(chest, { x: 0, y: 0, width: 32, height: 32 }, 0),
+    arches: withFrameset(obstacle, used('Arches_columns', [76, 77, 96, 97, 116, 117], 10)),
+    stairs: withFrameset(stairs, used('stairs', [0, 1, 17, 18], 8)),
+    door: withFrameset(doors, used('doors', [4, 5, 12, 13], 8)),
+    statue: withFrameset(statue, used('Statue_fire', [0, 1, 30, 31], 8)),
+    coffin: withFrameset(coffin, used('coffins', [7, 6, 37, 36], 10)),
+    objectDecoration: withFrameset(objectDecoration, used('other_objects', [18, 19, 30, 31, 42, 43], 12)),
+    trapPlate: withFrameset(trapPlate, used('plate_trap', [0, 1, 24, 25], 8)),
+    trapSpikes: withFrameset(trapSpikes, used('Spikes', [73, 74, 75], 8)),
+    torch: withRenderableRegion(torch, { x: 0, y: 0, width: 48, height: 48 }, 0, { variants: [0, 1, 4, 5] }),
+    candles: withFrameset(candles, used('candles', [0, 1, 27, 28, 54, 55], 8)),
+    chest: chestSprite,
   }
 }
