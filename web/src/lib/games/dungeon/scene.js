@@ -612,7 +612,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       enemy.visual.setPosition(enemy.x, enemy.y)
       this.updateHealthBar(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
       if (enemy.visual.setFlipX && Math.abs(dx) > 1) enemy.visual.setFlipX(dx < 0)
-      if (time < enemy.hitUntil) enemy.visual.setTintFill?.(0xffffff)
+      if (time < enemy.hitUntil) enemy.visual.setTint?.(0xffffff)
       else if (enemy.boss && enemy.phase === 2) enemy.visual.setTint?.(0xff705c)
       else if (enemy.tint) enemy.visual.setTint?.(enemy.tint)
       else enemy.visual.clearTint?.()
@@ -969,8 +969,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     flashPlayer() {
-      if (this.player.setTintFill) {
-        this.player.setTintFill(0xff5f6d)
+      if (this.player.setTint) {
+        this.player.setTint(0xff5f6d)
         this.time.delayedCall(90, () => this.player.clearTint?.())
       }
       this.cameras.main.shake(70, 0.003)

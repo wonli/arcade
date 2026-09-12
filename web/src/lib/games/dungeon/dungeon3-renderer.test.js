@@ -4,6 +4,17 @@ import { generateDungeonGeometry } from './map-generator.js'
 import * as renderer from './dungeon3-renderer.js'
 import { dungeon3Rules } from './dungeon3-rules.js'
 
+test('uses the per-tile terrain renderer on Safari', () => {
+  const scene = { add: { renderTexture() {} } }
+  assert.equal(renderer.canBatchDungeon3Terrain(scene, 'Mozilla/5.0 Version/17.0 Safari/605.1.15'), false)
+  assert.equal(renderer.canBatchDungeon3Terrain(scene, 'Mozilla/5.0 Chrome/123.0.0.0 Safari/537.36'), true)
+})
+
+test('legacy terrain can crop a tile from an unsliced source image', () => {
+  const source = renderer.legacyDungeon3TileSource({ tileset: 'walls_floor', tileId: 35 })
+  assert.deepEqual(source, { x: 16, y: 32, width: 16, height: 16 })
+})
+
 test('tile plan places coasts on land, feet over water, and preserves full authored props', () => {
   const g = generateDungeonGeometry({ runSeed: 33 })
   const tiles = renderer.buildDungeon3TilePlan(g)

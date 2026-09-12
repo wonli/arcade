@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { socket } from '$lib/ws/arcade'
@@ -14,9 +14,12 @@
   import { multiplayerRole } from '$lib/games/dungeon/multiplayer-state.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
+  import { dungeonSceneReady } from '$lib/games/dungeon/bootstrap.js'
+  import { installDungeonWorld } from '$lib/games/dungeon/world-runtime.js'
 
   let mount
   let game
+  let starting = false
   let gameResources
   let identity
   let name = ''
@@ -33,12 +36,14 @@
   let progress = initialDungeonProgress()
   let touchInput = null
   let multiplayer = null
+  let world = null
+  let pendingWorld = null
   let pendingPlayerState = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let mounted = false
-  let playerStateInFlight = false
-  let queuedPlayerState = null
+  let reconnecting = false
+  let reconnectTimer = null
 
   $: weaponModel = weaponHudModel(stats, 'en')
   $: playerCount = room?.players?.length ?? 0
@@ -50,7 +55,18 @@
     if (!next || next.type || next.game !== 'dungeon') return
     room = next
     role = identity ? multiplayerRole(next, identity.sessionId) : 'waiting'
+    syncMultiplayerRoom(next)
     if (next.players?.length === 2 && next.status === 'playing' && !game) startDungeon()
+  }
+
+  function syncMultiplayerRoom(next) {
+    if (!multiplayer || !identity) return
+    const remote = next.players?.find((player) => player.id !== identity.sessionId)
+    if (!remote) {
+      multiplayer.removeRemotePlayer?.()
+      return
+    }
+    if (multiplayer.remote?.id !== remote.id) multiplayer.replaceRemotePlayer?.(remote.id)
   }
 
   function subscribeRoom() {
@@ -62,8 +78,20 @@
       const payload = message.data.message
       if (!payload) return
       if (!payload.type) { applyRoom(payload); return }
+      if (payload.type === 'dungeon.state' && payload.playerId === room?.hostId) {
+        if (world) world.receiveState(payload.state)
+        else pendingWorld = payload.state
+        return
+      }
       if (payload.type !== 'dungeon.input' || payload.playerId === identity.sessionId) return
-      if (multiplayer) multiplayer.receivePlayerState(payload.input)
+      if (payload.input?.kind) { world?.receiveCommand(payload.input); return }
+      if (multiplayer) {
+        const incoming = { ...payload.input }
+        if (room?.hostId === identity.sessionId && world) {
+          for (const key of ['hp', 'maxHp', 'weapon', 'weaponRarity', 'weaponDamage', 'weaponAffixes']) delete incoming[key]
+        }
+        multiplayer.receivePlayerState(incoming)
+      }
       else pendingPlayerState = payload.input
     })
   }
@@ -115,21 +143,44 @@
     setTimeout(() => { copied = false }, 1200)
   }
 
+  async function leaveRoom() {
+    if (role !== 'guest' || !roomCode) return
+    try {
+      await socket.request('room.leave', { roomId: roomCode })
+      touchInput?.stopMove()
+      multiplayer?.destroy?.()
+      game?.destroy(true)
+      game = null
+      multiplayer = null
+      world = null
+      pendingWorld = null
+      touchInput = null
+      room = null
+      roomCode = ''
+      ready = false
+      history.replaceState(null, '', '/dungeon/coop')
+    } catch (cause) {
+      error = cause?.message ?? 'Failed to leave room'
+    }
+  }
+
   function sendPlayerState(state) {
-    if (!roomCode) return
-    if (playerStateInFlight) {
-      queuedPlayerState = state
+    if (roomCode) socket.publish('dungeon.input', { roomId: roomCode, input: state })
+  }
+
+  async function restoreRoomConnection() {
+    if (!mounted || !roomCode || reconnecting) return
+    reconnecting = true
+    try {
+      await ensureConnected()
+      if (!mounted || !roomCode) return
+      subscribeRoom()
+      applyRoom(await socket.request('room.state', { roomId: roomCode }))
+    } catch {
+      reconnectTimer = setTimeout(() => { reconnecting = false; restoreRoomConnection() }, 1000)
       return
     }
-    playerStateInFlight = true
-    socket.request('dungeon.input', { roomId: roomCode, input: state }).catch(() => {}).finally(() => {
-      playerStateInFlight = false
-      if (queuedPlayerState) {
-        const next = queuedPlayerState
-        queuedPlayerState = null
-        sendPlayerState(next)
-      }
-    })
+    reconnecting = false
   }
 
   function onEvent(event) {
@@ -152,11 +203,16 @@
   }
 
   async function startDungeon() {
-    if (!mounted || game || !room || room.players?.length < 2) return
+    if (!mounted || game || starting || !room || room.players?.length < 2) return
+    // The join response and room broadcast can arrive before resources resolve.
+    // Claim startup synchronously so only one Phaser instance owns the stage.
+    starting = true
     ready = false
     error = ''
     role = multiplayerRole(room, identity.sessionId)
     try {
+      await tick()
+      if (!mounted || !mount) return
       const { Phaser, assets, vfxManifest } = await loadGameResources()
       if (!mounted) return
       const runGame = createDungeonGame({
@@ -177,53 +233,69 @@
       const install = () => {
         if (!mounted || game !== runGame) return
         const scene = runGame.scene?.getScene?.('Dungeon')
-        if (!scene) {
+        if (!dungeonSceneReady(scene)) {
           if (attempts++ < 90) requestAnimationFrame(install)
           return
         }
+        try {
+          installAffixVisuals(scene)
 
-        installAffixVisuals(scene)
-        installDungeonVfx(scene, vfxManifest)
+          const spatial = installDungeonSpatial(scene, {
+            getProgress: () => ({ ...progress, floor: scene.floor }),
+            onEvent,
+            label: (key) => key,
+            runSeed: roomCode,
+          })
 
-        const seededRandom = () => Math.random()
-        seededRandom.runSeed = roomCode
-        installDungeonSpatial(scene, {
-          getProgress: () => progress,
-          onEvent,
-          label: (key) => key,
-          random: seededRandom,
-        })
+          Promise.resolve(spatial?.ready).then((loaded) => {
+            if (!mounted || game !== runGame) return
+            if (!loaded) throw new Error('Dungeon map assets could not be loaded')
+            installDungeonVfx(scene, vfxManifest)
+            scene.clearEnemyProjectiles?.()
+            scene.clearDrops?.()
+            scene.destroyPortal?.()
+            scene.floorCleared = false
+            installDungeonAttackRuntime(scene)
 
-        scene.clearEnemies?.()
-        scene.clearEnemyProjectiles?.()
-        scene.clearDrops?.()
-        scene.destroyPortal?.()
-        scene.floorCleared = false
-        installDungeonAttackRuntime(scene)
+            const localIndex = room.players.findIndex((player) => player.id === identity.sessionId)
+            const remotePlayer = room.players.find((player) => player.id !== identity.sessionId)
+            if (localIndex < 0 || !remotePlayer) {
+              error = 'Player seats could not be resolved'
+              return
+            }
 
-        const localIndex = room.players.findIndex((player) => player.id === identity.sessionId)
-        const remotePlayer = room.players.find((player) => player.id !== identity.sessionId)
-        if (localIndex < 0 || !remotePlayer) {
-          error = 'Player seats could not be resolved'
-          return
+            multiplayer = installDungeonMultiplayer(scene, {
+              localPlayerId: identity.sessionId,
+              remotePlayerId: remotePlayer.id,
+              localIndex,
+              localSpawn: localIndex === 1 && pendingPlayerState?.id === remotePlayer.id ? { x: pendingPlayerState.x, y: pendingPlayerState.y } : null,
+              spawnAtRemoteOnFirstState: localIndex === 1 && !pendingPlayerState,
+              sendPlayerState,
+            })
+            touchInput = installDungeonTouchInput(scene)
+            if (pendingPlayerState) {
+              multiplayer?.receivePlayerState(pendingPlayerState)
+              pendingPlayerState = null
+            }
+            world = installDungeonWorld(scene, {
+              host: room.hostId === identity.sessionId,
+              multiplayer,
+              sendState: state => socket.publish('dungeon.state', { roomId: roomCode, state }),
+              sendCommand: input => socket.publish('dungeon.input', { roomId: roomCode, input }),
+            })
+            if (pendingWorld) { world.receiveState(pendingWorld); pendingWorld = null }
+            world.publish()
+            ready = true
+          }).catch((cause) => { error = cause?.message ?? 'Failed to load dungeon map' })
+        } catch (cause) {
+          error = cause?.message ?? 'Failed to initialize co-op dungeon'
         }
-
-        multiplayer = installDungeonMultiplayer(scene, {
-          localPlayerId: identity.sessionId,
-          remotePlayerId: remotePlayer.id,
-          localIndex,
-          sendPlayerState,
-        })
-        touchInput = installDungeonTouchInput(scene)
-        if (pendingPlayerState) {
-          multiplayer?.receivePlayerState(pendingPlayerState)
-          pendingPlayerState = null
-        }
-        ready = true
       }
       install()
     } catch (cause) {
       error = cause?.message ?? 'Failed to start co-op dungeon'
+    } finally {
+      starting = false
     }
   }
 
@@ -234,7 +306,10 @@
     mounted = true
     identity = getIdentity()
     name = defaultName(identity.playerId)
-    unsubscribeConnection = socket.onConnection((state) => { connection = state })
+    unsubscribeConnection = socket.onConnection((state) => {
+      connection = state
+      if (state === 'offline') restoreRoomConnection()
+    })
     const code = new URLSearchParams(location.search).get('room')?.trim()
     if (code) joinRoom(code)
     return () => {
@@ -243,6 +318,7 @@
       unsubscribeConnection()
       touchInput?.stopMove()
       multiplayer?.destroy?.()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
       game?.destroy(true)
       game = null
       multiplayer = null
@@ -259,13 +335,13 @@
   </header>
 
   {#if !roomCode}
-    <section class="lobby-card"><span class="eyebrow">CO-OP FOUNDATION</span><h2>Open a two-player dungeon</h2><p>Create a room and invite a teammate. Both clients generate the same dungeon from the room seed and only exchange player state.</p><button on:click={createRoom} disabled={joining}>{joining ? 'CREATING…' : 'CREATE ROOM'}</button>{#if error}<div class="error-text">{error}</div>{/if}</section>
+    <section class="lobby-card"><span class="eyebrow">CO-OP FOUNDATION</span><h2>Open a two-player dungeon</h2><p>Create a room and invite a teammate. Share a seeded dungeon with synchronized monsters and loot.</p><button on:click={createRoom} disabled={joining}>{joining ? 'CREATING…' : 'CREATE ROOM'}</button>{#if error}<div class="error-text">{error}</div>{/if}</section>
   {:else}
     <section class="roombar">
-      <div><span>ROOM / SEED</span><strong>{roomCode}</strong></div><div><span>ROLE</span><strong>{role.toUpperCase()}</strong></div><div><span>PLAYERS</span><strong>{playerCount}/2</strong></div><button on:click={copyInvite}>{copied ? 'COPIED' : 'COPY INVITE'}</button>
+      <div><span>ROOM / SEED</span><strong>{roomCode}</strong></div><div><span>ROLE</span><strong>{role.toUpperCase()}</strong></div><div><span>PLAYERS</span><strong>{playerCount}/2</strong></div><button on:click={copyInvite}>{copied ? 'COPIED' : 'COPY INVITE'}</button>{#if role === 'guest'}<button class="leave" on:click={leaveRoom}>LEAVE ROOM</button>{/if}
     </section>
 
-    {#if playerCount < 2}
+    {#if playerCount < 2 && !game}
       <section class="waiting"><div class="pulse"></div><h2>Waiting for teammate</h2><p>{inviteUrl}</p>{#if error}<div class="error-text">{error}</div>{/if}</section>
     {:else}
       <section class="hud">
@@ -275,9 +351,10 @@
         <div bind:this={mount} class="stage"></div>
         <div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove} /></div></div>
         {#if !ready && !error}<div class="overlay">BUILDING SEEDED DUNGEON…</div>{/if}
+        {#if ready && playerCount < 2}<div class="overlay">WAITING FOR PLAYER 2…</div>{/if}
         {#if error}<div class="overlay error">{error}</div>{/if}
       </section>
-      <footer><span>{eventText || 'Foundation milestone: same seed · real P1/P2 entities · 20Hz player relay.'}</span><span>{room?.players?.map((player) => player.name).join(' · ')}</span></footer>
+      <footer><span>{eventText || 'Co-op · world updates every 300ms · immediate combat events.'}</span><span>{room?.players?.map((player) => player.name).join(' · ')}</span></footer>
     {/if}
   {/if}
 </main>

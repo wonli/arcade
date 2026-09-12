@@ -80,3 +80,48 @@ test('runtime adopts local actor, creates a real remote actor, and only relays p
   runtime.destroy()
   assert.equal(scene.players.has('p2'), false)
 })
+
+test('player state is broadcast every 300 milliseconds', () => {
+  const scene = fakeScene()
+  const sent = []
+  const runtime = installDungeonMultiplayer(scene, {
+    localPlayerId: 'p1',
+    remotePlayerId: 'p2',
+    sendPlayerState(state) { sent.push(state) },
+  })
+
+  runtime.update(0)
+  runtime.update(299)
+  assert.equal(sent.length, 1)
+  runtime.update(300)
+  assert.equal(sent.length, 2)
+})
+
+test('a replacement guest appears at the host position', () => {
+  const scene = fakeScene()
+  const runtime = installDungeonMultiplayer(scene, { localPlayerId: 'host', remotePlayerId: 'guest-1', sendPlayerState() {} })
+  scene.players.get('host').state.x = 412
+  scene.players.get('host').state.y = 284
+
+  runtime.replaceRemotePlayer('guest-2')
+
+  assert.equal(scene.players.has('guest-1'), false)
+  assert.equal(scene.players.get('guest-2').state.x, 412)
+  assert.equal(scene.players.get('guest-2').state.y, 284)
+})
+
+test('a joining guest moves to the host when its first state arrives after scene setup', () => {
+  const scene = fakeScene()
+  const runtime = installDungeonMultiplayer(scene, {
+    localPlayerId: 'guest',
+    remotePlayerId: 'host',
+    localIndex: 1,
+    spawnAtRemoteOnFirstState: true,
+    sendPlayerState() {},
+  })
+
+  runtime.receivePlayerState({ id: 'host', x: 412, y: 284, hp: 100, maxHp: 100, facing: 'down', moving: false, attacking: false })
+
+  assert.equal(scene.players.get('guest').state.x, 412)
+  assert.equal(scene.players.get('guest').state.y, 284)
+})

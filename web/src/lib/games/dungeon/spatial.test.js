@@ -66,3 +66,15 @@ test('explicit run seed makes procedural geometry deterministic across clients',
   assert.deepEqual(second, first)
   assert.notEqual(otherRoom.seed, first.seed)
 })
+
+test('seeded geometry works when structuredClone is unavailable', () => {
+  const original = globalThis.structuredClone
+  try {
+    globalThis.structuredClone = undefined
+    const geometry = roomGeometry(null, 4, () => 0.11, { runSeed: 'ROOM42' })
+    assert.equal(geometry.floor, 4)
+    assert.ok(geometry.rooms.length > 0)
+  } finally {
+    globalThis.structuredClone = original
+  }
+})

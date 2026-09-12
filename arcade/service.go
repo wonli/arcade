@@ -98,6 +98,13 @@ func (s *Service) Join(roomID string, playerID game.PlayerID, name string) error
 	}
 	return s.ready(r)
 }
+func (s *Service) LeaveDungeon(roomID string, playerID game.PlayerID) error {
+	r, ok := s.rooms.Get(roomID)
+	if !ok {
+		return errors.New("room not found")
+	}
+	return r.LeaveDungeonGuest(playerID)
+}
 func (s *Service) AddBot(roomID string, playerID game.PlayerID) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok {

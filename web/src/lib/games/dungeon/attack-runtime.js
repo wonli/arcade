@@ -74,8 +74,8 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     scene.__dungeonVfx?.impact?.(impactX, impactY, { critical: critical || (elite && killed), explosion: killed || context?.source === 'corpse_burst' })
     if (context?.direct || critical || killed) audio.play({ damage, critical, killed, elite })
 
-    if (enemy.visual?.setTintFill && enemy.visual?.clearTint) {
-      enemy.visual.setTintFill(critical || elite ? 0xffe18a : 0xffffff)
+    if (enemy.visual?.setTint && enemy.visual?.clearTint) {
+      enemy.visual.setTint(critical || elite ? 0xffe18a : 0xffffff)
       scene.time?.delayedCall?.(feedback.flashMs, () => {
         if (enemy.hp > 0 && enemy.visual?.active !== false) enemy.visual.clearTint()
       })

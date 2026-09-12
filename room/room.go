@@ -59,7 +59,7 @@ func (r *Room) Join(player Player) error {
 			return nil
 		}
 	}
-	if r.Status != StatusWaiting {
+	if r.Status != StatusWaiting && !(r.GameName == "dungeon" && r.Status == StatusPlaying && len(r.Players) == 1 && r.Players[0].ID == r.HostID) {
 		return errors.New("room has already started")
 	}
 	if len(r.Players) >= r.MaxPlayers {
@@ -71,6 +71,26 @@ func (r *Room) Join(player Player) error {
 	}
 	r.Players = append(r.Players, player)
 	return nil
+}
+
+func (r *Room) LeaveDungeonGuest(id game.PlayerID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.GameName != "dungeon" {
+		return errors.New("only dungeon guests can leave this way")
+	}
+	if id == r.HostID {
+		return errors.New("dungeon host cannot leave an active room")
+	}
+	for index, player := range r.Players {
+		if player.ID != id {
+			continue
+		}
+		r.Players = append(r.Players[:index], r.Players[index+1:]...)
+		return nil
+	}
+	return errors.New("player is not in room")
 }
 
 func (r *Room) PlayerIDs() []game.PlayerID {

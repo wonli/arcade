@@ -18,6 +18,7 @@ func (a *Actions) Register(router ws.IRouter) {
 	router.Add("arcade.login", a.login)
 	router.Add("room.create", a.createRoom)
 	router.Add("room.join", a.joinRoom)
+	router.Add("room.leave", a.leaveRoom)
 	router.Add("room.state", a.roomState)
 	router.Add("room.addBot", a.addBot)
 	router.Add("room.rematch", a.rematch)
@@ -75,6 +76,14 @@ func (a *Actions) joinRoom(c *ws.Context) {
 	req.RoomID=strings.ToUpper(strings.TrimSpace(req.RoomID))
 	if err:=a.service.Join(req.RoomID,playerID,displayName(req.Name,playerID)); err!=nil { c.SendCode(400,err.Error()); return }
 	r,_:=a.service.Get(req.RoomID); topic:=roomTopic(req.RoomID); c.Sub(topic); state:=r.Snapshot(); c.Send(state); c.Pub(topic,state)
+}
+
+func (a *Actions) leaveRoom(c *ws.Context) {
+	playerID,ok:=currentPlayer(c); if !ok { c.SendCode(401,"guest login required"); return }
+	var req roomRequest; if err:=c.BindingJson(&req); err!=nil || strings.TrimSpace(req.RoomID)=="" { c.SendCode(400,"invalid room request"); return }
+	req.RoomID=strings.ToUpper(strings.TrimSpace(req.RoomID))
+	if err:=a.service.LeaveDungeon(req.RoomID,playerID); err!=nil { c.SendCode(400,err.Error()); return }
+	a.sendRoom(c,req.RoomID)
 }
 
 func (a *Actions) roomState(c *ws.Context) { var req roomRequest; if err:=c.BindingJson(&req); err!=nil || strings.TrimSpace(req.RoomID)=="" { c.SendCode(400,"invalid room request"); return }; req.RoomID=strings.ToUpper(strings.TrimSpace(req.RoomID)); r,ok:=a.service.Get(req.RoomID); if !ok { c.SendCode(404,"room not found"); return }; c.Send(r.Snapshot()) }

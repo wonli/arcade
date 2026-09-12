@@ -3,6 +3,11 @@ import { dungeon3Rules as rules } from './dungeon3-rules.js'
 export const dungeon3TextureKey = name => `dungeon3-${name}`
 const isLand = cell => cell?.kind === 'floor' || cell?.kind === 'bridge'
 
+export function canBatchDungeon3Terrain(scene, userAgent = globalThis.navigator?.userAgent ?? '') {
+  if (typeof scene?.add?.renderTexture !== 'function') return false
+  return !(/Safari\//.test(userAgent) && !/(?:Chrome|Chromium|CriOS|Android)/.test(userAgent))
+}
+
 // Pure render plan: coordinates are the upper-left of a native 16px TMX cell.
 // Keeping it separate from Phaser lets tests audit every tile against geometry.
 export function buildDungeon3TilePlan(geometry) {
@@ -85,9 +90,7 @@ export function buildDungeon3TilePlan(geometry) {
       const y = rotation === 90 ? c.x : rotation === -90 ? stepMotif.width - 1 - c.x : rotation === 180 ? stepMotif.height - 1 - c.y : c.y
       return { ...c, x, y }
     })
-    if (rotated.every(c => land(left + c.x, top + c.y))) {
-      for (const c of rotated) add(left + c.x, top + c.y, c, 'stairs', 4.2, { motifId: stepMotif.id, rotation })
-    }
+    for (const c of rotated) add(left + c.x, top + c.y, c, 'stairs', 4.2, { motifId: stepMotif.id, rotation })
   }
   return tiles
 }
@@ -107,6 +110,24 @@ export function queueDungeon3Textures(scene) {
 
 function tileFrames(tile) {
   return rules.tilesets[tile.tileset]?.animations?.[String(tile.tileId)] ?? null
+}
+
+export function legacyDungeon3TileSource(tile) {
+  const set = rules.tilesets[tile?.tileset]
+  if (!set) return null
+  const width = set.tileWidth
+  const height = set.tileHeight
+  return {
+    x: (tile.tileId % set.columns) * width,
+    y: Math.floor(tile.tileId / set.columns) * height,
+    width,
+    height,
+  }
+}
+
+function hasDungeon3Frame(scene, key, frame) {
+  const texture = scene.textures?.get?.(key)
+  return typeof texture?.has === 'function' ? texture.has(frame) : true
 }
 
 function tileTransform(tile) {
@@ -151,7 +172,13 @@ function renderLegacyTerrain(scene, geometry) {
       if (color != null) track(scene.add.rectangle(tile.x + size / 2, tile.y + size / 2, size, size, color, 1).setDepth(tile.depth))
       continue
     }
-    const sprite = track(scene.add.image(tile.x + size / 2, tile.y + size / 2, key, tile.tileId).setDepth(tile.depth))
+    const sliced = hasDungeon3Frame(scene, key, tile.tileId)
+    const sprite = track(scene.add.image(tile.x + size / 2, tile.y + size / 2, key, sliced ? tile.tileId : undefined).setDepth(tile.depth))
+    if (!sliced) {
+      const source = legacyDungeon3TileSource(tile)
+      sprite.setCrop?.(source.x, source.y, source.width, source.height)
+      sprite.setDisplaySize?.(size, size)
+    }
     if (tile.flipDiagonal) {
       sprite.setAngle?.(90 + (tile.rotation ?? 0))
       sprite.setFlip?.(tile.flipY, !tile.flipX)
@@ -160,7 +187,7 @@ function renderLegacyTerrain(scene, geometry) {
       if (tile.rotation) sprite.setAngle?.(tile.rotation)
     }
     const frames = tileFrames(tile)
-    if (frames?.length) {
+    if (frames?.length && sliced) {
       const groupKey = `${key}/${tile.tileId}`
       if (!animated.has(groupKey)) animated.set(groupKey, { frames, sprites: [], duration: frames.reduce((total, f) => total + f.duration, 0), lastFrame: -1 })
       animated.get(groupKey).sprites.push(sprite)
@@ -183,7 +210,7 @@ function renderLegacyTerrain(scene, geometry) {
 }
 
 export function renderDungeon3Terrain(scene, geometry) {
-  if (typeof scene.add?.renderTexture !== 'function') {
+  if (!canBatchDungeon3Terrain(scene)) {
     renderLegacyTerrain(scene, geometry)
     return
   }

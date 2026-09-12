@@ -12,6 +12,11 @@ const PATH_REFRESH_MS = 520
 const CHEST_RANGE = 48
 const TRAP_RANGE = 22
 
+function cloneRuntimeValue(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value))
+}
+
 const RARITY_DAMAGE = {
   common: [2, 3],
   uncommon: [4, 5],
@@ -439,7 +444,7 @@ async function loadEnvironmentTextures(scene) {
       scene.__dungeonEnvironmentFloorSkin = { autotile: selected.floor?.autotile ? { ...selected.floor.autotile } : null, detailFrames: Array.isArray(selected.floor?.detailFrames) ? [...selected.floor.detailFrames] : [] }
       scene.__dungeonEnvironmentDecorationFrames = Array.isArray(selected.floorDecoration?.frameset) ? [...selected.floorDecoration.frameset] : []
       scene.__dungeonEnvironmentWaterFrames = Array.isArray(selected.water?.coastFrames) ? [...selected.water.coastFrames] : []
-      scene.__dungeonEnvironmentWaterCoasts = selected.water?.coasts ? structuredClone(selected.water.coasts) : null
+      scene.__dungeonEnvironmentWaterCoasts = selected.water?.coasts ? cloneRuntimeValue(selected.water.coasts) : null
       scene.__dungeonEnvironmentTorchVariants = Array.isArray(selected.torch?.variants) ? [...selected.torch.variants] : []
       const queue = [
         ['dungeon-tileset-floor', selected.floor], ['dungeon-tileset-floor-decoration', selected.floorDecoration], ['dungeon-tileset-wall', selected.wall],
@@ -471,7 +476,7 @@ function enemyIsFlying(enemy) {
 function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry }
 function playerTrapAt(position, geometry) { return (geometry?.traps ?? []).find((trap) => Math.hypot(trap.x - position.x, trap.y - position.y) <= TRAP_RANGE) ?? null }
 
-export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
+export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random, runSeed = null } = {}) {
   if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
   scene.__dungeonSpatialInstalled = true
   let chests = [], trapCooldownUntil = 0
@@ -485,7 +490,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   const refreshRoom = ({ geometry: fixedGeometry = null } = {}) => {
     const progress = getProgress() ?? {}
     const floor = progress.floor ?? scene.floor ?? 1
-    const geometry = fixedGeometry ?? roomGeometry(null, floor, random)
+    const geometry = fixedGeometry ?? roomGeometry(null, floor, random, { runSeed })
     scene.clearArena()
     for (const chest of chests) hideChestPrompt(chest)
     chests = []
@@ -613,6 +618,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   scene.events.on('update', updateInteraction)
 
   const openNearestChest = () => {
+    if (scene.__worldChestRequest) { scene.__worldChestRequest(); return }
     const chest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
     if (!chest || chest.opened) return
     openChestVisual(scene, chest); hideChestPrompt(chest)
@@ -625,6 +631,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     })
   }
   chestKey.on('down', openNearestChest)
+  scene.__openNearestChest = openNearestChest
   refreshRoom()
 
   scene.events.once('shutdown', () => {
@@ -638,8 +645,11 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     scene.updateBoss = originalUpdateBoss
   })
 
-  const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
+  const ready = loadEnvironmentTextures(scene).then((loaded) => {
+    if (loaded && scene.__roomGeometry) refreshRoom({ geometry: scene.__roomGeometry })
+    return loaded
+  })
+  const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests], ready }
   scene.__dungeonSpatial = api
-  loadEnvironmentTextures(scene).then((loaded) => { if (loaded && scene.__roomGeometry) refreshRoom({ geometry: scene.__roomGeometry }) })
   return api
 }

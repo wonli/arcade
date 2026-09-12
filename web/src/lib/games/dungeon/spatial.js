@@ -8,6 +8,11 @@ const BEAM_PADDING = 18
 const rect = (x, y, width, height, kind = 'wall') => ({ x, y, width, height, kind })
 const point = (x, y) => ({ x, y })
 
+function cloneGeometry(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value))
+}
+
 export const ROOM_TEMPLATES = ['open-hall', 'cross-hall', 'broken-ruins', 'twin-pools', 'pillar-maze', 'narrow-bridge']
 
 export function roomTemplateForFloor(floor = 1) {
@@ -68,7 +73,7 @@ function proceduralGeometry(floor, random, explicitRunSeed = null) {
     const runSeed = String(explicitRunSeed)
     const key = `${runSeed}:${normalizedFloor}`
     if (!explicitProceduralCache.has(key)) explicitProceduralCache.set(key, generateDungeonGeometry({ runSeed, floor: normalizedFloor }))
-    return structuredClone(explicitProceduralCache.get(key))
+    return cloneGeometry(explicitProceduralCache.get(key))
   }
   if (proceduralRunSeed == null || (normalizedFloor === 1 && highestProceduralFloor > 1)) {
     const roll = typeof random === 'function' ? random() : Math.random()
@@ -78,7 +83,7 @@ function proceduralGeometry(floor, random, explicitRunSeed = null) {
   }
   highestProceduralFloor = Math.max(highestProceduralFloor, normalizedFloor)
   if (!proceduralCache.has(normalizedFloor)) proceduralCache.set(normalizedFloor, generateDungeonGeometry({ runSeed: proceduralRunSeed, floor: normalizedFloor }))
-  return structuredClone(proceduralCache.get(normalizedFloor))
+  return cloneGeometry(proceduralCache.get(normalizedFloor))
 }
 
 export function roomGeometry(template = null, floor = 1, random = Math.random, { runSeed = null } = {}) {

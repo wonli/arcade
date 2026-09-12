@@ -63,6 +63,12 @@ class ArcadeSocket {
     return response.data
   }
 
+  publish(action: string, params: Record<string, any> = {}) {
+    if (!this.ws?.canConnect()) return false
+    this.ws.send(action, params, () => {})
+    return true
+  }
+
   subscribe(action: string, listener: MessageListener) {
     if (!this.ws) throw new Error('websocket is not connected')
 

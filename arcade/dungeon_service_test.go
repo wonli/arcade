@@ -35,6 +35,18 @@ func TestDungeonRequiresExactlyTwoPlayers(t *testing.T) {
 	}
 }
 
+func TestDungeonGuestCanLeaveAndBeReplacedAfterTheRoomStarts(t *testing.T) {
+	s := NewService()
+	r, err := s.Create("dungeon", 2)
+	if err != nil { t.Fatal(err) }
+	if err := s.Join(r.ID, "host", "Host"); err != nil { t.Fatal(err) }
+	if err := s.Join(r.ID, "guest-1", "Guest 1"); err != nil { t.Fatal(err) }
+	if err := s.LeaveDungeon(r.ID, "guest-1"); err != nil { t.Fatal(err) }
+	if r.HasPlayer("guest-1") || !r.HasPlayer("host") || !r.Started() { t.Fatalf("room did not retain only its active host: %#v", r.Snapshot()) }
+	if err := s.Join(r.ID, "guest-2", "Guest 2"); err != nil { t.Fatal(err) }
+	if !r.HasPlayer("guest-2") || len(r.PlayerIDs()) != 2 { t.Fatalf("replacement guest did not occupy the open seat: %#v", r.Snapshot()) }
+}
+
 func TestDungeonRelayAuthorizesMembersAndReservesWorldStateForHost(t *testing.T) {
 	s := NewService()
 	r, err := s.Create("dungeon", 2)
