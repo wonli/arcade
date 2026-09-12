@@ -1,6 +1,7 @@
 import { roomAnchor } from './room-anchors.js'
 import { circleHitsSolid } from './spatial.js'
 import { canRetreatFromFloor, restoreChestState, restoreDropState, snapshotFloorState } from './floor-history.js'
+import { createRetreatRequest } from './retreat-flow.js'
 
 const PLAYER_RADIUS = 18
 const PORTAL_CLEARANCE = 44
@@ -84,13 +85,48 @@ function placeAfterRestore(scene, direction) {
   scene.updateHealthBar?.(scene.playerBar, position.x, position.y - 42, scene.playerState.hp, scene.playerState.maxHp)
 }
 
-function defaultConfirmRetreat() {
-  const confirm = globalThis?.confirm
-  if (typeof confirm !== 'function') return false
-  return confirm('返回上一层？\nReturn to the previous floor?')
+function defaultRetreatPrompt({ confirm, cancel }) {
+  if (typeof document === 'undefined') {
+    cancel()
+    return
+  }
+
+  const root = document.createElement('div')
+  root.setAttribute('role', 'dialog')
+  root.setAttribute('aria-modal', 'true')
+  root.setAttribute('aria-label', '返回上一层')
+  root.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:20px;background:rgba(4,5,6,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);touch-action:none;'
+
+  const panel = document.createElement('div')
+  panel.style.cssText = 'width:min(360px,calc(100vw - 32px));box-sizing:border-box;padding:22px;border:1px solid #39414b;background:#101319;box-shadow:10px 10px 0 rgba(0,0,0,.45);color:#f4f0e8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
+  panel.innerHTML = '<div style="font-size:11px;font-weight:900;letter-spacing:.16em;color:#67a8ff;margin-bottom:10px">BACKTRACK</div><strong style="display:block;font-size:20px;line-height:1.2;margin-bottom:8px">返回上一层？</strong><p style="margin:0 0 20px;color:#8c96a1;font:12px/1.6 Inter,system-ui,sans-serif">当前楼层进度会保留，你可以之后再次回来。</p>'
+
+  const actions = document.createElement('div')
+  actions.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;'
+  const stay = document.createElement('button')
+  stay.type = 'button'
+  stay.textContent = '继续探索'
+  stay.style.cssText = 'min-height:52px;border:1px solid #39414b;background:#171b21;color:#d9dee4;font:800 12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;touch-action:manipulation;'
+  const back = document.createElement('button')
+  back.type = 'button'
+  back.textContent = '返回上一层'
+  back.style.cssText = 'min-height:52px;border:1px solid #c1ff56;background:#c1ff56;color:#080a0d;font:900 12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;touch-action:manipulation;'
+  actions.append(stay, back)
+  panel.append(actions)
+  root.append(panel)
+  document.body.append(root)
+
+  const close = (action) => {
+    root.remove()
+    action()
+  }
+  stay.addEventListener('click', () => close(cancel), { once: true })
+  back.addEventListener('click', () => close(confirm), { once: true })
+  root.addEventListener('pointerdown', (event) => event.stopPropagation())
+  stay.focus({ preventScroll: true })
 }
 
-export function installDungeonBacktracking(scene, { onProgress = () => {}, confirmRetreat = defaultConfirmRetreat } = {}) {
+export function installDungeonBacktracking(scene, { onProgress = () => {}, onRetreatRequest = defaultRetreatPrompt, confirmRetreat } = {}) {
   if (!scene || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
   scene.__dungeonBacktrackingInstalled = true
 
@@ -173,6 +209,35 @@ export function installDungeonBacktracking(scene, { onProgress = () => {}, confi
     refreshBackPortal()
   }
 
+  const requestRetreat = createRetreatRequest({
+    onRequest(actions) {
+      if (typeof confirmRetreat === 'function') {
+        if (confirmRetreat()) actions.confirm()
+        else actions.cancel()
+        return
+      }
+      scene.scene?.pause?.()
+      onRetreatRequest?.({
+        confirm() {
+          actions.confirm()
+          scene.scene?.resume?.()
+        },
+        cancel() {
+          actions.cancel()
+          scene.scene?.resume?.()
+        },
+      })
+    },
+    onConfirm() {
+      retreatPromptOpen = false
+      retreat()
+    },
+    onCancel() {
+      retreatPromptOpen = false
+      retreatPromptDismissed = true
+    },
+  })
+
   const updateBackPortal = () => {
     if (!backPortal || backtracked) return
     const available = canRetreatFromFloor(scene)
@@ -184,14 +249,7 @@ export function installDungeonBacktracking(scene, { onProgress = () => {}, confi
     if (distance > PORTAL_TRIGGER_RADIUS || retreatPromptOpen || retreatPromptDismissed) return
 
     retreatPromptOpen = true
-    let confirmed = false
-    try {
-      confirmed = confirmRetreat?.() === true
-    } finally {
-      retreatPromptOpen = false
-    }
-    if (confirmed) retreat()
-    else retreatPromptDismissed = true
+    requestRetreat()
   }
   scene.events?.on?.('update', updateBackPortal)
 
