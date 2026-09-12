@@ -1,0 +1,139 @@
+import { roomAnchor } from './room-anchors.js'
+import { canRetreatFromFloor, restoreChestState, restoreDropState, snapshotFloorState } from './floor-history.js'
+
+function destroyBackPortal(portal) {
+  if (!portal) return
+  for (const object of portal.objects ?? []) object?.destroy?.()
+}
+
+function setBackPortalVisible(portal, visible) {
+  for (const object of portal?.objects ?? []) object?.setVisible?.(visible)
+  if (portal) portal.visible = visible
+}
+
+function createBackPortal(scene) {
+  const spawn = roomAnchor(scene.__roomGeometry, 'spawn')
+  const x = spawn.x
+  const y = Math.min((scene.__roomGeometry?.height ?? 600) - 72, spawn.y + 74)
+  const objects = []
+  if (scene.add) {
+    const glow = scene.add.circle?.(x, y, 34, 0x67a8ff, 0.07)?.setDepth?.(8)
+    const ring = scene.add.circle?.(x, y, 23, 0x17365f, 0.34)?.setStrokeStyle?.(4, 0x67a8ff, 0.9)?.setDepth?.(9)
+    const text = scene.add.text?.(x, y, '↩', { fontSize: '19px', fontStyle: 'bold', color: '#b8d5ff', stroke: '#08090b', strokeThickness: 4 })?.setOrigin?.(0.5)?.setDepth?.(10)
+    for (const object of [glow, ring, text]) if (object) objects.push(object)
+    if (glow) scene.tweens?.add?.({ targets: glow, scale: 1.25, alpha: 0.16, duration: 760, yoyo: true, repeat: -1 })
+  }
+  return { x, y, unlockAt: (scene.time?.now ?? 0) + 650, objects, visible: true }
+}
+
+function placeAfterRestore(scene, direction) {
+  const geometry = scene.__roomGeometry
+  const anchor = roomAnchor(geometry, direction === 'back' ? 'exit' : 'spawn')
+  const offset = direction === 'back' ? -72 : 0
+  const x = anchor.x
+  const y = Math.max(72, Math.min((geometry?.height ?? 600) - 72, anchor.y + offset))
+  scene.playerState.x = x
+  scene.playerState.y = y
+  scene.player?.setPosition?.(x, y)
+  scene.updateHealthBar?.(scene.playerBar, x, y - 42, scene.playerState.hp, scene.playerState.maxHp)
+}
+
+export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}) {
+  if (!scene || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
+  scene.__dungeonBacktrackingInstalled = true
+
+  const originalAdvanceFloor = scene.advanceFloor.bind(scene)
+  const originalStartFloor = scene.startFloor.bind(scene)
+  const originalGetProgress = scene.__infiniteDungeon.getProgress.bind(scene.__infiniteDungeon)
+  let previousState = null
+  let currentState = null
+  let backtracked = false
+  let backPortal = null
+
+  const visibleProgress = () => backtracked && previousState ? previousState.progress : originalGetProgress()
+  scene.__infiniteDungeon.getProgress = visibleProgress
+
+  const capture = () => snapshotFloorState(scene, visibleProgress(), scene.__dungeonSpatial, { fortuneActive: Boolean(visibleProgress()?.fortuneActive) })
+
+  const removeBackPortal = () => {
+    destroyBackPortal(backPortal)
+    backPortal = null
+  }
+
+  const refreshBackPortal = () => {
+    removeBackPortal()
+    if (!previousState || backtracked) return
+    backPortal = createBackPortal(scene)
+  }
+
+  const restoreState = (state, direction) => {
+    if (!state) return
+    removeBackPortal()
+    scene.destroyPortal?.()
+    scene.clearEnemies?.()
+    scene.clearEnemyProjectiles?.()
+    scene.clearDrops?.()
+    scene.floor = state.progress.floor
+    scene.floorCleared = state.cleared
+    scene.floorKills = state.floorKills ?? 0
+
+    if (!state.cleared) {
+      originalStartFloor(false)
+      if (state.geometry) scene.__dungeonSpatial.refreshRoom?.({ geometry: state.geometry })
+    } else if (state.geometry) {
+      scene.__dungeonSpatial.refreshRoom?.({ geometry: state.geometry })
+    } else scene.drawArena?.()
+
+    restoreChestState(scene, state.chests)
+    if (state.cleared) restoreDropState(scene, state.drops)
+    if (state.cleared) scene.openPortal?.()
+    placeAfterRestore(scene, direction)
+    scene.showBanner?.(`${direction === 'back' ? '↩ ' : ''}${state.progress.floor}`, direction === 'back' ? '#67a8ff' : '#f4f0e8', 30)
+  }
+
+  const retreat = () => {
+    if (!previousState || backtracked || !canRetreatFromFloor(scene)) return false
+    currentState = capture()
+    backtracked = true
+    restoreState(previousState, 'back')
+    onProgress(visibleProgress())
+    return true
+  }
+
+  scene.advanceFloor = function advanceFloorWithHistory() {
+    if (backtracked) {
+      previousState = capture()
+      backtracked = false
+      restoreState(currentState, 'forward')
+      currentState = null
+      refreshBackPortal()
+      onProgress(visibleProgress())
+      return
+    }
+
+    previousState = capture()
+    originalAdvanceFloor()
+    currentState = null
+    refreshBackPortal()
+  }
+
+  const updateBackPortal = () => {
+    if (!backPortal || backtracked) return
+    const available = canRetreatFromFloor(scene)
+    if (backPortal.visible !== available) setBackPortalVisible(backPortal, available)
+    if (!available || (scene.time?.now ?? 0) < backPortal.unlockAt) return
+    if (Math.hypot(scene.playerState.x - backPortal.x, scene.playerState.y - backPortal.y) <= 34) retreat()
+  }
+  scene.events?.on?.('update', updateBackPortal)
+
+  scene.events?.once?.('shutdown', () => {
+    removeBackPortal()
+    scene.events?.off?.('update', updateBackPortal)
+    scene.advanceFloor = originalAdvanceFloor
+    scene.__infiniteDungeon.getProgress = originalGetProgress
+  })
+
+  const api = { retreat, getVisibleProgress: visibleProgress }
+  scene.__dungeonBacktracking = api
+  return api
+}

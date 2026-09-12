@@ -8,6 +8,7 @@
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
   import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
+  import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
   import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
   import { installDungeonTouchInput, joystickVector } from '$lib/games/dungeon/touch-runtime.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
@@ -165,6 +166,7 @@
           label: (key) => t(key),
         })
         installDungeonAttackRuntime(scene)
+        installDungeonBacktracking(scene, { onProgress(next) { progress = next } })
         touchInput = installDungeonTouchInput(scene)
       }
       installRuntime()

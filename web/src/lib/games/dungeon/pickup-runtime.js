@@ -26,6 +26,7 @@ function nearOpenedChest(scene, x, y) {
 
 export function prepareDropItem(scene, x, y, item, random = Math.random) {
   if (!item) return item
+  if (scene?.__restoringFloor) return item
   if (nearOpenedChest(scene, x, y) && random() < 0.20) {
     return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
   }
@@ -47,7 +48,7 @@ function currentWeapon(scene) {
 }
 
 export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random } = {}) {
-  if (!scene || scene.__pickupInteractionInstalled) return
+  if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
 
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
@@ -74,6 +75,13 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) {
     return spawnDropWithMotion(x, y, item)
   }
+
+  const api = {
+    spawnExact(x, y, item) {
+      return spawnDropWithMotion(x, y, item, { prepare: false })
+    },
+  }
+  scene.__dungeonPickupRuntime = api
 
   const publish = (next) => {
     if (selected === next) return
@@ -129,5 +137,8 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
     publish(null)
+    if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
+
+  return api
 }
