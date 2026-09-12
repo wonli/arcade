@@ -69,7 +69,7 @@ export function spatialAnimation(kind, animations = {}) {
 }
 
 export function spatialSurfaceTint(kind) {
-  if (kind === 'floor') return 0xb49a82
+  if (kind === 'floor') return null
   if (kind === 'boundary' || kind === 'wall') return 0x667488
   if (kind === 'water') return 0x7db5c8
   return 0xaeb5bd
@@ -161,6 +161,46 @@ function addStackedTileProp(scene, x, bottomY, key, tileFrames, targetHeight, de
   return sprites
 }
 
+function renderAuthoredFloorSkin(scene, geometry, floorTexture, frame, skin) {
+  const inset = 48
+  const left = inset
+  const top = inset
+  const right = geometry.width - inset
+  const bottom = geometry.height - inset
+  const width = right - left
+  const height = bottom - top
+
+  addTiledTexture(scene, left + width / 2, top + height / 2, width, height, floorTexture, 1, null, frame)
+
+  const edge = skin?.autotile
+  if (edge) {
+    const size = 16
+    addTiledTexture(scene, left + width / 2, top + size / 2, width - size * 2, size, floorTexture, 1.2, null, edge.top)
+    addTiledTexture(scene, left + width / 2, bottom - size / 2, width - size * 2, size, floorTexture, 1.2, null, edge.bottom)
+    addTiledTexture(scene, left + size / 2, top + height / 2, size, height - size * 2, floorTexture, 1.2, null, edge.left)
+    addTiledTexture(scene, right - size / 2, top + height / 2, size, height - size * 2, floorTexture, 1.2, null, edge.right)
+    addScaledImage(scene, left + size / 2, top + size / 2, floorTexture, size, 1.21, edge.topLeft)
+    addScaledImage(scene, right - size / 2, top + size / 2, floorTexture, size, 1.21, edge.topRight)
+    addScaledImage(scene, left + size / 2, bottom - size / 2, floorTexture, size, 1.21, edge.bottomLeft)
+    addScaledImage(scene, right - size / 2, bottom - size / 2, floorTexture, size, 1.21, edge.bottomRight)
+  }
+
+  const detailFrames = Array.isArray(skin?.detailFrames) ? skin.detailFrames : []
+  if (!detailFrames.length) return
+  const step = 96
+  let row = 0
+  for (let y = top + 56; y < bottom - 40; y += step, row++) {
+    let column = 0
+    for (let x = left + 56; x < right - 40; x += step, column++) {
+      const seed = row * 17 + column * 31
+      if (seed % 5 !== 0) continue
+      const frameIndex = Math.abs(seed) % detailFrames.length
+      const detail = addScaledImage(scene, x + ((seed % 3) - 1) * 9, y + (((seed >> 1) % 3) - 1) * 7, floorTexture, 16, 1.3, detailFrames[frameIndex])
+      detail.setAlpha?.(0.72)
+    }
+  }
+}
+
 function renderFloor(scene, geometry) {
   const background = track(scene, scene.add.graphics().setDepth(0))
   background.fillStyle(0x080a0d, 1).fillRect(0, 0, geometry.width, geometry.height)
@@ -169,20 +209,11 @@ function renderFloor(scene, geometry) {
   const frames = scene.__dungeonEnvironmentFrames ?? {}
   const stacks = scene.__dungeonEnvironmentStacks ?? {}
   const animations = scene.__dungeonEnvironmentAnimations ?? {}
+  const floorSkin = scene.__dungeonEnvironmentFloorSkin ?? null
   const floorTexture = spatialTextureKey('floor', available)
 
   if (floorTexture) {
-    addTiledTexture(
-      scene,
-      geometry.width / 2,
-      geometry.height / 2,
-      geometry.width - tile * 2,
-      geometry.height - tile * 2,
-      floorTexture,
-      1,
-      spatialSurfaceTint('floor'),
-      spatialTextureFrame('floor', frames),
-    )
+    renderAuthoredFloorSkin(scene, geometry, floorTexture, spatialTextureFrame('floor', frames), floorSkin)
   } else {
     for (let y = tile; y < geometry.height - tile; y += tile) {
       for (let x = tile; x < geometry.width - tile; x += tile) {
@@ -418,6 +449,10 @@ async function loadEnvironmentTextures(scene) {
           .filter(([, asset]) => Array.isArray(asset?.animation) && asset.animation.length)
           .map(([kind, asset]) => [kind, asset.animation.map((entry) => ({ ...entry }))]),
       )
+      scene.__dungeonEnvironmentFloorSkin = {
+        autotile: selected.floor?.autotile ? { ...selected.floor.autotile } : null,
+        detailFrames: Array.isArray(selected.floor?.detailFrames) ? [...selected.floor.detailFrames] : [],
+      }
       const queue = [
         ['dungeon-tileset-floor', selected.floor],
         ['dungeon-tileset-wall', selected.wall],
