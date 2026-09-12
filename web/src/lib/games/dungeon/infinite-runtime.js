@@ -34,6 +34,12 @@ export function progressSnapshot(progress, fortunePending = false, fortuneActive
   }
 }
 
+export function bindRestChoicePointer(text, index, choose) {
+  text?.setInteractive?.()
+  text?.on?.('pointerdown', () => choose(index))
+  return text
+}
+
 function promoteEquipment(item, floor, fortuneActive, random) {
   if (!item?.type?.startsWith('weapon.') || random() >= lootPromotionChance(floor, fortuneActive)) return item
   const index = RARITIES.indexOf(item.rarity)
@@ -210,16 +216,6 @@ export function installInfiniteDungeon(scene, {
     const choiceLabels = restChoices()
     const choiceTexts = []
 
-    const showChoices = () => {
-      if (choicesVisible || used) return
-      choicesVisible = true
-      choiceLabels.forEach((choice, index) => {
-        const text = scene.add.text(x, y + 48 + index * 24, `${index + 1}. ${label(`rest.${choice}`)}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', color: index === 0 ? '#70ff9f' : index === 1 ? '#67a8ff' : '#c984ff', stroke: '#08090b', strokeThickness: 3 }).setOrigin(0.5).setDepth(31)
-        choiceTexts.push(text)
-        objects.push(text)
-      })
-    }
-
     const choose = (index) => {
       if (!choicesVisible || used) return
       const choice = choiceLabels[index]
@@ -235,6 +231,17 @@ export function installInfiniteDungeon(scene, {
       for (const text of choiceTexts) text.destroy()
       title.setText(label('restComplete'))
       openInfinitePortal()
+    }
+
+    const showChoices = () => {
+      if (choicesVisible || used) return
+      choicesVisible = true
+      choiceLabels.forEach((choice, index) => {
+        const text = scene.add.text(x, y + 48 + index * 24, `${index + 1}. ${label(`rest.${choice}`)}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', color: index === 0 ? '#70ff9f' : index === 1 ? '#67a8ff' : '#c984ff', stroke: '#08090b', strokeThickness: 3 }).setOrigin(0.5).setDepth(31)
+        bindRestChoicePointer(text, index, choose)
+        choiceTexts.push(text)
+        objects.push(text)
+      })
     }
 
     keys.forEach((key, index) => key.on('down', () => choose(index)))
