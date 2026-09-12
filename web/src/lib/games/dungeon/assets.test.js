@@ -40,3 +40,14 @@ test('spatial renderer reuses loaded dungeon textures for floor walls and obstac
   assert.equal(runtime.spatialTextureKey('broken-wall', { floor: true, wall: true }), 'dungeon-wall')
   assert.equal(runtime.spatialTextureKey('floor', { floor: false, wall: true }), null)
 })
+
+test('floor walls and obstacles have deliberately different visual tones', async () => {
+  const runtime = await import('./spatial-runtime.js')
+  assert.equal(typeof runtime.spatialSurfaceTint, 'function')
+  const floor = runtime.spatialSurfaceTint('floor')
+  const wall = runtime.spatialSurfaceTint('boundary')
+  const obstacle = runtime.spatialSurfaceTint('pillar')
+  assert.notEqual(floor, wall)
+  assert.notEqual(wall, obstacle)
+  assert.notEqual(floor, obstacle)
+})
