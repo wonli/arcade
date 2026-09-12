@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { chooseDungeonAssets, directionFromInput, rarityPresentation, floorOutcome, roomLayoutForFloor } from './scene.js'
-import { pickupIntent } from './pickup.js'
+import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 
 const manifest = {
   assets: [
@@ -53,6 +53,15 @@ test('weapon drops require confirmation while potions remain automatic', () => {
   assert.equal(pickupIntent({ type: 'weapon.dungeon_blade' }), 'confirm')
   assert.equal(pickupIntent({ type: 'consumable.health_potion' }), 'auto')
   assert.equal(pickupIntent(null), 'ignore')
+})
+
+test('nearest weapon inside interaction radius wins without selecting potions', () => {
+  const player = { x: 100, y: 100 }
+  const farWeapon = { x: 132, y: 100, item: { type: 'weapon.dungeon_blade', damage: 8 } }
+  const nearWeapon = { x: 112, y: 100, item: { type: 'weapon.dungeon_blade', damage: 11 } }
+  const potion = { x: 104, y: 100, item: { type: 'consumable.health_potion' } }
+  assert.equal(nearestConfirmableDrop(player, [farWeapon, potion, nearWeapon], 40), nearWeapon)
+  assert.equal(nearestConfirmableDrop(player, [farWeapon], 20), null)
 })
 
 test('rarity presentation makes rare loot visually stronger', () => {
