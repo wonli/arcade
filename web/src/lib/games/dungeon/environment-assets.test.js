@@ -81,7 +81,9 @@ test('exposes Dungeon3 bridge stairs doors props traps and light variants', () =
     assert.ok(Array.isArray(assets[kind]?.frameset) && assets[kind].frameset.length > 0, `${kind} frameset missing`)
   }
   assert.equal(assets.bridge.path.endsWith('/Tiled_files/Arches_columns.png'), true)
-  assert.ok(assets.bridge.frameset.every((frame) => frame >= 135), 'bridge should come from the right-side Arches_columns platform tiles')
+  assert.equal(assets.bridge.frameWidth, 16)
+  assert.equal(assets.bridge.frameHeight, 32)
+  assert.deepEqual(assets.bridge.frameset, [76])
   assert.ok(Array.isArray(assets.torch.variants) && assets.torch.variants.length > 1)
 })
 
