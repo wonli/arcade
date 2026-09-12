@@ -96,7 +96,9 @@ function circleRectIntersects(position, radius, area) {
 }
 
 export function circleHitsSolid(position, radius, geometry) {
-  return (geometry?.solids ?? []).some((solid) => circleRectIntersects(position, radius, solid))
+  const solids = geometry?.solids ?? []
+  const water = geometry?.water ?? []
+  return [...solids, ...water].some((solid) => circleRectIntersects(position, radius, solid))
 }
 
 export function movementWithCollision(from, delta, radius, geometry) {
@@ -121,7 +123,7 @@ export function movementWithCollision(from, delta, radius, geometry) {
 export function terrainAt(position, geometry) {
   const water = (geometry?.water ?? []).some((area) => position.x >= area.x && position.x <= area.x + area.width && position.y >= area.y && position.y <= area.y + area.height)
   return water
-    ? { type: 'water', speedMultiplier: 0.62, navCost: 2.4 }
+    ? { type: 'water', speedMultiplier: 0, navCost: Infinity }
     : { type: 'floor', speedMultiplier: 1, navCost: 1 }
 }
 
