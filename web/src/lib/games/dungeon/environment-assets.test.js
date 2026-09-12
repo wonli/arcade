@@ -9,6 +9,7 @@ const manifest = {
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/Water_coasts_animation.png', kind: 'water', width: 464, height: 512, frames: 928, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/water_details_animation.png', kind: 'water', width: 592, height: 1248, frames: 2886, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/Arches_columns.png', kind: 'obstacle', width: 320, height: 224, frames: 280, frameWidth: 16, frameHeight: 16 },
+    { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/plates.png', kind: 'floor', width: 208, height: 128, frames: 104, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/torches.png', kind: 'torch', width: 224, height: 288, frames: 252, frameWidth: 16, frameHeight: 16 },
     { source: 'dungeon-tileset', path: '/assets/dungeon-tileset/Tiled_files/chest_lever.png', kind: 'chest', width: 192, height: 176, frames: 132, frameWidth: 16, frameHeight: 16 },
   ],
@@ -37,10 +38,12 @@ const tiledManifest = {
         },
         walls_floor: { name: 'walls_floor', firstGid: 3815, tileCount: 442 },
         Arches_columns: { name: 'Arches_columns', firstGid: 4257, tileCount: 280 },
+        plates: { name: 'plates', firstGid: 4537, tileCount: 104 },
       },
       layers: {
         Floor: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
         floor1_details: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [4216, 4218, 4219, 4233, 4234, 0] }] },
+        plates1: { chunks: [{ x: 0, y: 0, width: 8, height: 1, gids: [4552, 4539, 4620, 4633, 4602, 4542, 4552, 4539] }] },
         Walls: {
           chunks: [{
             x: 0,
@@ -57,6 +60,7 @@ const tiledManifest = {
         floor2_dark: [{ chunks: [{ x: 0, y: 0, width: 6, height: 3, gids: [4190,4191,4191,4191,4191,4192,4207,4208,4208,4208,4208,4209,4224,4225,4225,4225,4225,4226] }] }],
         Floor1_dark: [],
         floor1_details: [{ chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [4216, 4218, 4219, 4233, 4234, 0] }] }],
+        plates1: [{ chunks: [{ x: 0, y: 0, width: 8, height: 1, gids: [4552, 4539, 4620, 4633, 4602, 4542, 4552, 4539] }] }],
       },
     },
   },
@@ -102,6 +106,13 @@ test('keeps the opaque Floor base and layers authored dark edges and sparse deta
     bottomLeft: 409, bottom: 410, bottomRight: 411,
   })
   assert.deepEqual(assets.floor.detailFrames, [401, 403, 404, 418, 419])
+})
+
+test('derives floor decorations from Dungeon3 plates1', () => {
+  const assets = chooseEnvironmentAssets(tiledManifest)
+  assert.equal(assets.floorDecoration.path.endsWith('/Tiled_files/plates.png'), true)
+  assert.deepEqual(assets.floorDecoration.frameset, [15, 2, 83, 96, 65, 5])
+  assert.equal(assets.floorDecoration.authoredBy, 'Dungeon3/plates1')
 })
 
 test('derives water frames while preserving an authored multi-tile wall motif', () => {
