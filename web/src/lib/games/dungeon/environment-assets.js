@@ -130,7 +130,6 @@ function authoredFloorAutotile(map) {
       }
     }
   }
-  // These nine GIDs form the authored 3x3 dark-floor edge family visible throughout Dungeon3.
   const gids = [4190, 4191, 4192, 4207, 4208, 4209, 4224, 4225, 4226]
   if (!gids.slice(3).every((gid) => used.has(gid))) return null
   const frame = (gid) => gid - first
@@ -160,9 +159,12 @@ export function chooseEnvironmentAssets(manifest = {}) {
     ? null
     : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
 
+  const floorFrame = floorAutotile?.center ?? authoredFloor ?? 311
+  const floorAuthoredBy = floorAutotile ? 'Dungeon3/floor2_dark' : authoredFloor == null ? null : 'Dungeon3/Floor'
+
   return {
-    floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : {
-      authoredBy: 'Dungeon3/Floor',
+    floor: withFrame(wallsFloor, floorFrame, {
+      ...(floorAuthoredBy ? { authoredBy: floorAuthoredBy } : {}),
       ...(floorAutotile ? { autotile: floorAutotile } : {}),
     }),
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
