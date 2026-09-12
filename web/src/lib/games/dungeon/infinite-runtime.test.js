@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { encounterPlan, lootPromotionChance } from './infinite-runtime.js'
+import { encounterPlan, lootPromotionChance, progressSnapshot } from './infinite-runtime.js'
 
 test('encounter plans distinguish combat elite rest and boss rooms', () => {
   assert.equal(encounterPlan({ floor: 3, chapter: 1, roomRole: 'rest' }).kind, 'rest')
@@ -28,4 +28,20 @@ test('loot quality improves gradually with depth and fortune without becoming au
   const fortunate = lootPromotionChance(30, true)
   assert.ok(fortunate > deep)
   assert.ok(fortunate < 0.8)
+})
+
+test('progress snapshot is synchronous runtime state including room role and fortune flags', () => {
+  const progress = {
+    floor: 9,
+    chapter: 2,
+    chapterFloor: 4,
+    chapterLength: 5,
+    chapterPlan: ['combat', 'elite', 'rest', 'combat', 'boss'],
+  }
+  assert.deepEqual(progressSnapshot(progress, true, false), {
+    ...progress,
+    roomRole: 'combat',
+    fortunePending: true,
+    fortuneActive: false,
+  })
 })
