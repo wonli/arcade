@@ -25,44 +25,32 @@ function boundarySolids() {
 const TEMPLATES = {
   'open-hall': {
     solids: [rect(126, 126, 42, 42, 'pillar'), rect(792, 126, 42, 42, 'pillar'), rect(126, 432, 42, 42, 'pillar'), rect(792, 432, 42, 42, 'pillar')],
-    water: [],
-    torches: [point(96, 76), point(864, 76), point(96, 524), point(864, 524)],
-    chests: [point(480, 116)],
+    water: [], torches: [point(96, 76), point(864, 76), point(96, 524), point(864, 524)], chests: [point(480, 116)],
     spawnPoints: [point(96, 112), point(864, 112), point(100, 488), point(860, 488), point(480, 92), point(480, 508)],
   },
   'cross-hall': {
     solids: [rect(350, 122, 260, 24, 'wall'), rect(350, 454, 260, 24, 'wall'), rect(218, 222, 24, 156, 'wall'), rect(718, 222, 24, 156, 'wall'), rect(338, 279, 42, 42, 'pillar'), rect(580, 279, 42, 42, 'pillar')],
-    water: [],
-    torches: [point(305, 92), point(655, 92), point(305, 508), point(655, 508)],
-    chests: [point(480, 300)],
+    water: [], torches: [point(305, 92), point(655, 92), point(305, 508), point(655, 508)], chests: [point(480, 300)],
     spawnPoints: [point(102, 100), point(858, 100), point(102, 500), point(858, 500), point(480, 82), point(480, 518)],
   },
   'broken-ruins': {
     solids: [rect(204, 176, 176, 24, 'wall'), rect(584, 392, 190, 24, 'wall'), rect(424, 126, 42, 42, 'pillar'), rect(714, 176, 42, 42, 'pillar'), rect(174, 398, 42, 42, 'pillar')],
-    water: [rect(390, 332, 180, 88, 'water')],
-    torches: [point(104, 88), point(846, 126), point(142, 500), point(808, 504)],
-    chests: [point(750, 310)],
+    water: [rect(390, 332, 180, 88, 'water')], torches: [point(104, 88), point(846, 126), point(142, 500), point(808, 504)], chests: [point(750, 310)],
     spawnPoints: [point(98, 112), point(858, 122), point(110, 486), point(850, 486), point(480, 90), point(480, 510)],
   },
   'twin-pools': {
     solids: [rect(455, 120, 50, 118, 'wall'), rect(455, 362, 50, 118, 'wall')],
-    water: [rect(150, 190, 250, 210, 'water'), rect(560, 190, 250, 210, 'water')],
-    torches: [point(94, 94), point(866, 94), point(94, 506), point(866, 506)],
-    chests: [point(480, 300)],
+    water: [rect(150, 190, 250, 210, 'water'), rect(560, 190, 250, 210, 'water')], torches: [point(94, 94), point(866, 94), point(94, 506), point(866, 506)], chests: [point(480, 300)],
     spawnPoints: [point(110, 110), point(850, 110), point(110, 490), point(850, 490), point(480, 84), point(480, 516)],
   },
   'pillar-maze': {
     solids: [rect(198, 152, 44, 44, 'pillar'), rect(358, 152, 44, 44, 'pillar'), rect(558, 152, 44, 44, 'pillar'), rect(718, 152, 44, 44, 'pillar'), rect(278, 278, 44, 44, 'pillar'), rect(678, 278, 44, 44, 'pillar'), rect(198, 404, 44, 44, 'pillar'), rect(358, 404, 44, 44, 'pillar'), rect(558, 404, 44, 44, 'pillar'), rect(718, 404, 44, 44, 'pillar')],
-    water: [],
-    torches: [point(94, 92), point(866, 92), point(94, 508), point(866, 508)],
-    chests: [point(480, 474)],
+    water: [], torches: [point(94, 92), point(866, 92), point(94, 508), point(866, 508)], chests: [point(480, 474)],
     spawnPoints: [point(100, 110), point(860, 110), point(100, 490), point(860, 490), point(480, 92), point(480, 508)],
   },
   'narrow-bridge': {
     solids: [rect(48, 176, 320, 28, 'wall'), rect(592, 176, 320, 28, 'wall'), rect(48, 396, 320, 28, 'wall'), rect(592, 396, 320, 28, 'wall')],
-    water: [rect(48, 204, 320, 192, 'water'), rect(592, 204, 320, 192, 'water')],
-    torches: [point(410, 166), point(550, 166), point(410, 434), point(550, 434)],
-    chests: [point(480, 104)],
+    water: [rect(48, 204, 320, 192, 'water'), rect(592, 204, 320, 192, 'water')], torches: [point(410, 166), point(550, 166), point(410, 434), point(550, 434)], chests: [point(480, 104)],
     spawnPoints: [point(100, 110), point(860, 110), point(100, 490), point(860, 490), point(480, 100), point(480, 500)],
   },
 }
@@ -71,21 +59,16 @@ export function roomGeometry(template = null, floor = 1, _random = Math.random) 
   const name = typeof template === 'string' && TEMPLATES[template] ? template : roomTemplateForFloor(floor)
   const authored = TEMPLATES[name]
   return {
-    name,
-    width: WIDTH,
-    height: HEIGHT,
+    name, width: WIDTH, height: HEIGHT,
     bounds: { x: BORDER, y: BORDER, width: WIDTH - BORDER * 2, height: HEIGHT - BORDER * 2 },
     solids: [...boundarySolids(), ...authored.solids.map((entry) => ({ ...entry }))],
-    water: authored.water.map((entry) => ({ ...entry })),
-    torches: authored.torches.map((entry) => ({ ...entry })),
-    chests: authored.chests.map((entry) => ({ ...entry })),
+    water: authored.water.map((entry) => ({ ...entry })), bridges: [], stairs: [], doors: [], traps: [], decorations: [],
+    torches: authored.torches.map((entry) => ({ ...entry })), chests: authored.chests.map((entry) => ({ ...entry })),
     spawnPoints: authored.spawnPoints.map((entry) => ({ ...entry })),
   }
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value))
-}
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)) }
 
 function circleRectIntersects(position, radius, area) {
   const nearestX = clamp(position.x, area.x, area.x + area.width)
@@ -95,10 +78,16 @@ function circleRectIntersects(position, radius, area) {
   return dx * dx + dy * dy < radius * radius
 }
 
+function pointInRect(position, area) {
+  return position.x >= area.x && position.x <= area.x + area.width && position.y >= area.y && position.y <= area.y + area.height
+}
+
 export function circleHitsSolid(position, radius, geometry) {
   const solids = geometry?.solids ?? []
-  const water = geometry?.water ?? []
-  return [...solids, ...water].some((solid) => circleRectIntersects(position, radius, solid))
+  if (solids.some((solid) => circleRectIntersects(position, radius, solid))) return true
+  const onBridge = (geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))
+  if (onBridge) return false
+  return (geometry?.water ?? []).some((water) => circleRectIntersects(position, radius, water))
 }
 
 export function movementWithCollision(from, delta, radius, geometry) {
@@ -110,7 +99,6 @@ export function movementWithCollision(from, delta, radius, geometry) {
   const stepX = dx / steps
   const stepY = dy / steps
   const next = { x: from.x, y: from.y }
-
   for (let index = 0; index < steps; index++) {
     const candidateX = { x: next.x + stepX, y: next.y }
     if (!circleHitsSolid(candidateX, radius, geometry)) next.x = candidateX.x
@@ -121,33 +109,20 @@ export function movementWithCollision(from, delta, radius, geometry) {
 }
 
 export function terrainAt(position, geometry) {
-  const water = (geometry?.water ?? []).some((area) => position.x >= area.x && position.x <= area.x + area.width && position.y >= area.y && position.y <= area.y + area.height)
-  return water
-    ? { type: 'water', speedMultiplier: 0, navCost: Infinity }
-    : { type: 'floor', speedMultiplier: 1, navCost: 1 }
+  if ((geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))) return { type: 'bridge', speedMultiplier: 1, navCost: 1 }
+  const water = (geometry?.water ?? []).some((area) => pointInRect(position, area))
+  return water ? { type: 'water', speedMultiplier: 0, navCost: Infinity } : { type: 'floor', speedMultiplier: 1, navCost: 1 }
 }
 
 function segmentRectIntersection(start, end, area, padding = 0) {
-  const minX = area.x - padding
-  const maxX = area.x + area.width + padding
-  const minY = area.y - padding
-  const maxY = area.y + area.height + padding
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  let tMin = 0
-  let tMax = 1
-
+  const minX = area.x - padding, maxX = area.x + area.width + padding
+  const minY = area.y - padding, maxY = area.y + area.height + padding
+  const dx = end.x - start.x, dy = end.y - start.y
+  let tMin = 0, tMax = 1
   for (const [origin, direction, min, max] of [[start.x, dx, minX, maxX], [start.y, dy, minY, maxY]]) {
-    if (Math.abs(direction) < 1e-9) {
-      if (origin < min || origin > max) return null
-      continue
-    }
-    const t1 = (min - origin) / direction
-    const t2 = (max - origin) / direction
-    const near = Math.min(t1, t2)
-    const far = Math.max(t1, t2)
-    tMin = Math.max(tMin, near)
-    tMax = Math.min(tMax, far)
+    if (Math.abs(direction) < 1e-9) { if (origin < min || origin > max) return null; continue }
+    const t1 = (min - origin) / direction, t2 = (max - origin) / direction
+    tMin = Math.max(tMin, Math.min(t1, t2)); tMax = Math.min(tMax, Math.max(t1, t2))
     if (tMin > tMax) return null
   }
   return tMin >= 0 && tMin <= 1 ? tMin : null
@@ -159,9 +134,5 @@ export function clipSegmentToSolids(start, end, geometry, padding = BEAM_PADDING
     const t = segmentRectIntersection(start, end, solid, padding)
     if (t !== null && t < bestT) bestT = t
   }
-  return {
-    x: start.x + (end.x - start.x) * bestT,
-    y: start.y + (end.y - start.y) * bestT,
-    blocked: bestT < 1,
-  }
+  return { x: start.x + (end.x - start.x) * bestT, y: start.y + (end.y - start.y) * bestT, blocked: bestT < 1 }
 }
