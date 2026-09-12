@@ -57,6 +57,11 @@ export function spatialTextureFrame(kind, frames = {}) {
   return frames[kind] ?? null
 }
 
+export function spatialTileStack(kind, stacks = {}) {
+  if (kind !== 'pillar') return null
+  return Array.isArray(stacks.obstacle) && stacks.obstacle.length ? stacks.obstacle : null
+}
+
 export function spatialSurfaceTint(kind) {
   if (kind === 'floor') return 0xb49a82
   if (kind === 'boundary' || kind === 'wall') return 0x667488
@@ -120,12 +125,28 @@ function addScaledImage(scene, x, y, key, targetHeight, depth, frame = null) {
   return image
 }
 
+function addStackedTileProp(scene, x, bottomY, key, tileFrames, targetHeight, depth) {
+  if (!Array.isArray(tileFrames) || !tileFrames.length) return []
+  const targetTileHeight = targetHeight / tileFrames.length
+  const sprites = []
+  for (let index = 0; index < tileFrames.length; index++) {
+    const frame = tileFrames[index]
+    const y = bottomY - targetHeight + targetTileHeight * (index + 0.5)
+    const sprite = track(scene, scene.add.image(x, y, key, frame).setDepth(depth))
+    const sourceHeight = sprite.height || 16
+    sprite.setScale?.(targetTileHeight / Math.max(1, sourceHeight))
+    sprites.push(sprite)
+  }
+  return sprites
+}
+
 function renderFloor(scene, geometry) {
   const background = track(scene, scene.add.graphics().setDepth(0))
   background.fillStyle(0x080a0d, 1).fillRect(0, 0, geometry.width, geometry.height)
   const tile = 48
   const available = textureAvailability(scene)
   const frames = scene.__dungeonEnvironmentFrames ?? {}
+  const stacks = scene.__dungeonEnvironmentStacks ?? {}
   const floorTexture = spatialTextureKey('floor', available)
 
   if (floorTexture) {
@@ -197,6 +218,19 @@ function renderFloor(scene, geometry) {
     ).setDepth(depth - 1))
 
     if (texture) {
+      const tileStack = spatialTileStack(solid.kind, stacks)
+      if (tileStack) {
+        addStackedTileProp(
+          scene,
+          solid.x + solid.width / 2,
+          solid.y + solid.height / 2 + 10,
+          texture,
+          tileStack,
+          Math.max(64, solid.height + 24),
+          depth,
+        )
+        continue
+      }
       addTiledTexture(
         scene,
         solid.x + solid.width / 2,
@@ -332,6 +366,11 @@ async function loadEnvironmentTextures(scene) {
     if (complete) {
       scene.__dungeonEnvironmentFrames = Object.fromEntries(
         Object.entries(selected).map(([kind, asset]) => [kind, asset?.frame ?? 0]),
+      )
+      scene.__dungeonEnvironmentStacks = Object.fromEntries(
+        Object.entries(selected)
+          .filter(([, asset]) => Array.isArray(asset?.tileStack) && asset.tileStack.length)
+          .map(([kind, asset]) => [kind, [...asset.tileStack]]),
       )
       const queue = [
         ['dungeon-tileset-floor', selected.floor],
