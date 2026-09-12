@@ -41,7 +41,8 @@ export function chooseEnvironmentAssets(manifest = {}) {
   return {
     // walls_floor is a 17-column 16px grid. Frame 0 is transparent; 311 is an authored stone floor tile.
     floor: withFrame(wallsFloor, 311),
-    wall: withFrame(wallsFloor, 18),
+    // Frame 18 is a shaded corner fragment. Frame 30 is a complete stone block and tiles cleanly in either axis.
+    wall: withFrame(wallsFloor, 30),
     water: withFrame(water, 0),
     // Re-slice prop sheets on their authored multi-cell boundaries. The existing loader can then render
     // a complete prop frame without special-case texture code in the spatial renderer.
