@@ -14,6 +14,10 @@ function withFrame(asset, frame) {
   return asset ? { ...asset, frame } : null
 }
 
+function withRegion(asset, region) {
+  return asset ? { ...asset, region } : null
+}
+
 export function chooseEnvironmentAssets(manifest = {}) {
   const dedicated = normalizedAssets(manifest).filter((asset) => asset.source === 'dungeon-tileset')
   const wallsFloor = prefer(dedicated, [/\/Tiled_files\/walls_floor\.png$/i, /walls_floor\.png$/i], 'wall')
@@ -23,12 +27,13 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const chest = prefer(dedicated, [/\/Tiled_files\/chest_lever\.png$/i, /chest.*lever/i], 'chest')
 
   return {
-    // walls_floor is one authored 16px sheet; distinct frames keep walkable floor and solids visually separate.
-    floor: withFrame(wallsFloor, 0),
+    // walls_floor is a 17-column 16px grid. Frame 0 is transparent; 311 is an authored stone floor tile.
+    floor: withFrame(wallsFloor, 311),
     wall: withFrame(wallsFloor, 18),
     water: withFrame(water, 0),
-    obstacle: withFrame(obstacle, 0),
-    torch: withFrame(torch, 0),
-    chest: withFrame(chest, 0),
+    // Props span multiple 16px cells. Preserve their authored silhouette instead of rendering one fragment.
+    obstacle: withRegion(obstacle, { x: 16, y: 160, width: 32, height: 48 }),
+    torch: withRegion(torch, { x: 16, y: 0, width: 48, height: 48 }),
+    chest: withRegion(chest, { x: 0, y: 0, width: 32, height: 32 }),
   }
 }
