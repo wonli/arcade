@@ -36,12 +36,21 @@ const tiledManifest = {
           },
         },
         walls_floor: { name: 'walls_floor', firstGid: 3815, tileCount: 442 },
+        Arches_columns: { name: 'Arches_columns', firstGid: 4257, tileCount: 280 },
       },
       layers: {
-        Floor: { chunks: [{ gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
-        Walls: { chunks: [{ gids: [3850, 3851, 3851, 3851, 3852, 3851, 0] }] },
-        Water: { chunks: [{ gids: [0, 872, 872, 872, 872, 0] }] },
-        Water_details: { chunks: [{ gids: [0, 1254, 1254, 1254, 1254, 0] }] },
+        Floor: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [0, 3953, 3953, 3953, 3970, 3953] }] },
+        Walls: {
+          chunks: [{
+            x: 0,
+            y: 0,
+            width: 6,
+            height: 2,
+            gids: [3837, 3842, 4278, 4279, 3868, 3843, 3844, 3845, 4298, 4299, 3885, 3847],
+          }],
+        },
+        Water: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [0, 872, 872, 872, 872, 0] }] },
+        Water_details: { chunks: [{ x: 0, y: 0, width: 6, height: 1, gids: [0, 1254, 1254, 1254, 1254, 0] }] },
       },
     },
   },
@@ -66,6 +75,7 @@ test('uses visible fallback tiles and authored prop composition without Tiled me
   assert.equal(assets.obstacle.frameWidth, 16)
   assert.equal(assets.obstacle.frameHeight, 16)
   assert.deepEqual(assets.obstacle.tileStack, [188, 208, 228, 248])
+  assert.equal(assets.obstacle.rotation, 90)
   assert.deepEqual(assets.torch.region, { x: 0, y: 0, width: 48, height: 48 })
   assert.equal(assets.torch.frameWidth, 48)
   assert.equal(assets.torch.frameHeight, 48)
@@ -76,14 +86,32 @@ test('uses visible fallback tiles and authored prop composition without Tiled me
   assert.equal(assets.chest.frame, 0)
 })
 
-test('derives representative floor wall and water frames from Dungeon3 authored layers', () => {
+test('derives floor and water frames while preserving an authored multi-tile wall motif', () => {
   const assets = chooseEnvironmentAssets(tiledManifest)
   assert.equal(assets.floor.frame, 138)
-  assert.equal(assets.wall.frame, 36)
   assert.equal(assets.water.frame, 871)
   assert.equal(assets.floor.authoredBy, 'Dungeon3/Floor')
-  assert.equal(assets.wall.authoredBy, 'Dungeon3/Walls')
   assert.equal(assets.water.authoredBy, 'Dungeon3/Water')
+  assert.equal(assets.wall.frame, 30)
+  assert.equal(assets.wall.authoredBy, 'Dungeon3/Walls')
+  assert.deepEqual(assets.wall.motif, {
+    width: 6,
+    height: 2,
+    cells: [
+      { texture: 'wall', frame: 22 },
+      { texture: 'wall', frame: 27 },
+      { texture: 'obstacle', frame: 21 },
+      { texture: 'obstacle', frame: 22 },
+      { texture: 'wall', frame: 53 },
+      { texture: 'wall', frame: 28 },
+      { texture: 'wall', frame: 29 },
+      { texture: 'wall', frame: 30 },
+      { texture: 'obstacle', frame: 41 },
+      { texture: 'obstacle', frame: 42 },
+      { texture: 'wall', frame: 70 },
+      { texture: 'wall', frame: 32 },
+    ],
+  })
 })
 
 test('derives animated water detail from Dungeon3 instead of inventing frame timing', () => {
