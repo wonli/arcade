@@ -265,12 +265,16 @@ export function chooseEnvironmentAssets(manifest = {}) {
     animation: [0, 1, 2, 3, 4, 5].map((tileId) => ({ tileId, duration: tileId === 5 ? 220 : 120 })),
     openFrame: 5,
   })
+  const bridgeSprite = withRenderableRegion(obstacle, { x: 256, y: 96, width: 16, height: 32 }, 76, {
+    frameset: [76],
+    authoredBy: 'Dungeon3/Objects2 Arches_columns bridge center strip',
+  })
 
   return {
     floor: withFrame(wallsFloor, authoredFloor ?? 311, authoredFloor == null ? {} : { authoredBy: 'Dungeon3/Floor', ...(floorAutotile ? { autotile: floorAutotile } : {}), ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}) }),
     floorDecoration: plates && floorDecorationFrames.length ? { ...plates, frame: floorDecorationFrames[0], frameset: floorDecorationFrames, authoredBy: 'Dungeon3/plates1' } : null,
     pathPlate: withFrameset(plates, floorDecorationFrames.length ? floorDecorationFrames : [15, 2, 83, 96, 65, 5], { authoredBy: 'Dungeon3/plates1' }),
-    bridge: withFrameset(obstacle, [135, 136, 137, 138, 154, 155, 156, 157, 158, 176, 177, 178, 197, 217, 237], { authoredBy: 'Dungeon3/Objects2 Arches_columns bridge/platform tiles' }),
+    bridge: bridgeSprite,
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water', coastFrames: waterFrames, ...(waterCoasts ? { coasts: waterCoasts } : {}) }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation ? null : withFrame(waterDetail, authoredWaterDetail, { authoredBy: 'Dungeon3/Water_details', animation: waterDetailAnimation.map((entry) => ({ ...entry })) }),
