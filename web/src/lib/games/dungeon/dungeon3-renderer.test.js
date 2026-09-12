@@ -43,3 +43,56 @@ test('floor levels carry authored inset floor panels and southern concave transi
   }
   assert.ok(tiles.some(t=>t.layer==='stairs'&&t.motifId===dungeon3Rules.motifs.stairs.find(m=>m.width===5).id))
 })
+
+test('terrain renderer batches tile plan into render textures instead of one game object per tile', () => {
+  const geometry = generateDungeonGeometry({ runSeed: 33 })
+  const tiles = renderer.buildDungeon3TilePlan(geometry)
+  const groups = renderer.groupDungeon3TerrainTiles(tiles)
+  const renderTextures = []
+  let imageCalls = 0
+  let update = null
+  const tracked = []
+
+  const scene = {
+    textures: { exists() { return true } },
+    trackArena(object) { tracked.push(object); return object },
+    add: {
+      renderTexture() {
+        const target = {
+          renders: 0,
+          clears: 0,
+          setOrigin() { return this },
+          setDepth(depth) { this.depth = depth; return this },
+          stamp() { return this },
+          render() { this.renders++; return this },
+          clear() { this.clears++; return this },
+          destroy() {},
+        }
+        renderTextures.push(target)
+        return target
+      },
+      image() { imageCalls++; throw new Error('batched terrain must not allocate per-tile images') },
+      graphics() {
+        return { setDepth() { return this }, fillStyle() { return this }, fillRect() { return this }, destroy() {} }
+      },
+    },
+    events: {
+      on(name, handler) { if (name === 'update') update = handler },
+      off() {},
+    },
+  }
+
+  renderer.renderDungeon3Terrain(scene, geometry)
+
+  assert.equal(imageCalls, 0)
+  assert.ok(tiles.length > 1000)
+  assert.ok(renderTextures.length <= groups.length)
+  assert.ok(renderTextures.length <= 20)
+  assert.ok(tracked.length <= 21)
+  assert.ok(renderTextures.every(target => target.renders >= 1))
+
+  if (update) {
+    update(150)
+    assert.ok(renderTextures.some(target => target.clears > 0))
+  }
+})

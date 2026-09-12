@@ -16,7 +16,6 @@ export function buildDungeon3TilePlan(geometry) {
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
     const cell = at(x, y)
     if (cell.kind === 'boundary') continue
-    // Water also backs partially transparent cliff/shore cells.
     add(x, y, rules.water.body, 'water', 1)
     if (!isLand(cell)) continue
     const skin = rules.floorSkins[cell.level % rules.floorSkins.length]
@@ -25,13 +24,11 @@ export function buildDungeon3TilePlan(geometry) {
     const side = !n ? (!w ? 'nw' : !e ? 'ne' : 'n') : !s ? (!w ? 'sw' : !e ? 'se' : 's') : !w ? 'w' : !e ? 'e' : null
     if (side) add(x, y, rules.water.coast[side], 'coast', 3)
     else {
-      // Concave corners occur where a corridor joins a wider platform.
       const corner = !land(x - 1, y - 1) ? 'innerNW' : !land(x + 1, y - 1) ? 'innerNE' : !land(x - 1, y + 1) ? 'innerSW' : !land(x + 1, y + 1) ? 'innerSE' : null
       if (corner) {
         const motif = corner === 'innerSW' ? rules.water.concaveSouth.sw : corner === 'innerSE' ? rules.water.concaveSouth.se : null
         if (motif) {
           for (const part of motif.cells) {
-            // These vertical source transitions run down the adjacent land column.
             if (land(x + part.x, y + part.y)) add(x + part.x, y + part.y, part, 'coast', 3.1, { motifId: motif.id })
           }
         } else add(x, y, rules.water[corner], 'coast', 3)
@@ -57,7 +54,6 @@ export function buildDungeon3TilePlan(geometry) {
   const stamp = (motif, left, top, layer, depth, extra = {}) => {
     for (const cell of motif.cells) add(left + cell.x, top + cell.y, cell, layer, depth, { motifId: motif.id, ...extra })
   }
-  // Repeat a complete authored 2x2 pavement unit along the connected centerline.
   const paving = rules.motifs.plates.find(m => m.width === 2 && m.height === 2 && m.cells.length === 4)
   const paved = new Set()
   if (paving) for (const path of geometry.paths ?? []) {
@@ -77,7 +73,6 @@ export function buildDungeon3TilePlan(geometry) {
     if (!motif) continue
     stamp(motif, prop.x / size - motif.width / 2, prop.y / size - motif.height / 2, 'prop', 6, { ownerX: prop.x, ownerY: prop.y })
   }
-  // Use whole stairs from Dungeon3 rather than magnifying a single 16px fragment.
   const stepMotif = rules.motifs.stairs.find(m => m.width === 5 && m.height === 3)
   if (stepMotif) for (const stair of geometry.stairs ?? []) {
     const horizontal = stair.orientation === 'right' || stair.orientation === 'left'
@@ -110,35 +105,67 @@ export function queueDungeon3Textures(scene) {
   return queued
 }
 
-export function renderDungeon3Terrain(scene, geometry) {
+function tileFrames(tile) {
+  return rules.tilesets[tile.tileset]?.animations?.[String(tile.tileId)] ?? null
+}
+
+function tileTransform(tile) {
+  if (tile.flipDiagonal) {
+    return { angle: 90 + (tile.rotation ?? 0), scaleX: tile.flipY ? -1 : 1, scaleY: !tile.flipX ? -1 : 1 }
+  }
+  return { angle: tile.rotation ?? 0, scaleX: tile.flipX ? -1 : 1, scaleY: tile.flipY ? -1 : 1 }
+}
+
+function stampTile(target, tile, size, frame = tile.tileId) {
+  target.stamp(dungeon3TextureKey(tile.tileset), frame, tile.x + size / 2, tile.y + size / 2, {
+    ...tileTransform(tile), originX: 0.5, originY: 0.5,
+  })
+}
+
+export function groupDungeon3TerrainTiles(tiles) {
+  const groups = new Map()
+  for (const tile of tiles) {
+    const animated = Boolean(tileFrames(tile)?.length)
+    const key = `${tile.depth}:${animated ? 'animated' : 'static'}`
+    if (!groups.has(key)) groups.set(key, { depth: tile.depth, animated, tiles: [] })
+    groups.get(key).tiles.push(tile)
+  }
+  return [...groups.values()].sort((a, b) => a.depth - b.depth || Number(a.animated) - Number(b.animated))
+}
+
+function fallbackColor(tile) {
+  if (tile.layer === 'water') return 0x26464a
+  if (tile.layer === 'floor') return 0x514b43
+  if (tile.layer === 'prop') return 0x6e7772
+  return null
+}
+
+function renderLegacyTerrain(scene, geometry) {
   const track = object => scene.trackArena?.(object) ?? object
   const animated = new Map()
   const size = geometry.grid.tileSize
   for (const tile of buildDungeon3TilePlan(geometry)) {
     const key = dungeon3TextureKey(tile.tileset)
     if (!scene.textures?.exists?.(key)) {
-      // Loading fallback follows the same terrain silhouette, never a full floor.
-      if (tile.layer === 'water' || tile.layer === 'floor' || tile.layer === 'prop') {
-        const color = tile.layer === 'water' ? 0x26464a : tile.layer === 'floor' ? 0x514b43 : 0x6e7772
-        track(scene.add.rectangle(tile.x + size / 2, tile.y + size / 2, size, size, color, 1).setDepth(tile.depth))
-      }
+      const color = fallbackColor(tile)
+      if (color != null) track(scene.add.rectangle(tile.x + size / 2, tile.y + size / 2, size, size, color, 1).setDepth(tile.depth))
       continue
     }
     const sprite = track(scene.add.image(tile.x + size / 2, tile.y + size / 2, key, tile.tileId).setDepth(tile.depth))
-    // Tiled's diagonal flag exchanges x/y before its horizontal/vertical flips.
     if (tile.flipDiagonal) {
       sprite.setAngle?.(90 + (tile.rotation ?? 0))
       sprite.setFlip?.(tile.flipY, !tile.flipX)
-    } else { sprite.setFlip?.(tile.flipX, tile.flipY); if (tile.rotation) sprite.setAngle?.(tile.rotation) }
-    const frames = rules.tilesets[tile.tileset]?.animations?.[String(tile.tileId)]
+    } else {
+      sprite.setFlip?.(tile.flipX, tile.flipY)
+      if (tile.rotation) sprite.setAngle?.(tile.rotation)
+    }
+    const frames = tileFrames(tile)
     if (frames?.length) {
       const groupKey = `${key}/${tile.tileId}`
       if (!animated.has(groupKey)) animated.set(groupKey, { frames, sprites: [], duration: frames.reduce((total, f) => total + f.duration, 0), lastFrame: -1 })
       animated.get(groupKey).sprites.push(sprite)
     }
   }
-  // One shared update hook, removed with the arena, keeps authored coast timings
-  // synchronized without allocating a timer for every edge tile.
   if (animated.size) {
     const update = time => {
       for (const group of animated.values()) {
@@ -153,4 +180,81 @@ export function renderDungeon3Terrain(scene, geometry) {
     scene.events.on('update', update)
     track({ destroy: () => scene.events.off('update', update) })
   }
+}
+
+export function renderDungeon3Terrain(scene, geometry) {
+  if (typeof scene.add?.renderTexture !== 'function') {
+    renderLegacyTerrain(scene, geometry)
+    return
+  }
+
+  const track = object => scene.trackArena?.(object) ?? object
+  const size = geometry.grid.tileSize
+  const width = geometry.width ?? geometry.grid.columns * size
+  const height = geometry.height ?? geometry.grid.rows * size
+  const groups = groupDungeon3TerrainTiles(buildDungeon3TilePlan(geometry))
+  const animatedBatches = []
+  const fallbackGraphics = new Map()
+
+  const fallback = tile => {
+    const color = fallbackColor(tile)
+    if (color == null || typeof scene.add?.graphics !== 'function') return
+    let graphics = fallbackGraphics.get(tile.depth)
+    if (!graphics) {
+      graphics = track(scene.add.graphics().setDepth(tile.depth))
+      fallbackGraphics.set(tile.depth, graphics)
+    }
+    graphics.fillStyle(color, 1).fillRect(tile.x, tile.y, size, size)
+  }
+
+  for (const group of groups) {
+    const drawable = group.tiles.filter(tile => scene.textures?.exists?.(dungeon3TextureKey(tile.tileset)))
+    for (const tile of group.tiles) {
+      if (!scene.textures?.exists?.(dungeon3TextureKey(tile.tileset))) fallback(tile)
+    }
+    if (!drawable.length) continue
+
+    const target = track(scene.add.renderTexture(0, 0, width, height))
+    target.setOrigin?.(0, 0)
+    target.setDepth?.(group.depth)
+
+    if (group.animated) {
+      const entries = drawable.map(tile => {
+        const frames = tileFrames(tile)
+        return { tile, frames, duration: frames.reduce((total, frame) => total + frame.duration, 0), currentFrame: tile.tileId }
+      })
+      for (const entry of entries) stampTile(target, entry.tile, size, entry.currentFrame)
+      target.render?.()
+      animatedBatches.push({ target, entries })
+    } else {
+      for (const tile of drawable) stampTile(target, tile, size)
+      target.render?.()
+    }
+  }
+
+  if (!animatedBatches.length) return
+
+  const update = time => {
+    for (const batch of animatedBatches) {
+      let dirty = false
+      for (const entry of batch.entries) {
+        let elapsed = time % entry.duration
+        let frame = entry.frames[0].tileId
+        for (const candidate of entry.frames) {
+          frame = candidate.tileId
+          if (elapsed < candidate.duration) break
+          elapsed -= candidate.duration
+        }
+        if (frame === entry.currentFrame) continue
+        entry.currentFrame = frame
+        dirty = true
+      }
+      if (!dirty) continue
+      batch.target.clear?.()
+      for (const entry of batch.entries) stampTile(batch.target, entry.tile, size, entry.currentFrame)
+      batch.target.render?.()
+    }
+  }
+  scene.events.on('update', update)
+  track({ destroy: () => scene.events.off('update', update) })
 }
