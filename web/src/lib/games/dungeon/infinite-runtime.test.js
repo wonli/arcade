@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { encounterPlan } from './infinite-runtime.js'
+import { encounterPlan, lootPromotionChance } from './infinite-runtime.js'
 
 test('encounter plans distinguish combat elite rest and boss rooms', () => {
   assert.equal(encounterPlan({ floor: 3, chapter: 1, roomRole: 'rest' }).kind, 'rest')
@@ -18,4 +18,14 @@ test('encounter plans distinguish combat elite rest and boss rooms', () => {
 test('deep encounter plans keep enemy counts bounded', () => {
   const plan = encounterPlan({ floor: 200, chapter: 35, roomRole: 'elite' })
   assert.ok(plan.count <= 14)
+})
+
+test('loot quality improves gradually with depth and fortune without becoming automatic', () => {
+  assert.equal(lootPromotionChance(1, false), 0)
+  const deep = lootPromotionChance(30, false)
+  assert.ok(deep > 0)
+  assert.ok(deep <= 0.35)
+  const fortunate = lootPromotionChance(30, true)
+  assert.ok(fortunate > deep)
+  assert.ok(fortunate < 0.8)
 })
