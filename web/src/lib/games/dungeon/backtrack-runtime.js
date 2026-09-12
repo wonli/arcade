@@ -1,5 +1,9 @@
 import { roomAnchor } from './room-anchors.js'
+import { circleHitsSolid } from './spatial.js'
 import { canRetreatFromFloor, restoreChestState, restoreDropState, snapshotFloorState } from './floor-history.js'
+
+const PLAYER_RADIUS = 18
+const PORTAL_CLEARANCE = 44
 
 function destroyBackPortal(portal) {
   if (!portal) return
@@ -26,16 +30,56 @@ function createBackPortal(scene) {
   return { x, y, unlockAt: (scene.time?.now ?? 0) + 650, objects, visible: true }
 }
 
-function placeAfterRestore(scene, direction) {
-  const geometry = scene.__roomGeometry
+function containingRoom(geometry, point) {
+  return (geometry?.rooms ?? []).find((room) => point.x >= room.x && point.x <= room.x + room.width && point.y >= room.y && point.y <= room.y + room.height) ?? null
+}
+
+function validRestorePoint(point, geometry, portal) {
+  const margin = PLAYER_RADIUS + 4
+  const width = geometry?.width ?? 960
+  const height = geometry?.height ?? 600
+  if (point.x < margin || point.x > width - margin || point.y < margin || point.y > height - margin) return false
+  if (portal && Math.hypot(point.x - portal.x, point.y - portal.y) < PORTAL_CLEARANCE) return false
+  return !circleHitsSolid(point, PLAYER_RADIUS, geometry)
+}
+
+export function safeRestorePosition(geometry, direction = 'back') {
   const anchor = roomAnchor(geometry, direction === 'back' ? 'exit' : 'spawn')
-  const offset = direction === 'back' ? -72 : 0
-  const x = anchor.x
-  const y = Math.max(72, Math.min((geometry?.height ?? 600) - 72, anchor.y + offset))
-  scene.playerState.x = x
-  scene.playerState.y = y
-  scene.player?.setPosition?.(x, y)
-  scene.updateHealthBar?.(scene.playerBar, x, y - 42, scene.playerState.hp, scene.playerState.maxHp)
+  if (direction !== 'back') return anchor
+
+  const room = containingRoom(geometry, anchor)
+  const target = room?.center ?? (room ? { x: room.x + room.width / 2, y: room.y + room.height / 2 } : roomAnchor(geometry, 'spawn'))
+  const vx = target.x - anchor.x
+  const vy = target.y - anchor.y
+  const length = Math.hypot(vx, vy) || 1
+  const ux = vx / length
+  const uy = vy / length
+  const angles = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI]
+  const distances = [52, 68, 84, 104, 128, 152]
+
+  for (const distance of distances) {
+    for (const angle of angles) {
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      const dx = ux * cos - uy * sin
+      const dy = ux * sin + uy * cos
+      const candidate = { x: anchor.x + dx * distance, y: anchor.y + dy * distance }
+      if (validRestorePoint(candidate, geometry, anchor)) return candidate
+    }
+  }
+
+  const fallbacks = [...(geometry?.spawnPoints ?? []), roomAnchor(geometry, 'spawn')]
+    .filter(Boolean)
+    .sort((a, b) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(b.x - anchor.x, b.y - anchor.y))
+  return fallbacks.find((point) => validRestorePoint(point, geometry, anchor)) ?? anchor
+}
+
+function placeAfterRestore(scene, direction) {
+  const position = safeRestorePosition(scene.__roomGeometry, direction)
+  scene.playerState.x = position.x
+  scene.playerState.y = position.y
+  scene.player?.setPosition?.(position.x, position.y)
+  scene.updateHealthBar?.(scene.playerBar, position.x, position.y - 42, scene.playerState.hp, scene.playerState.maxHp)
 }
 
 export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}) {

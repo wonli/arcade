@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { installDungeonBacktracking } from './backtrack-runtime.js'
+import { installDungeonBacktracking, safeRestorePosition } from './backtrack-runtime.js'
 import { prepareDropItem } from './pickup-runtime.js'
+import { circleHitsSolid } from './spatial.js'
 
 function visual() {
   return {
@@ -97,4 +98,20 @@ test('restored drops bypass rerolling so old equipment keeps its exact damage', 
   const item = { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 31, affixes: [] }
   const scene = { __restoringFloor: true, floor: 30, __dungeonSpatial: { getChests: () => [] } }
   assert.equal(prepareDropItem(scene, 0, 0, item, () => 0.99).damage, 31)
+})
+
+test('backtracking chooses a collision-free point near the exit instead of a fixed offset', () => {
+  const geometry = {
+    width: 960,
+    height: 600,
+    spawn: { x: 100, y: 100 },
+    exit: { x: 800, y: 500 },
+    rooms: [{ x: 700, y: 360, width: 180, height: 170, center: { x: 790, y: 445 } }],
+    solids: [{ x: 770, y: 395, width: 60, height: 60 }],
+    water: [],
+    spawnPoints: [{ x: 790, y: 470 }],
+  }
+  const position = safeRestorePosition(geometry, 'back')
+  assert.equal(circleHitsSolid(position, 18, geometry), false)
+  assert.ok(Math.hypot(position.x - geometry.exit.x, position.y - geometry.exit.y) >= 44)
 })
