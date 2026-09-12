@@ -341,7 +341,7 @@ async function loadEnvironmentTextures(scene) {
         ['dungeon-tileset-torch', selected.torch],
         ['dungeon-tileset-chest', selected.chest],
       ]
-      const queued = queue.some(([key, asset]) => queueEnvironmentTexture(scene, key, asset))
+      const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean)
       if (!queued) return true
       await new Promise((resolve) => {
         scene.load.once('complete', resolve)
@@ -356,7 +356,7 @@ async function loadEnvironmentTextures(scene) {
       ['dungeon-torch', fallback.torch],
       ['dungeon-chest', fallback.chest],
     ]
-    const queued = queue.some(([key, asset]) => queueEnvironmentTexture(scene, key, asset))
+    const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean)
     if (!queued) return false
     await new Promise((resolve) => {
       scene.load.once('complete', resolve)
