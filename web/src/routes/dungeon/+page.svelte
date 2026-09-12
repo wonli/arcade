@@ -1,16 +1,17 @@
 <script>
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
-  import { formatAffixLabel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
+  import { formatAffixLabel, weaponComparisonModel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
+  import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
   const messages = {
     'zh-CN': {
-      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '装备{rarity}地牢之刃，基础伤害 +{damage}。', pickupPotion: '喝下生命药水，恢复 {heal} 点生命。', dropWeapon: '{rarity}装备掉落！', dropPotion: '生命药水掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。', floorTitle: '第 {floor} 层', floorClear: '本层已清空', floorStart: '进入第 {floor} 层。', portal: '出口已开启，进入绿色传送门。', runComplete: '地牢征服', runCompleteHint: '五层探索完成', runCompleteEvent: '五层地牢已全部清空！', dungeonBlade: '地牢之刃', rarityCommon: '普通', rarityUncommon: '精良', rarityRare: '稀有', rarityEpic: '史诗'
+      title: '无尽地牢', subtitle: 'WASD 移动 · 自动普攻 · Space 主动技能', hp: '生命', damage: '伤害', kills: '击杀', floor: '层数', weapon: '武器', none: '无', loading: '正在进入地牢…', back: '返回 Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '装备{rarity}地牢之刃，基础伤害 +{damage}。', pickupPotion: '喝下生命药水，恢复 {heal} 点生命。', dropWeapon: '{rarity}装备掉落！', dropPotion: '生命药水掉落！', gameover: '本次探索结束。', skill: '主动技能命中 {hits} 个敌人。', floorTitle: '第 {floor} 层', floorClear: '本层已清空', floorStart: '进入第 {floor} 层。', portal: '出口已开启，进入绿色传送门。', runComplete: '地牢征服', runCompleteHint: '五层探索完成', runCompleteEvent: '五层地牢已全部清空！', dungeonBlade: '地牢之刃', rarityCommon: '普通', rarityUncommon: '精良', rarityRare: '稀有', rarityEpic: '史诗', current: '当前装备', ground: '地上装备', baseDamage: '基础伤害', equipHint: '按 E 换装 · 走开忽略', emptyWeapon: '未装备武器'
     },
     en: {
-      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space active skill', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion: 'Health potion restored {heal} HP.', dropWeapon: '{rarity} equipment dropped!', dropPotion: 'Health potion dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.', floorTitle: 'FLOOR {floor}', floorClear: 'FLOOR CLEAR', floorStart: 'Entered floor {floor}.', portal: 'Exit portal opened. Step into the green portal.', runComplete: 'DUNGEON CLEARED', runCompleteHint: 'Five floors survived', runCompleteEvent: 'All five dungeon floors cleared!', dungeonBlade: 'Dungeon Blade', rarityCommon: 'Common', rarityUncommon: 'Uncommon', rarityRare: 'Rare', rarityEpic: 'Epic'
+      title: 'Endless Dungeon', subtitle: 'WASD move · auto attack · Space active skill', hp: 'HP', damage: 'Damage', kills: 'Kills', floor: 'Floor', weapon: 'Weapon', none: 'None', loading: 'Entering the dungeon…', back: 'Back to Arcade', asset: 'Debts in the Depths · CC0', pickupWeapon: '{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion: 'Health potion restored {heal} HP.', dropWeapon: '{rarity} equipment dropped!', dropPotion: 'Health potion dropped!', gameover: 'Run ended.', skill: 'Active skill hit {hits} enemies.', floorTitle: 'FLOOR {floor}', floorClear: 'FLOOR CLEAR', floorStart: 'Entered floor {floor}.', portal: 'Exit portal opened. Step into the green portal.', runComplete: 'DUNGEON CLEARED', runCompleteHint: 'Five floors survived', runCompleteEvent: 'All five dungeon floors cleared!', dungeonBlade: 'Dungeon Blade', rarityCommon: 'Common', rarityUncommon: 'Uncommon', rarityRare: 'Rare', rarityEpic: 'Epic', current: 'Equipped', ground: 'Ground Item', baseDamage: 'Base Damage', equipHint: 'Press E to equip · walk away to ignore', emptyWeapon: 'No weapon equipped'
     }
   }
 
@@ -21,6 +22,7 @@
   let locale = 'en'
   let stats = { hp: 100, maxHp: 100, damage: 10, kills: 0, floor: 1, weapon: null, weaponRarity: null, weaponDamage: 0, weaponAffixes: [] }
   let eventText = ''
+  let pickupSelection = null
 
   const t = (key, values = {}) => {
     let text = messages[locale]?.[key] ?? messages.en[key] ?? key
@@ -29,16 +31,12 @@
   }
 
   const rarityName = (rarity) => {
-    const key = {
-      common: 'rarityCommon',
-      uncommon: 'rarityUncommon',
-      rare: 'rarityRare',
-      epic: 'rarityEpic',
-    }[rarity]
+    const key = { common: 'rarityCommon', uncommon: 'rarityUncommon', rare: 'rarityRare', epic: 'rarityEpic' }[rarity]
     return key ? t(key) : ''
   }
 
   $: weaponModel = weaponHudModel(stats, locale)
+  $: comparison = pickupSelection ? weaponComparisonModel(pickupSelection.current, pickupSelection.candidate, locale) : null
 
   function setLocale(next) {
     locale = next
@@ -83,9 +81,13 @@
         onStats(next) { stats = next },
         onEvent,
       })
-      const installVisuals = () => installAffixVisuals(game?.scene?.getScene?.('Dungeon'))
-      installVisuals()
-      requestAnimationFrame(installVisuals)
+      const installRuntime = () => {
+        const scene = game?.scene?.getScene?.('Dungeon')
+        installAffixVisuals(scene)
+        installPickupInteraction(scene, { onSelection(next) { pickupSelection = next } })
+      }
+      installRuntime()
+      requestAnimationFrame(installRuntime)
       ready = true
     } catch (cause) {
       console.error(cause)
@@ -137,6 +139,36 @@
 
   <section class="stage-shell">
     <div bind:this={mount} class="stage"></div>
+    {#if comparison}
+      <aside class="compare-card">
+        <div class="compare-column current">
+          <small>{t('current')}</small>
+          {#if comparison.current}
+            <strong class={comparison.current.rarity}>{rarityName(comparison.current.rarity)} {t('dungeonBlade')}</strong>
+            <div class="damage-row"><span>{t('baseDamage')}</span><b>{comparison.current.damage}</b></div>
+            <ul>
+              {#each comparison.current.affixes as affix}
+                <li class:build={affix.build} class:lost={affix.direction === 'lost'}>{affix.label}{affix.direction === 'lost' ? ' ↓' : ''}</li>
+              {/each}
+            </ul>
+          {:else}
+            <strong class="muted">{t('emptyWeapon')}</strong>
+          {/if}
+        </div>
+        <div class="compare-divider">→</div>
+        <div class="compare-column candidate">
+          <small>{t('ground')}</small>
+          <strong class={comparison.candidate.rarity}>{rarityName(comparison.candidate.rarity)} {t('dungeonBlade')}</strong>
+          <div class="damage-row"><span>{t('baseDamage')}</span><b>{comparison.candidate.damage} <em class:gain={comparison.candidate.damageDelta > 0} class:loss={comparison.candidate.damageDelta < 0}>{comparison.candidate.damageDelta > 0 ? `↑ +${comparison.candidate.damageDelta}` : comparison.candidate.damageDelta < 0 ? `↓ ${comparison.candidate.damageDelta}` : '＝'}</em></b></div>
+          <ul>
+            {#each comparison.candidate.affixes as affix}
+              <li class:build={affix.build} class:gain={affix.direction === 'up' || affix.direction === 'new'} class:loss={affix.direction === 'down'}>{affix.label}{affix.direction === 'up' || affix.direction === 'new' ? ' ↑' : affix.direction === 'down' ? ' ↓' : ''}</li>
+            {/each}
+          </ul>
+        </div>
+        <div class="equip-hint"><kbd>E</kbd> {t('equipHint').replace(/^按 E |^Press E /, '')}</div>
+      </aside>
+    {/if}
     {#if !ready && !error}<div class="overlay">{t('loading')}</div>{/if}
     {#if error}<div class="overlay error">{error}</div>{/if}
   </section>
@@ -148,5 +180,5 @@
 </main>
 
 <style>
-  :global(body){margin:0;background:#080a0d;color:#f4f0e8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{min-height:100vh;padding:20px;box-sizing:border-box}.topbar{width:min(1180px,100%);margin:0 auto 14px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end}.brand{color:#c1ff56;text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.18em}.topbar h1{margin:8px 0 3px;font-size:clamp(28px,5vw,48px);letter-spacing:-.05em}.topbar p{margin:0;color:#7e8792;font-size:13px}.actions{display:flex;gap:8px;align-items:center}.actions button,.actions a{height:34px;padding:0 11px;border:1px solid #30363f;background:#111419;color:#9aa4ae;font:inherit;font-size:11px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}.actions button.active{border-color:#c1ff56;color:#c1ff56}.hud{width:min(1180px,100%);margin:0 auto 12px;display:grid;grid-template-columns:repeat(4,1fr) minmax(280px,1.7fr);border:1px solid #262c34;background:#101319}.hud>div{padding:10px 14px;border-right:1px solid #262c34}.hud>div:last-child{border-right:0}.hud span{display:block;color:#66717d;font-size:9px;text-transform:uppercase;letter-spacing:.12em}.hud strong{display:block;margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}.hud strong.common{color:#f4f0e8}.hud strong.uncommon{color:#70ff9f}.hud strong.rare{color:#67a8ff}.hud strong.epic{color:#c984ff}.affixes{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 10px}.affixes li{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:#9ca7b2;white-space:nowrap}.affixes li.build{color:#ffd56a;font-weight:800}.stage-shell{position:relative;width:min(1180px,100%);aspect-ratio:16/10;margin:0 auto;border:1px solid #30363f;background:#0b0d10;box-shadow:14px 14px 0 #040506;overflow:hidden}.stage{width:100%;height:100%}.stage :global(canvas){display:block;width:100%!important;height:100%!important}.overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;letter-spacing:.08em}.overlay.error{color:#ff6875;padding:32px;text-align:center}footer{width:min(1180px,100%);margin:16px auto 0;display:flex;justify-content:space-between;gap:20px;color:#67717c;font-size:11px}@media(max-width:720px){.page{padding:12px}.topbar{align-items:flex-start;flex-direction:column}.actions{flex-wrap:wrap}.hud{grid-template-columns:repeat(2,1fr)}.hud>div{border-bottom:1px solid #262c34}.weapon-cell{grid-column:1/-1}.stage-shell{aspect-ratio:4/5;box-shadow:8px 8px 0 #040506}footer{flex-direction:column}.topbar h1{font-size:34px}}
+  :global(body){margin:0;background:#080a0d;color:#f4f0e8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{min-height:100vh;padding:20px;box-sizing:border-box}.topbar{width:min(1180px,100%);margin:0 auto 14px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end}.brand{color:#c1ff56;text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.18em}.topbar h1{margin:8px 0 3px;font-size:clamp(28px,5vw,48px);letter-spacing:-.05em}.topbar p{margin:0;color:#7e8792;font-size:13px}.actions{display:flex;gap:8px;align-items:center}.actions button,.actions a{height:34px;padding:0 11px;border:1px solid #30363f;background:#111419;color:#9aa4ae;font:inherit;font-size:11px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}.actions button.active{border-color:#c1ff56;color:#c1ff56}.hud{width:min(1180px,100%);margin:0 auto 12px;display:grid;grid-template-columns:repeat(4,1fr) minmax(280px,1.7fr);border:1px solid #262c34;background:#101319}.hud>div{padding:10px 14px;border-right:1px solid #262c34}.hud>div:last-child{border-right:0}.hud span{display:block;color:#66717d;font-size:9px;text-transform:uppercase;letter-spacing:.12em}.hud strong{display:block;margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}.hud strong.common,.compare-card .common{color:#f4f0e8}.hud strong.uncommon,.compare-card .uncommon{color:#70ff9f}.hud strong.rare,.compare-card .rare{color:#67a8ff}.hud strong.epic,.compare-card .epic{color:#c984ff}.affixes{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 10px}.affixes li{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:#9ca7b2;white-space:nowrap}.affixes li.build{color:#ffd56a;font-weight:800}.stage-shell{position:relative;width:min(1180px,100%);aspect-ratio:16/10;margin:0 auto;border:1px solid #30363f;background:#0b0d10;box-shadow:14px 14px 0 #040506;overflow:hidden}.stage{width:100%;height:100%}.stage :global(canvas){display:block;width:100%!important;height:100%!important}.compare-card{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:min(680px,calc(100% - 32px));display:grid;grid-template-columns:1fr 34px 1fr;gap:10px;padding:14px 16px 38px;box-sizing:border-box;background:rgba(8,10,13,.95);border:1px solid #4a535f;box-shadow:8px 8px 0 rgba(0,0,0,.42);z-index:60;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.compare-column small{display:block;color:#697582;font-size:9px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}.compare-column>strong{font-size:13px}.compare-column .muted{color:#697582}.compare-divider{display:grid;place-items:center;color:#697582;font-size:18px}.damage-row{display:flex;justify-content:space-between;gap:12px;margin-top:9px;padding-top:7px;border-top:1px solid #232a32;font-size:11px}.damage-row span{color:#78838e}.damage-row b{color:#f4f0e8}.damage-row em{font-style:normal;font-size:10px;margin-left:6px}.compare-column ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:3px}.compare-column li{font-size:10px;color:#9ca7b2}.compare-column li.build{color:#ffd56a;font-weight:800}.gain{color:#70ff9f!important}.loss,.lost{color:#ff7b84!important}.equip-hint{position:absolute;left:16px;right:16px;bottom:10px;border-top:1px solid #232a32;padding-top:8px;color:#aeb8c2;font-size:10px;text-align:center}.equip-hint kbd{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-right:4px;border:1px solid #c1ff56;color:#c1ff56;background:#12161b;font:inherit;font-weight:900}.overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;letter-spacing:.08em}.overlay.error{color:#ff6875;padding:32px;text-align:center}footer{width:min(1180px,100%);margin:16px auto 0;display:flex;justify-content:space-between;gap:20px;color:#67717c;font-size:11px}@media(max-width:720px){.page{padding:12px}.topbar{align-items:flex-start;flex-direction:column}.actions{flex-wrap:wrap}.hud{grid-template-columns:repeat(2,1fr)}.hud>div{border-bottom:1px solid #262c34}.weapon-cell{grid-column:1/-1}.stage-shell{aspect-ratio:4/5;box-shadow:8px 8px 0 #040506}.compare-card{grid-template-columns:1fr;padding-bottom:38px;bottom:10px}.compare-divider{display:none}footer{flex-direction:column}.topbar h1{font-size:34px}}
 </style>
