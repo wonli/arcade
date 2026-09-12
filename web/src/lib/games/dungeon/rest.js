@@ -1,6 +1,7 @@
 import { deriveEquipment } from './affixes.js'
 
 const BASIC = new Set(['power', 'attack_speed', 'critical', 'movement_speed', 'vitality', 'life_steal'])
+const DEFAULT_BASE = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
 
 export function restChoices() {
   return ['recover', 'temper', 'fortune']
@@ -12,8 +13,12 @@ function cloneWeapon(weapon) {
 }
 
 function temperWeapon(playerState, random = Math.random) {
+  const baseStats = { ...DEFAULT_BASE, ...(playerState?.baseStats ?? {}) }
   const weapon = cloneWeapon(playerState?.equippedWeapon)
-  if (!weapon) return playerState
+  if (!weapon) {
+    const nextBase = { ...baseStats, damage: (baseStats.damage ?? 10) + 1 }
+    return { ...deriveEquipment(nextBase, null, playerState), baseStats: nextBase }
+  }
 
   const eligible = weapon.affixes
     .map((entry, index) => ({ entry, index }))
@@ -27,7 +32,7 @@ function temperWeapon(playerState, random = Math.random) {
     weapon.damage = (weapon.damage ?? 0) + 1
   }
 
-  return deriveEquipment(playerState.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }, weapon, playerState)
+  return { ...deriveEquipment(baseStats, weapon, playerState), baseStats }
 }
 
 export function applyRestChoice(playerState, choice, random = Math.random) {
