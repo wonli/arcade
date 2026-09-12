@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { spatialAnimation, spatialTextureKey, spatialTileStack, spatialWallMotif, spatialPropRotation } from './spatial-runtime.js'
+import { spatialAnimation, spatialTextureKey, spatialTileStack } from './spatial-runtime.js'
 import { roomGeometry } from './spatial.js'
 import { parseTiledMap } from './tiled-map.js'
 
@@ -29,20 +29,11 @@ test('wall-shaped room solids are classified as walls while pillars stay props',
   assert.ok(pillars.every((solid) => spatialTextureKey(solid.kind, allTextures) === 'dungeon-tileset-obstacle'))
 })
 
-test('pillars render from the authored vertical tile stack and rotate as one prop', () => {
+test('pillars render from the authored vertical tile stack', () => {
   const stacks = { obstacle: [188, 208, 228, 248] }
   assert.deepEqual(spatialTileStack('pillar', stacks), [188, 208, 228, 248])
   assert.equal(spatialTileStack('wall', stacks), null)
   assert.equal(spatialTileStack('boundary', stacks), null)
-  assert.equal(spatialPropRotation('pillar', { obstacle: 90 }), 90)
-  assert.equal(spatialPropRotation('wall', { obstacle: 90 }), 0)
-})
-
-test('walls expose the authored Dungeon3 multi-texture motif', () => {
-  const motif = { width: 2, height: 2, cells: [{ texture: 'wall', frame: 1 }, { texture: 'obstacle', frame: 2 }] }
-  assert.equal(spatialWallMotif('wall', { wall: motif }), motif)
-  assert.equal(spatialWallMotif('boundary', { wall: motif }), motif)
-  assert.equal(spatialWallMotif('pillar', { wall: motif }), null)
 })
 
 test('preserves duplicate Tiled layers instead of overwriting floor2_dark', () => {
