@@ -276,7 +276,7 @@ export function installDungeonMultiplayer(scene, {
       if (Number.isFinite(Number(input.y))) peer.state.y = Math.max(minY, Math.min(maxY, Number(input.y)))
       peer.state.facing = input.facing ?? peer.state.facing
       peer.state.moving = Boolean(input.moving)
-      peer.state.attacking = Boolean(input.attacking) || peer.state.attacking
+      peer.state.attacking = Boolean(input.attacking)
       if (input.skill) peerSkill(scene, peer, scene.time?.now ?? 0)
       syncActor(scene, peer, peer.state)
     },
