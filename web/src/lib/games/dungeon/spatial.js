@@ -1,3 +1,5 @@
+import { generateDungeonGeometry } from './map-generator.js'
+
 const WIDTH = 960
 const HEIGHT = 600
 const BORDER = 48
@@ -55,11 +57,28 @@ const TEMPLATES = {
   },
 }
 
-export function roomGeometry(template = null, floor = 1, _random = Math.random) {
-  const name = typeof template === 'string' && TEMPLATES[template] ? template : roomTemplateForFloor(floor)
-  const authored = TEMPLATES[name]
+let proceduralRunSeed = null
+let highestProceduralFloor = 0
+const proceduralCache = new Map()
+
+function proceduralGeometry(floor, random) {
+  const normalizedFloor = Math.max(1, Math.floor(floor || 1))
+  if (proceduralRunSeed == null || (normalizedFloor === 1 && highestProceduralFloor > 1)) {
+    const roll = typeof random === 'function' ? random() : Math.random()
+    proceduralRunSeed = Math.max(1, Math.floor(Math.abs(Number(roll) || 0.5) * 0xffffffff))
+    highestProceduralFloor = 0
+    proceduralCache.clear()
+  }
+  highestProceduralFloor = Math.max(highestProceduralFloor, normalizedFloor)
+  if (!proceduralCache.has(normalizedFloor)) proceduralCache.set(normalizedFloor, generateDungeonGeometry({ runSeed: proceduralRunSeed, floor: normalizedFloor }))
+  return structuredClone(proceduralCache.get(normalizedFloor))
+}
+
+export function roomGeometry(template = null, floor = 1, random = Math.random) {
+  if (!(typeof template === 'string' && TEMPLATES[template])) return proceduralGeometry(floor, random)
+  const authored = TEMPLATES[template]
   return {
-    name, width: WIDTH, height: HEIGHT,
+    name: template, width: WIDTH, height: HEIGHT,
     bounds: { x: BORDER, y: BORDER, width: WIDTH - BORDER * 2, height: HEIGHT - BORDER * 2 },
     solids: [...boundarySolids(), ...authored.solids.map((entry) => ({ ...entry }))],
     water: authored.water.map((entry) => ({ ...entry })), bridges: [], stairs: [], doors: [], traps: [], decorations: [],
