@@ -52,7 +52,7 @@ const TEMPLATES = {
     spawnPoints: [point(110, 110), point(850, 110), point(110, 490), point(850, 490), point(480, 84), point(480, 516)],
   },
   'pillar-maze': {
-    solids: [rect(198, 152, 44, 44, 'pillar'), rect(358, 152, 44, 44, 'pillar'), rect(558, 152, 44, 44, 'pillar'), rect(718, 152, 44, 44, 'pillar'), rect(278, 278, 44, 44, 'pillar'), rect(478, 278, 44, 44, 'pillar'), rect(678, 278, 44, 44, 'pillar'), rect(198, 404, 44, 44, 'pillar'), rect(358, 404, 44, 44, 'pillar'), rect(558, 404, 44, 44, 'pillar'), rect(718, 404, 44, 44, 'pillar')],
+    solids: [rect(198, 152, 44, 44, 'pillar'), rect(358, 152, 44, 44, 'pillar'), rect(558, 152, 44, 44, 'pillar'), rect(718, 152, 44, 44, 'pillar'), rect(278, 278, 44, 44, 'pillar'), rect(678, 278, 44, 44, 'pillar'), rect(198, 404, 44, 44, 'pillar'), rect(358, 404, 44, 44, 'pillar'), rect(558, 404, 44, 44, 'pillar'), rect(718, 404, 44, 44, 'pillar')],
     water: [],
     torches: [point(94, 92), point(866, 92), point(94, 508), point(866, 508)],
     chests: [point(480, 474)],
