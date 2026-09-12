@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { describeDungeonAsset, describeRpgMainCharacterAsset } from './assets.js'
+import { describeDungeonAsset, describeDungeonTilesetAsset, describeRpgMainCharacterAsset } from './assets.js'
 
 test('describes the Debts wizard strip as four 26x18 animation frames', () => {
   assert.deepEqual(
@@ -28,6 +28,13 @@ test('describes RPG main character attack sheets as one two-frame row', () => {
   assert.deepEqual(
     describeRpgMainCharacterAsset('/assets/rpg-main-character/_side attack.png', 128, 128),
     { frames: 2, frameWidth: 64, frameHeight: 64, action: 'attack', direction: 'side' },
+  )
+})
+
+test('slices Tiled_files dungeon sheets into authored 16px cells', () => {
+  assert.deepEqual(
+    describeDungeonTilesetAsset('/assets/dungeon-tileset/Tiled_files/walls_floor.png', 272, 416),
+    { frames: 442, frameWidth: 16, frameHeight: 16, columns: 17, rows: 26 },
   )
 })
 
