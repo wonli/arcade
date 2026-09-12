@@ -2,6 +2,7 @@ import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwind
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
+import { installDungeonSfx } from './sfx-runtime.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -46,6 +47,7 @@ function createImpactAudio(windowImpl = globalThis.window) {
 export function installDungeonAttackRuntime(scene, { random = Math.random } = {}) {
   if (!scene || scene.__dungeonAttackRuntimeInstalled) return scene?.__dungeonAttackRuntime ?? null
   scene.__dungeonAttackRuntimeInstalled = true
+  installDungeonSfx(scene)
 
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
