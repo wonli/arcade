@@ -1,14 +1,6 @@
-export function joystickVector(clientX, clientY, rect, { radius = null, deadzone = 0.12 } = {}) {
-  const cx = rect.left + rect.width / 2
-  const cy = rect.top + rect.height / 2
-  const maxRadius = radius ?? Math.max(1, Math.min(rect.width, rect.height) / 2)
-  let dx = (clientX - cx) / maxRadius
-  let dy = (clientY - cy) / maxRadius
-  const length = Math.hypot(dx, dy)
-  if (length > 1) { dx /= length; dy /= length }
-  if (Math.hypot(dx, dy) < deadzone) return { x: 0, y: 0 }
-  return { x: dx, y: dy }
-}
+import { clampJoystickVector } from '../touch/joystick.js'
+
+export { joystickVector } from '../touch/joystick.js'
 
 export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   if (!scene) return null
@@ -54,9 +46,9 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   const api = {
     setMove(x = 0, y = 0) {
       if (x || y) ensureAudio()
-      const length = Math.hypot(x, y)
-      state.x = length > 1 ? x / length : x
-      state.y = length > 1 ? y / length : y
+      const vector = clampJoystickVector(x, y)
+      state.x = vector.x
+      state.y = vector.y
     },
     stopMove() { state.x = 0; state.y = 0 },
     triggerSkill() { ensureAudio(); state.skillPending = true },
