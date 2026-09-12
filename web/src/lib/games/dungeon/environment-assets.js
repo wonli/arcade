@@ -44,15 +44,15 @@ function layerCandidates(map, layerName) {
   return map?.layers?.[layerName] ? [map.layers[layerName]] : []
 }
 
-function representativeTile(map, layerName, tilesetName) {
+function rankedTiles(map, layerName, tilesetName, limit = Infinity) {
   const layers = layerCandidates(map, layerName)
   const tileset = map?.tilesets?.[tilesetName]
-  if (!layers.length || !tileset) return null
+  if (!layers.length || !tileset) return []
 
   const firstGid = Number(tileset.firstGid) || 0
   const tileCount = Number(tileset.tileCount) || 0
   const lastGid = tileCount > 0 ? firstGid + tileCount : Number.POSITIVE_INFINITY
-  if (firstGid <= 0) return null
+  if (firstGid <= 0) return []
 
   const counts = new Map()
   let order = 0
@@ -69,13 +69,15 @@ function representativeTile(map, layerName, tilesetName) {
     }
   }
 
-  let selected = null
-  for (const [tileId, entry] of counts) {
-    if (!selected || entry.count > selected.count || (entry.count === selected.count && entry.order < selected.order)) {
-      selected = { tileId, ...entry }
-    }
-  }
-  return selected?.tileId ?? null
+  return [...counts.entries()]
+    .map(([tileId, entry]) => ({ tileId, ...entry }))
+    .sort((a, b) => b.count - a.count || a.order - b.order)
+    .slice(0, limit)
+    .map((entry) => entry.tileId)
+}
+
+function representativeTile(map, layerName, tilesetName) {
+  return rankedTiles(map, layerName, tilesetName, 1)[0] ?? null
 }
 
 function wallCell(map, gid) {
@@ -163,6 +165,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const water = prefer(dedicated, [/\/Tiled_files\/Water_coasts_animation\.png$/i, /water.*coast/i], 'water')
   const waterDetail = prefer(dedicated, [/\/Tiled_files\/water_details_animation\.png$/i])
   const obstacle = prefer(dedicated, [/\/Tiled_files\/Arches_columns\.png$/i, /arches.*columns/i], 'obstacle')
+  const plates = prefer(dedicated, [/\/Tiled_files\/plates\.png$/i])
   const torch = prefer(dedicated, [/\/Tiled_files\/torches\.png$/i, /torches\.png$/i], 'torch')
   const chest = prefer(dedicated, [/\/Tiled_files\/chest_lever\.png$/i, /chest.*lever/i], 'chest')
   const dungeon3 = manifest?.tiledMaps?.Dungeon3
@@ -173,6 +176,7 @@ export function chooseEnvironmentAssets(manifest = {}) {
   const wallMotif = authoredWallMotif(dungeon3)
   const floorAutotile = authoredFloorAutotile(dungeon3)
   const floorDetailFrames = authoredFloorDetails(dungeon3)
+  const floorDecorationFrames = rankedTiles(dungeon3, 'plates1', 'plates', 6)
   const waterDetailAnimation = authoredWaterDetail == null
     ? null
     : dungeon3?.tilesets?.Water_detilazation?.animations?.[String(authoredWaterDetail)] ?? null
@@ -183,6 +187,9 @@ export function chooseEnvironmentAssets(manifest = {}) {
       ...(floorAutotile ? { autotile: floorAutotile } : {}),
       ...(floorDetailFrames.length ? { detailFrames: floorDetailFrames } : {}),
     }),
+    floorDecoration: plates && floorDecorationFrames.length
+      ? { ...plates, frame: floorDecorationFrames[0], frameset: floorDecorationFrames, authoredBy: 'Dungeon3/plates1' }
+      : null,
     wall: withFrame(wallsFloor, 30, wallMotif ? { authoredBy: 'Dungeon3/Walls', motif: wallMotif } : {}),
     water: withFrame(water, authoredWater ?? 0, authoredWater == null ? {} : { authoredBy: 'Dungeon3/Water' }),
     waterDetail: authoredWaterDetail == null || !waterDetailAnimation
