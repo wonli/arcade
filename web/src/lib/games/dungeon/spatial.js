@@ -39,7 +39,7 @@ const TEMPLATES = {
   },
   'broken-ruins': {
     solids: [rect(204, 176, 176, 24, 'wall'), rect(584, 392, 190, 24, 'wall'), rect(424, 126, 42, 42, 'pillar'), rect(714, 176, 42, 42, 'pillar'), rect(174, 398, 42, 42, 'pillar')],
-    water: [rect(390, 288, 180, 88, 'water')],
+    water: [rect(390, 332, 180, 88, 'water')],
     torches: [point(104, 88), point(846, 126), point(142, 500), point(808, 504)],
     chests: [point(750, 310)],
     spawnPoints: [point(98, 112), point(858, 122), point(110, 486), point(850, 486), point(480, 90), point(480, 510)],
