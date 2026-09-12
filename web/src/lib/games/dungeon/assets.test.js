@@ -31,14 +31,15 @@ test('describes RPG main character attack sheets as one two-frame row', () => {
   )
 })
 
-test('spatial renderer reuses loaded dungeon textures for floor walls and obstacles', async () => {
+test('spatial renderer keeps floor walls and obstacles on distinct texture roles', async () => {
   const runtime = await import('./spatial-runtime.js')
   assert.equal(typeof runtime.spatialTextureKey, 'function')
-  assert.equal(runtime.spatialTextureKey('floor', { floor: true, wall: true }), 'dungeon-floor')
-  assert.equal(runtime.spatialTextureKey('boundary', { floor: true, wall: true }), 'dungeon-wall')
-  assert.equal(runtime.spatialTextureKey('pillar', { floor: true, wall: true }), 'dungeon-wall')
-  assert.equal(runtime.spatialTextureKey('broken-wall', { floor: true, wall: true }), 'dungeon-wall')
-  assert.equal(runtime.spatialTextureKey('floor', { floor: false, wall: true }), null)
+  assert.equal(runtime.spatialTextureKey('floor', { floor: true, wall: true, obstacle: true }), 'dungeon-floor')
+  assert.equal(runtime.spatialTextureKey('boundary', { floor: true, wall: true, obstacle: true }), 'dungeon-wall')
+  assert.equal(runtime.spatialTextureKey('pillar', { floor: true, wall: true, obstacle: true }), 'dungeon-obstacle')
+  assert.equal(runtime.spatialTextureKey('broken-wall', { floor: true, wall: true, obstacle: true }), 'dungeon-obstacle')
+  assert.equal(runtime.spatialTextureKey('pillar', { floor: true, wall: true, obstacle: false }), null)
+  assert.equal(runtime.spatialTextureKey('floor', { floor: false, wall: true, obstacle: true }), null)
 })
 
 test('floor walls and obstacles have deliberately different visual tones', async () => {
@@ -50,4 +51,21 @@ test('floor walls and obstacles have deliberately different visual tones', async
   assert.notEqual(floor, wall)
   assert.notEqual(wall, obstacle)
   assert.notEqual(floor, obstacle)
+})
+
+test('selects Debts environment sprites for obstacles torches and chests', async () => {
+  const runtime = await import('./spatial-runtime.js')
+  assert.equal(typeof runtime.selectDebtsEnvironmentAssets, 'function')
+  const selected = runtime.selectDebtsEnvironmentAssets({
+    assets: [
+      { path: '/assets/debts/Tiles/BrickFloor.png', source: 'debts', frames: 1 },
+      { path: '/assets/debts/Tiles/StoneWall.png', source: 'debts', frames: 1 },
+      { path: '/assets/debts/Environment/Pillar.png', source: 'debts', frames: 1 },
+      { path: '/assets/debts/Environment/Torch.png', source: 'debts', frames: 1 },
+      { path: '/assets/debts/Items/Chest.png', source: 'debts', frames: 1 },
+    ],
+  })
+  assert.equal(selected.obstacle.path, '/assets/debts/Environment/Pillar.png')
+  assert.equal(selected.torch.path, '/assets/debts/Environment/Torch.png')
+  assert.equal(selected.chest.path, '/assets/debts/Items/Chest.png')
 })
