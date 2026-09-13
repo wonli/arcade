@@ -51,13 +51,23 @@ test('perimeter walls frame the dungeon and props are denser with oversized auth
     assert.equal(wall.footprint.height, g.bounds.height)
     const props = g.decorations.filter(d => d.kind !== 'wall')
     totalDecorations += props.length
-    for (const d of props) scales.add(`${d.footprint.width}x${d.footprint.height}`)
+    for (const d of props) if (d.footprint) scales.add(`${d.footprint.width}x${d.footprint.height}`)
     decoratedRooms += g.rooms.filter(room => props.some(d => d.x >= room.x && d.x <= room.x + room.width && d.y >= room.y && d.y <= room.y + room.height)).length
   }
   assert.ok(totalDecorations / totalRooms >= 3.25, `expected denser dressing, got ${(totalDecorations / totalRooms).toFixed(2)} props/room`)
   assert.ok(decoratedRooms / totalRooms >= 0.8, 'most rooms should receive decoration')
   assert.ok(scales.size >= 5, `expected varied decoration footprints, saw ${[...scales]}`)
   assert.ok([...scales].some(size => size.split('x').map(Number).some(value => value >= 80)), `expected oversized native props, saw ${[...scales]}`)
+})
+
+test('room connections keep a generous walkable throat and expose doors and landmarks', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })
+    assert.ok(g.bridges.every(bridge => Math.min(bridge.width, bridge.height) >= 96), `seed ${seed}: narrow bridge throat`)
+    assert.ok(g.doors.length >= g.paths.length * 2, `seed ${seed}: each connection should have two door frames`)
+    assert.ok(g.decorations.some(entry => entry.kind === 'statue'), `seed ${seed}: missing statue landmark`)
+    for (const door of g.doors) assert.equal(circleHitsSolid(door, 18, g), false, `seed ${seed}: door blocks its own passage`)
+  }
 })
 
 test('regression: geometry stays deterministic, tile-aligned, multi-level and collision-safe', () => {
