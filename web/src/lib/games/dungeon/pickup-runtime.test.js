@@ -55,6 +55,7 @@ test('equipping with E leaves the previous weapon on the ground', () => {
     time: { now: 0 },
     input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
     events: { once() {} },
+    emitStats() {},
     spawnDrop(x, y, item) { this.drops.push({ x, y, item, visual: { scaleX: 1, scaleY: 1, setY() {}, setScale() {} }, glow: { setAlpha() {} } }) },
     updateDrops() {
       const drop = this.drops[0]
