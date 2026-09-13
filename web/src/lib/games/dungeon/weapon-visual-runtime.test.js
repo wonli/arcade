@@ -11,26 +11,38 @@ test('weapon visual profile maps rarity to distinct Soul weapon art without chan
   assert.equal(weaponVisualProfile(null), null)
 })
 
-test('weapon pose follows four player facings and exposes the blade tip for VFX alignment', () => {
+test('idle weapon trails behind player facing and stays behind the character layer', () => {
   const player = { x: 100, y: 120 }
   const right = weaponPose(player, 'right')
   const left = weaponPose(player, 'left')
   const up = weaponPose(player, 'up')
   const down = weaponPose(player, 'down')
 
-  assert.ok(right.x > player.x && right.tip.x > right.x)
-  assert.ok(left.x < player.x && left.tip.x < left.x)
-  assert.ok(up.y < player.y && up.tip.y < up.y)
-  assert.ok(down.y > player.y && down.tip.y > down.y)
+  assert.ok(right.x < player.x)
+  assert.ok(left.x > player.x)
+  assert.ok(up.y > player.y)
+  assert.ok(down.y < player.y)
+  for (const pose of [right, left, up, down]) assert.ok(pose.depth < 20)
 })
 
-test('attacking pose swings around the hand while preserving the facing side', () => {
+test('attacking pose moves weapon to the facing side and in front of the character', () => {
   const player = { x: 200, y: 200 }
-  const idle = weaponPose(player, 'right')
-  const attack = weaponPose(player, 'right', { attacking: true })
-  assert.notEqual(attack.angle, idle.angle)
-  assert.ok(attack.x > player.x)
-  assert.ok(attack.tip.x > player.x)
+  const right = weaponPose(player, 'right', { attacking: true })
+  const left = weaponPose(player, 'left', { attacking: true })
+  const up = weaponPose(player, 'up', { attacking: true })
+  const down = weaponPose(player, 'down', { attacking: true })
+
+  assert.ok(right.x > player.x && right.tip.x > player.x)
+  assert.ok(left.x < player.x && left.tip.x < player.x)
+  assert.ok(up.y < player.y && up.tip.y < player.y)
+  assert.ok(down.y > player.y && down.tip.y > player.y)
+  for (const pose of [right, left, up, down]) assert.ok(pose.depth > 20)
+})
+
+test('weapon flip follows the corrected side-sprite facing semantics', () => {
+  const player = { x: 0, y: 0 }
+  assert.equal(weaponPose(player, 'left').flipX, false)
+  assert.equal(weaponPose(player, 'right').flipX, true)
 })
 
 test('runtime attaches one weapon sprite, follows the player and returns the blade tip on swing', () => {
@@ -44,10 +56,10 @@ test('runtime attaches one weapon sprite, follows the player and returns the bla
     add: {
       image(x, y, key) {
         const object = {
-          x, y, key, visible: true, angle: 0,
+          x, y, key, visible: true, angle: 0, depth: 0, flipX: false,
           setOrigin() { return this }, setScale() { return this }, setVisible(value) { this.visible = value; return this },
           setPosition(nx, ny) { this.x = nx; this.y = ny; return this }, setAngle(value) { this.angle = value; return this },
-          setFlipX() { return this }, setDepth() { return this }, destroy() { this.destroyed = true },
+          setFlipX(value) { this.flipX = value; return this }, setDepth(value) { this.depth = value; return this }, destroy() { this.destroyed = true },
         }
         created.push(object)
         return object
@@ -64,15 +76,18 @@ test('runtime attaches one weapon sprite, follows the player and returns the bla
   update()
   assert.equal(created.length, 1)
   assert.equal(created[0].key, 'dungeon-held-weapon-rare')
-  assert.ok(created[0].x > scene.playerState.x)
+  assert.ok(created[0].x < scene.playerState.x)
+  assert.ok(created[0].depth < 20)
+  assert.equal(created[0].flipX, true)
 
-  const idleAngle = created[0].angle
   const tip = runtime.swing()
-  assert.notEqual(created[0].angle, idleAngle)
+  assert.ok(created[0].x > scene.playerState.x)
+  assert.ok(created[0].depth > 20)
   assert.ok(tip.x > scene.playerState.x)
 
   scene.playerState.x = 160
   scene.time.now = 300
   update()
-  assert.ok(created[0].x > 160)
+  assert.ok(created[0].x < 160)
+  assert.ok(created[0].depth < 20)
 })
