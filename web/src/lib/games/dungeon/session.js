@@ -1,5 +1,5 @@
 export function initialDungeonStats() {
-  return { hp: 100, maxHp: 100, damage: 10, kills: 0, weapon: null, weaponRarity: null, weaponDamage: 0, weaponAffixes: [] }
+  return { hp: 100, maxHp: 100, damage: 10, kills: 0, healthPotions: 0, weapon: null, weaponRarity: null, weaponDamage: 0, weaponAffixes: [] }
 }
 
 export function initialDungeonProgress() {

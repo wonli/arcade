@@ -1,5 +1,6 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
+import { healthPotionPickupMode, useStoredHealthPotion } from './inventory.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -27,9 +28,7 @@ function nearOpenedChest(scene, x, y) {
 export function prepareDropItem(scene, x, y, item, random = Math.random) {
   if (!item) return item
   if (scene?.__restoringFloor) return item
-  if (nearOpenedChest(scene, x, y) && random() < 0.20) {
-    return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
-  }
+  if (nearOpenedChest(scene, x, y) && random() < 0.20) return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
   if (!item.type?.startsWith('weapon.')) return item
   const rolled = weaponDamageForFloor(item.rarity, scene?.floor ?? 1, random)
   return { ...item, damage: Math.max(item.damage ?? 0, rolled), affixes: [...(item.affixes ?? [])] }
@@ -50,12 +49,18 @@ function currentWeapon(scene) {
 export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random } = {}) {
   if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
+  scene.playerState.healthPotions ??= 0
 
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalUpdateDrops = scene.updateDrops.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
+  const originalEmitStats = scene.emitStats.bind(scene)
   const key = scene.input?.keyboard?.addKey?.('E')
   let selected = null
+
+  scene.emitStats = function emitStatsWithInventory(now) {
+    originalEmitStats(now)
+  }
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
     const before = scene.drops?.length ?? 0
@@ -72,14 +77,29 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     return drop
   }
 
-  scene.spawnDrop = function spawnPreparedDrop(x, y, item) {
-    return spawnDropWithMotion(x, y, item)
+  scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
+
+  const emitInventoryStats = () => {
+    originalEmitStats()
+    scene.__dungeonInventoryStats?.(scene.playerState.healthPotions ?? 0)
+  }
+
+  const useHealthPotion = () => {
+    const next = useStoredHealthPotion(scene.playerState, 28)
+    if (!next.used) return false
+    scene.playerState.hp = next.hp
+    scene.playerState.healthPotions = next.healthPotions
+    scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+    scene.pickupBurst?.(scene.playerState.x, scene.playerState.y, { type: 'consumable.health_potion' }, next.healed)
+    scene.__dungeonInventoryStats?.(scene.playerState.healthPotions)
+    originalEmitStats()
+    return true
   }
 
   const api = {
-    spawnExact(x, y, item) {
-      return spawnDropWithMotion(x, y, item, { prepare: false })
-    },
+    spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
+    useHealthPotion,
+    getHealthPotions() { return scene.playerState.healthPotions ?? 0 },
   }
   scene.__dungeonPickupRuntime = api
 
@@ -93,7 +113,6 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     if (!selected || !scene.drops?.includes(selected)) return
     const distance = Math.hypot(selected.x - scene.playerState.x, selected.y - scene.playerState.y)
     if (distance > 34) return
-
     const previous = currentWeapon(scene)
     const x = selected.x
     const y = selected.y
@@ -121,11 +140,24 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     const allDrops = [...(scene.drops ?? [])]
     const confirmDrops = allDrops.filter((drop) => pickupIntent(drop.item) === 'confirm')
     const automaticDrops = allDrops.filter((drop) => pickupIntent(drop.item) !== 'confirm')
+    const remainingAutomatic = []
 
-    scene.drops = automaticDrops
+    for (const drop of automaticDrops) {
+      const potion = drop.item?.type === 'consumable.health_potion'
+      const nearby = Math.hypot((drop.x ?? 0) - scene.playerState.x, (drop.y ?? 0) - scene.playerState.y) <= 34
+      if (potion && nearby && healthPotionPickupMode(scene.playerState) === 'store') {
+        scene.playerState.healthPotions = (scene.playerState.healthPotions ?? 0) + 1
+        scene.destroyDrop?.(drop)
+        scene.__dungeonInventoryStats?.(scene.playerState.healthPotions)
+        scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
+        continue
+      }
+      remainingAutomatic.push(drop)
+    }
+
+    scene.drops = remainingAutomatic
     originalUpdateDrops()
     scene.drops = [...confirmDrops, ...scene.drops]
-
     publish(nearestConfirmableDrop(scene.playerState, confirmDrops, 34))
   }
 
