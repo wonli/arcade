@@ -40,7 +40,10 @@ test('variant selection is stable for the same seed and can vary across seeds', 
   assert.equal(selectVfxVariant(catalog, 'missing', 1), null)
 })
 
-test('vfx blend modes follow semantic content instead of forcing ADD', () => {
-  for (const kind of ['beam', 'lightning', 'flame', 'sparkle', 'heal', 'portal', 'aura']) assert.equal(vfxBlendMode(kind), 'ADD', kind)
-  for (const kind of ['slash', 'impact', 'critical', 'whirlwind', 'explosion', 'smoke']) assert.equal(vfxBlendMode(kind), 'NORMAL', kind)
+test('blend mode accounts for source packs that rely on additive black removal', () => {
+  assert.equal(vfxBlendMode('slash', { source: 'spell-effects' }), 'ADD')
+  assert.equal(vfxBlendMode('whirlwind', { source: 'foozle' }), 'ADD')
+  assert.equal(vfxBlendMode('impact', { source: 'retro-impact' }), 'NORMAL')
+  assert.equal(vfxBlendMode('critical', { source: 'retro-impact' }), 'NORMAL')
+  assert.equal(vfxBlendMode('beam', { source: 'free-pixel-magic' }), 'ADD')
 })

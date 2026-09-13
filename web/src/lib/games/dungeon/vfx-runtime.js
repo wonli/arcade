@@ -16,6 +16,8 @@ const SOURCE_PREFERENCE = {
   smoke: ['retro-impact', 'foozle', 'spell-effects', 'kenney-particles'],
 }
 
+const ADDITIVE_SOURCES = new Set(['spell-effects', 'foozle', 'free-pixel-magic', 'kenney-particles', 'lightning'])
+
 function scoreAsset(asset, kind) {
   const preference = SOURCE_PREFERENCE[kind] ?? []
   const sourceIndex = preference.indexOf(asset.source)
@@ -61,7 +63,8 @@ export function selectVfxVariant(catalog, kind, seed = 0) {
   return candidates[stableHash(`${kind}:${seed}`) % candidates.length] ?? null
 }
 
-export function vfxBlendMode(kind) {
+export function vfxBlendMode(kind, asset = null) {
+  if (ADDITIVE_SOURCES.has(asset?.source)) return 'ADD'
   return ['beam', 'lightning', 'flame', 'sparkle', 'heal', 'portal', 'aura'].includes(kind) ? 'ADD' : 'NORMAL'
 }
 
@@ -110,7 +113,7 @@ function spawnEffectSprite(scene, catalog, kind, x, y, { angle = 0, width = null
   const key = textureKey(kind, index)
   if (!scene.textures?.exists?.(key)) return null
   const object = (asset.frames ?? 1) > 1 ? scene.add.sprite(x, y, key, 0) : scene.add.image(x, y, key)
-  object.setDepth(depth).setAlpha(alpha).setAngle(angle).setBlendMode?.(vfxBlendMode(kind))
+  object.setDepth(depth).setAlpha(alpha).setAngle(angle).setBlendMode?.(vfxBlendMode(kind, asset))
   if (tint != null) object.setTint?.(tint)
   if (width != null) object.displayWidth = width
   if (height != null) object.displayHeight = height
