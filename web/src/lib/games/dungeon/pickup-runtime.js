@@ -221,30 +221,31 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
 
   const equipSelected = () => {
-    if (!selected || !scene.drops?.includes(selected)) return
-    const distance = Math.hypot(selected.x - scene.playerState.x, selected.y - scene.playerState.y)
+    const candidate = selected
+    if (!candidate || !scene.drops?.includes(candidate)) return
+    const distance = Math.hypot(candidate.x - scene.playerState.x, candidate.y - scene.playerState.y)
     if (distance > 34) return
     const previous = currentWeapon(scene)
-    const x = selected.x
-    const y = selected.y
-    const rest = scene.drops.filter((drop) => drop !== selected)
+    const x = candidate.x
+    const y = candidate.y
+    const rest = scene.drops.filter((drop) => drop && drop !== candidate)
 
-    // Clear the selected texture while the visual is still alive. originalUpdateDrops()
-    // destroys the picked drop, so publishing after it would call setTexture() on a
-    // destroyed Phaser GameObject and crash inside TextureManager (scene.sys missing).
+    // Clear the selected texture while the visual is still alive. Keep a stable local
+    // reference because publish(null) intentionally clears the selected closure state.
     publish(null)
-    scene.drops = [selected]
+    scene.drops = [candidate]
     originalUpdateDrops()
     const equipped = scene.drops.length === 0
-    scene.drops = equipped ? rest : [selected, ...rest]
+    scene.drops = equipped ? rest : [candidate, ...rest]
     if (equipped && previous) spawnDropWithMotion(x, y, previous, { prepare: false })
   }
 
   key?.on?.('down', equipSelected)
 
   scene.updateDrops = function updateDropsWithConfirmation() {
+    scene.drops = (scene.drops ?? []).filter(Boolean)
     const now = scene.time?.now ?? 0
-    for (const drop of scene.drops ?? []) {
+    for (const drop of scene.drops) {
       if (drop.spawnedAt == null || !drop.visual) continue
       const motion = lootMotion(now - drop.spawnedAt, drop.groundY ?? drop.y, 72)
       drop.visual.setY?.(motion.y)
@@ -252,7 +253,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
       if (drop.glow && now - drop.spawnedAt < 420) drop.glow.setAlpha?.(Math.min(0.75, (now - drop.spawnedAt) / 420 * 0.65))
     }
 
-    const allDrops = [...(scene.drops ?? [])]
+    const allDrops = [...scene.drops]
     const confirmDrops = allDrops.filter((drop) => pickupIntent(drop.item) === 'confirm')
     const automaticDrops = allDrops.filter((drop) => pickupIntent(drop.item) !== 'confirm')
     const remainingAutomatic = []
@@ -273,7 +274,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
     scene.drops = remainingAutomatic
     originalUpdateDrops()
-    scene.drops = [...confirmDrops, ...scene.drops]
+    scene.drops = [...confirmDrops, ...(scene.drops ?? []).filter(Boolean)]
     publish(nearestConfirmableDrop(scene.playerState, confirmDrops, 34))
   }
 
