@@ -123,6 +123,23 @@ test('visible east-west crypt paving stays walkable near coffin groups', () => {
   }
 })
 
+test('every walkable room floor belongs to the room center navigation component', () => {
+  for (let seed=1;seed<=80;seed++) {
+    for (let floor=1;floor<=3;floor++) {
+      const g=generateDungeonGeometry({runSeed:seed,floor})
+      const nav=buildNavGrid(g,{cellSize:16,actorRadius:26})
+      for (const room of g.rooms) {
+        for (const cell of nav.cells.values()) {
+          if (cell.blocked) continue
+          if (cell.x < room.x || cell.x >= room.x + room.width || cell.y < room.y || cell.y >= room.y + room.height) continue
+          assert.ok(findPath(nav,room.center,cell).length,
+            `seed ${seed} floor ${floor}: ${room.theme} room ${room.id} has isolated walkable floor at ${cell.x},${cell.y}`)
+        }
+      }
+    }
+  }
+})
+
 test('the rendered assets keep complete motifs at every randomized density', () => {
   for (const seed of [5,13,33,57,91]) {
     const g=generateDungeonGeometry({runSeed:seed}),plan=buildDungeon3TilePlan(g)
