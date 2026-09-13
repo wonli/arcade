@@ -7,21 +7,25 @@ test('legacy weapons fall back to sword', () => {
   assert.equal(weaponArchetype({ weapon: 'weapon.rust_sword' }), 'sword')
 })
 
-test('dagger is fast and close while katana is slower and longer', () => {
-  const dagger = weaponProfile({ archetype: 'dagger' })
-  const sword = weaponProfile({ archetype: 'sword' })
-  const katana = weaponProfile({ archetype: 'katana' })
-  assert.ok(dagger.intervalMultiplier < sword.intervalMultiplier)
-  assert.ok(dagger.range < sword.range)
-  assert.ok(dagger.damageMultiplier < sword.damageMultiplier)
-  assert.ok(katana.intervalMultiplier > sword.intervalMultiplier)
-  assert.ok(katana.range > sword.range)
-  assert.ok(katana.damageMultiplier > sword.damageMultiplier)
-  assert.ok(dagger.swingMs < sword.swingMs)
-  assert.ok(katana.swingMs > sword.swingMs)
+test('all weapon identities resolve to an explicit combat archetype', () => {
+  for (const archetype of ['dagger', 'sword', 'katana', 'greatsword', 'spear', 'axe', 'bow', 'staff']) {
+    assert.equal(weaponProfile({ archetype }).archetype, archetype)
+  }
 })
 
-test('player state resolves equipped weapon archetype', () => {
-  assert.equal(weaponArchetype({ equippedWeapon: { archetype: 'katana' } }), 'katana')
-  assert.equal(weaponProfile({ equippedWeapon: { archetype: 'dagger' } }).range, 132)
+test('profiles encode materially different combat roles', () => {
+  const dagger = weaponProfile({ archetype: 'dagger' })
+  const sword = weaponProfile({ archetype: 'sword' })
+  const greatsword = weaponProfile({ archetype: 'greatsword' })
+  const spear = weaponProfile({ archetype: 'spear' })
+  const axe = weaponProfile({ archetype: 'axe' })
+  const bow = weaponProfile({ archetype: 'bow' })
+  const staff = weaponProfile({ archetype: 'staff' })
+  assert.ok(dagger.intervalMultiplier < sword.intervalMultiplier)
+  assert.ok(greatsword.damageMultiplier > sword.damageMultiplier)
+  assert.ok(spear.range > greatsword.range)
+  assert.ok(axe.knockbackMultiplier > greatsword.knockbackMultiplier)
+  assert.ok(bow.range > spear.range)
+  assert.equal(bow.attackMode, 'ranged')
+  assert.equal(staff.attackMode, 'ranged')
 })

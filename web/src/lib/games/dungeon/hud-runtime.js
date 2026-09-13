@@ -1,3 +1,5 @@
+import { weaponDefinition } from './weapon-catalog.js'
+
 export const HUD_INSET = 56
 export const HUD_WEAPON_ICON_URL = new URL('./assets/sword-7soul1_20201212/32x32/dagger_01.png', import.meta.url).href
 
@@ -9,10 +11,15 @@ const HUD_BG = 0x05070a
 const HUD_BG_ALPHA = 0.48
 const HUD_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
 
+function equippedWeaponName(weapon, labels) {
+  const type = typeof weapon === 'string' ? weapon : weapon?.type
+  return weaponDefinition(type)?.name ?? labels.dungeonBlade ?? 'Dungeon Blade'
+}
+
 export function dungeonHudModel({ stats = {}, labels = {} } = {}) {
   const rarityName = stats.weaponRarity ? (labels[`rarity:${stats.weaponRarity}`] ?? stats.weaponRarity) : ''
   const weaponTitle = stats.weapon
-    ? `${rarityName ? `${rarityName} ` : ''}${labels.dungeonBlade ?? 'Dungeon Blade'}`
+    ? `${rarityName ? `${rarityName} ` : ''}${equippedWeaponName(stats.weapon, labels)}`
     : (labels.none ?? 'None')
   const weaponDetail = stats.weapon
     ? `+${stats.weaponDamage ?? 0} ${labels.baseDamage ?? 'DMG'}`
@@ -37,6 +44,7 @@ function rarityColor(rarity) {
     uncommon: '#70ff9f',
     rare: '#67a8ff',
     epic: '#c984ff',
+    legendary: '#ffb347',
   }[rarity] ?? '#f4f0e8'
 }
 
@@ -124,6 +132,7 @@ export function installDungeonHud(scene, {
       uncommon: 0x70ff9f,
       rare: 0x67a8ff,
       epic: 0xc984ff,
+      legendary: 0xffb347,
     }[model.rarity] ?? 0xffffff)
     return model
   }
