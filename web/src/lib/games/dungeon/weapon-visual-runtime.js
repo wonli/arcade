@@ -80,10 +80,10 @@ export function weaponVisualProfile(item, { selected = false } = {}) {
 }
 
 const IDLE_POSES = {
-  right: { dx: -15, dy: 6, angle: -38 },
-  left: { dx: 15, dy: 6, angle: 38 },
-  up: { dx: 8, dy: 15, angle: 38 },
-  down: { dx: 8, dy: -15, angle: -38 },
+  right: { dx: -15, dy: 6, angle: 52 },
+  left: { dx: 15, dy: 6, angle: 128 },
+  up: { dx: 8, dy: 15, angle: 128 },
+  down: { dx: 8, dy: -15, angle: 52 },
 }
 const ATTACK_POSES = {
   right: { dx: 17, dy: 5, angle: 84, tipDx: 25, tipDy: -16 },
