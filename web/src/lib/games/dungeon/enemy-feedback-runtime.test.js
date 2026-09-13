@@ -51,7 +51,7 @@ test('runtime hit reaction moves only the visual, not authoritative enemy coordi
 
 test('death keeps sprite visible while scheduling bounded fade and shrink', () => {
   let tween = null
-  const visual = { visible: true, scaleX: 2, scaleY: 2, setVisible(value) { this.visible = value; return this } }
+  const visual = { visible: false, scaleX: 2, scaleY: 2, setVisible(value) { this.visible = value; return this } }
   const scene = { tweens: { add(config) { tween = config; return config } }, events: { once() {} } }
   const enemy = { x: 120, y: 100, visual, elite: false, boss: false }
   installDungeonEnemyFeedback(scene).death(enemy)
@@ -59,4 +59,31 @@ test('death keeps sprite visible while scheduling bounded fade and shrink', () =
   assert.equal(tween.alpha, 0)
   assert.ok(tween.duration >= 180 && tween.duration <= 300)
   assert.ok(tween.scaleX < visual.scaleX)
+})
+
+test('boss wrappers add bounded warnings and delegate gameplay exactly once', () => {
+  let chargeCalls = 0
+  let shockwaveCalls = 0
+  const shapes = []
+  const shape = () => ({ setOrigin() { return this }, setRotation() { return this }, setDepth() { return this }, setStrokeStyle() { return this }, destroy() { this.destroyed = true } })
+  const scene = {
+    playerState: { x: 240, y: 180 },
+    bossCharge() { chargeCalls++ },
+    bossShockwave() { shockwaveCalls++ },
+    add: {
+      rectangle() { const value = shape(); shapes.push(value); return value },
+      circle() { const value = shape(); shapes.push(value); return value },
+    },
+    tweens: { add() {} },
+    events: { once() {} },
+  }
+  const runtime = installDungeonEnemyFeedback(scene)
+  const enemy = { x: 100, y: 100, phase: 2 }
+  scene.bossCharge(enemy)
+  assert.equal(chargeCalls, 1)
+  assert.equal(shapes.length, 2)
+  scene.bossShockwave(enemy)
+  assert.equal(shockwaveCalls, 1)
+  assert.equal(shapes.length, 5)
+  runtime.restore()
 })
