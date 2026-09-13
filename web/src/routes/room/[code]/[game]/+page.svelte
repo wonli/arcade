@@ -5,6 +5,7 @@
   import TetrisBattle from '$lib/games/tetris/TetrisBattle.svelte'
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
   import DrawGuess from '$lib/games/drawguess/DrawGuess.svelte'
+  import ChessBoard from '$lib/games/chess/ChessBoard.svelte'
 
   export let data
 
@@ -18,6 +19,7 @@
   let connection = 'connecting'
   let error = ''
   let copied = false
+  let botDifficulty = data?.difficulty ?? 'medium'
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let audioContext = null
@@ -46,6 +48,11 @@
 
   function playFinishSound(winner, roomState) {
     if (!winner) { tone(300, .12); tone(260, .16, .03, .1); return }
+    if (gameName === 'chess') {
+      if (winner === myChessColor(roomState)) { tone(440, .1); tone(660, .16, .035, .09) }
+      else { tone(330, .1); tone(220, .18, .035, .09) }
+      return
+    }
     if (winner === myStone(roomState)) { tone(440, .1); tone(660, .16, .035, .09) }
     else { tone(330, .1); tone(220, .18, .035, .09) }
   }
@@ -55,9 +62,15 @@
     const previous = gameState
     room = snapshot
     gameState = snapshot.state ?? null
-    if (gameName !== 'gomoku' || !previous || !gameState) return
-    if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
-    else if (gameState.moves > previous.moves) playMoveSound()
+    if (!previous || !gameState) return
+    if (gameName === 'gomoku') {
+      if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
+      else if (gameState.moves > previous.moves) playMoveSound()
+    }
+    if (gameName === 'chess') {
+      if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
+      else if (gameState.ply > previous.ply) playMoveSound()
+    }
   }
 
   function myStone(roomState) {
@@ -65,8 +78,13 @@
     return index === 0 ? 1 : index === 1 ? 2 : 0
   }
 
+  function myChessColor(roomState) {
+    const index = roomState?.players?.findIndex((player) => player.id === identity.sessionId) ?? -1
+    return index === 0 ? 'white' : index === 1 ? 'black' : ''
+  }
+
   function canMove(roomState, state, x, y) { return !!state && state.status === 'playing' && myStone(roomState) === state.turn && state.board?.[y]?.[x] === 0 }
-  function canAddBot(roomState) { return gameName === 'gomoku' && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
+  function canAddBot(roomState) { return (gameName === 'gomoku' || gameName === 'chess') && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
   function isMultiplayer(roomState) { return roomState?.maxPlayers === 2 }
 
   function subscribeRoom() {
@@ -87,9 +105,13 @@
     await socket.request('arcade.login', { playerId: identity.sessionId, sessionId: identity.sessionId })
 
     if (roomCode === 'NEW') {
-      const snapshot = await socket.request('room.create', { game: gameName, name, players: data?.players ?? 2 })
+      const wantsChessBot = gameName === 'chess' && data?.players === 1
+      const snapshot = await socket.request('room.create', { game: gameName, name, players: wantsChessBot ? 2 : (data?.players ?? 2) })
       applySnapshot(snapshot)
       roomCode = snapshot.id
+      if (wantsChessBot) {
+        applySnapshot(await socket.request('room.addBot', { roomId: roomCode, difficulty: botDifficulty }))
+      }
       history.replaceState(null, '', `/room/${roomCode.toLowerCase()}/${gameName}`)
     } else {
       const snapshot = await socket.request('room.join', { roomId: roomCode, name })
@@ -105,7 +127,8 @@
   }
 
   async function moveStone(x, y) { if (!canMove(room, gameState, x, y)) return; error=''; try { applySnapshot(await socket.request('game.move',{roomId:roomCode,move:{x,y}})) } catch(err){ error=err.message } }
-  async function addBot() { error=''; try { applySnapshot(await socket.request('room.addBot',{roomId:roomCode})) } catch(err){ error=err.message } }
+  async function moveChess(move) { error=''; try { applySnapshot(await socket.request('game.move',{roomId:roomCode,move})) } catch(err){ error=err.message } }
+  async function addBot() { error=''; try { applySnapshot(await socket.request('room.addBot',{roomId:roomCode,difficulty:botDifficulty})) } catch(err){ error=err.message } }
   async function rematch() { error=''; try { applySnapshot(await socket.request('room.rematch',{roomId:roomCode})) } catch(err){ error=err.message } }
   async function copyInvite() { await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/${gameName}`); copied=true; setTimeout(()=>copied=false,1200) }
   async function reconnect() { try { await bootstrap() } catch(err){ connection='offline'; error=err.message } }
@@ -119,10 +142,27 @@
     return state.turn===myStone(roomState)?'Your turn':"Friend's turn"
   }
 
+  function chessLabel(roomState, state) {
+    if (!roomState || roomState.players.length < roomState.maxPlayers) return 'Waiting for an opponent'
+    if (!state) return 'Preparing board'
+    if (state.status === 'finished') {
+      if (state.winner) return state.winner === myChessColor(roomState) ? 'Checkmate · You win' : 'Checkmate · Opponent wins'
+      if (state.drawReason === 'stalemate') return 'Draw · Stalemate'
+      if (state.drawReason === 'threefold-repetition') return 'Draw · Threefold repetition'
+      if (state.drawReason === 'fifty-move') return 'Draw · Fifty-move rule'
+      if (state.drawReason === 'insufficient-material') return 'Draw · Insufficient material'
+      return 'Draw'
+    }
+    const mine = myChessColor(roomState)
+    const turn = state.turn === mine ? 'Your turn' : (roomState.players?.[1]?.bot && state.turn === 'black' ? 'Bot to move' : "Opponent's turn")
+    return state.check ? `${turn} · Check` : turn
+  }
+
   function pageTitle(){
     if(gameName==='tetris')return'Tetris Battle'
     if(gameName==='snake')return'Snake Arena'
     if(gameName==='drawguess')return'Draw & Guess'
+    if(gameName==='chess')return'Chess'
     return'Gomoku'
   }
 
@@ -155,6 +195,26 @@
       {#if isMultiplayer(room)}<aside class="room-panel tetris-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div><button class="primary-button" onclick={copyInvite}>{copied?'Link copied':'Copy invite link'}</button></aside>{/if}
       {#if error}<div class="room-error">{error}</div>{/if}
       {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>Reconnect</button>{/if}
+    {:else if gameName === 'chess'}
+      <section class="match-head chess-head">
+        <div class="player-card active-player"><div class="chess-side white-side">♔</div><div><span>WHITE</span><strong>{room?.players?.[0]?.name??name}</strong></div></div>
+        <div class="match-status"><span>INTERNATIONAL CHESS</span><h1>{chessLabel(room,gameState)}</h1><p>{gameState?.ply ?? 0} half-moves</p></div>
+        <div class="player-card right"><div><span>BLACK</span><strong>{room?.players?.[1]?.name??'Waiting...'}{room?.players?.[1]?.botDifficulty ? ` · ${room.players[1].botDifficulty.toUpperCase()}` : ''}</strong></div><div class="chess-side black-side">♚</div></div>
+      </section>
+      <section class="board-stage chess-stage">
+        <div class="chess-board-column">{#if room && gameState}<ChessBoard {room} state={gameState} {identity} onMove={moveChess} />{/if}</div>
+        <aside class="room-panel chess-panel">
+          <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div>
+          <button class="primary-button" onclick={copyInvite}>{copied?'Link copied':'Copy invite link'}</button>
+          {#if canAddBot(room)}
+            <div class="difficulty-control"><label for="bot-difficulty">BOT DIFFICULTY</label><select id="bot-difficulty" bind:value={botDifficulty}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="expert">Expert</option></select></div>
+            <button class="secondary-button" onclick={addBot}>Play vs Bot</button>
+          {/if}
+          {#if gameState?.status==='finished'&&myChessColor(room)}<button class="secondary-button" onclick={rematch}>Play again</button>{/if}
+          {#if error}<div class="room-error">{error}</div>{/if}
+          {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>Reconnect</button>{/if}
+        </aside>
+      </section>
     {:else}
       <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>BLACK</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>GOMOKU</span><h1>{gameLabel(room,gameState)}</h1><p>{room?.players?.length??0}/{room?.maxPlayers??2} players</p></div><div class="player-card right"><div><span>WHITE</span><strong>{room?.players?.[1]?.name??'Waiting...'}</strong></div><div class="player-stone white"></div></div></section>
       <section class="board-stage"><div class="board-frame"><div class="gomoku-board" aria-label="Gomoku board">{#each cells as cell}<button class:last={isLast(gameState,cell.x,cell.y)} class:playable={canMove(room,gameState,cell.x,cell.y)} class="board-cell" onclick={()=>moveStone(cell.x,cell.y)} aria-label={`Place stone at ${cell.x+1}, ${cell.y+1}`}>{#if stoneAt(gameState,cell.x,cell.y)===1}<span class="stone stone-black"></span>{:else if stoneAt(gameState,cell.x,cell.y)===2}<span class="stone stone-white"></span>{:else}<span class="ghost-stone"></span>{/if}</button>{/each}</div></div>
@@ -164,5 +224,5 @@
 </div>
 
 <style>
-  .tetris-panel{width:min(100%,960px);margin:26px auto 0;display:grid;grid-template-columns:180px minmax(180px,260px);gap:12px;align-items:stretch}.tetris-panel .code-display{margin:0}.standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}@media(max-width:640px){.tetris-panel{grid-template-columns:1fr}}
+  .tetris-panel{width:min(100%,960px);margin:26px auto 0;display:grid;grid-template-columns:180px minmax(180px,260px);gap:12px;align-items:stretch}.tetris-panel .code-display{margin:0}.standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}.chess-stage{align-items:start}.chess-board-column{min-width:0;width:100%}.chess-side{display:grid;place-items:center;width:42px;height:42px;border:1px solid #343a42;font-family:'Times New Roman',serif;font-size:32px}.white-side{background:#f3eddf;color:#17191c}.black-side{background:#17191c;color:#f3eddf}.difficulty-control{display:grid;gap:7px;margin-top:12px}.difficulty-control label{color:#727c87;font-size:9px;font-weight:900;letter-spacing:.14em}.difficulty-control select{height:44px;padding:0 10px;border:1px solid #3b424c;border-radius:0;background:#0b0d10;color:#f4f0e8;font:inherit;text-transform:uppercase}.chess-panel{position:sticky;top:92px}@media(max-width:900px){.chess-panel{position:static}}@media(max-width:640px){.tetris-panel{grid-template-columns:1fr}.chess-head .player-card strong{font-size:11px}.chess-side{width:34px;height:34px;font-size:26px}}
 </style>
