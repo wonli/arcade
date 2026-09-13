@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { generateDungeonGeometry } from './map-generator.js'
 import { buildDungeon3TilePlan } from './dungeon3-renderer.js'
 import { activeTrapAt } from './dungeon3-hazards.js'
+import { buildNavGrid, findPath } from './pathfinding.js'
 
 test('every dungeon reserves themed rooms, a complete fire statue, coffin groups and continuous spike banks', () => {
   for(let seed=1;seed<=30;seed++) {
@@ -48,6 +49,25 @@ test('room themes reserve landmark, hazard and safe-route footprints before loos
     const shrinePaving=g.pavingAreas.filter(a=>a.roomId===shrine.id&&a.kind==='processional')
     assert.ok(shrinePaving.some(a=>a.height>=96&&a.width>=48),`seed ${seed}: shrine path is still a small paving patch`)
     for(const p of g.criticalPath) assert.equal(activeTrapAt(p,g,1100),null,`seed ${seed}: themed layout blocks the safe route`)
+  }
+})
+
+test('crypt coffin groups never seal an east-west room connection for the largest actor', () => {
+  for (let seed=1;seed<=400;seed++) {
+    const g=generateDungeonGeometry({runSeed:seed,floor:1})
+    const nav=buildNavGrid(g,{cellSize:16,actorRadius:26})
+    for (const crypt of g.rooms.filter(room=>room.theme==='crypt')) {
+      const horizontal=g.paths.some(path=>{
+        if(path.from!==crypt.id&&path.to!==crypt.id) return false
+        const other=g.rooms[path.from===crypt.id?path.to:path.from]
+        return other.center.y===crypt.center.y
+      })
+      if(!horizontal) continue
+      const left={x:crypt.x+16,y:crypt.center.y}
+      const right={x:crypt.x+crypt.width-16,y:crypt.center.y}
+      assert.ok(findPath(nav,left,crypt.center).length,`seed ${seed}: crypt west side sealed`)
+      assert.ok(findPath(nav,crypt.center,right).length,`seed ${seed}: crypt east side sealed`)
+    }
   }
 })
 
