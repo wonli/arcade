@@ -117,10 +117,23 @@ function currentWeapon(scene) {
   }
 }
 
+function killTween(scene, target) {
+  if (target) scene?.tweens?.killTweensOf?.(target)
+}
+
+function killDropTweens(scene, drop) {
+  if (!drop) return
+  killTween(scene, drop.visual)
+  killTween(scene, drop.glow)
+  killTween(scene, drop.label)
+  for (const sparkle of drop.sparkles ?? []) killTween(scene, sparkle)
+}
+
 function syncGroundWeaponVisual(scene, drop, position) {
   const visual = createWeaponVisual(scene, drop?.item, position.x, position.y)
   if (!visual) return
   visual?.setDepth?.(15)
+  killTween(scene, drop.visual)
   drop.visual?.destroy?.()
   drop.visual = visual
 }
@@ -132,6 +145,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalUpdateDrops = scene.updateDrops.bind(scene)
+  const originalDestroyDrop = scene.destroyDrop?.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
   const originalEmitStats = scene.emitStats.bind(scene)
   const key = scene.input?.keyboard?.addKey?.('E')
@@ -139,6 +153,13 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   scene.emitStats = function emitStatsWithInventory(now) {
     originalEmitStats(now)
+  }
+
+  if (originalDestroyDrop) {
+    scene.destroyDrop = function destroyDropWithoutTweenLeaks(drop) {
+      killDropTweens(scene, drop)
+      return originalDestroyDrop(drop)
+    }
   }
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
@@ -265,6 +286,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     scene.events?.off?.('update', autoPotionUpdate)
     publish(null)
     scene.__dungeonDropNavGrid = null
+    if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
 
