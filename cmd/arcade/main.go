@@ -30,6 +30,7 @@ func main() {
 	router := ws.NewRouter().Use(middlewares.Recovery())
 	actions := arcadeserver.NewActions(arcade.NewService())
 	actions.Register(router)
+	actions.RegisterChess(router)
 	actions.RegisterDungeon(router)
 
 	frontend.Register(engine)
