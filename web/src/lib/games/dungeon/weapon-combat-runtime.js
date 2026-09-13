@@ -12,9 +12,13 @@ export function installDungeonWeaponCombat(scene) {
     const beforeDamage = scene.playerState.damage
     const originalDamageEnemy = scene.damageEnemy
     scene.playerState.damage = weaponAttackDamage(scene.playerState, beforeDamage)
+    scene.__dungeonWeaponVfx?.attack?.({ x: target.x, y: target.y })
     scene.damageEnemy = function archetypeDamageEnemy(enemy, damage, critical, knockback, context) {
-      const adjusted = context?.source === 'weapon' ? weaponAttackKnockback(scene.playerState, knockback) : knockback
-      return originalDamageEnemy.call(scene, enemy, damage, critical, adjusted, context)
+      const isWeapon = context?.source === 'weapon'
+      const adjusted = isWeapon ? weaponAttackKnockback(scene.playerState, knockback) : knockback
+      const result = originalDamageEnemy.call(scene, enemy, damage, critical, adjusted, context)
+      if (isWeapon) scene.__dungeonWeaponVfx?.impact?.(enemy?.x ?? target.x, enemy?.y ?? target.y, { critical })
+      return result
     }
     try { return originalSlash(target) } finally { scene.playerState.damage = beforeDamage; scene.damageEnemy = originalDamageEnemy }
   }

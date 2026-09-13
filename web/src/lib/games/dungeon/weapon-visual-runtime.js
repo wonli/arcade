@@ -1,4 +1,5 @@
 import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
+import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
 
 const ART = {
@@ -36,12 +37,13 @@ export function installDungeonWeaponVisuals(scene) {
   const poseNow = () => { const profile = weaponProfile(equippedItem(scene)); return weaponPose(scene.playerState, scene.playerFacing, { attacking: (scene.time?.now ?? 0) < attackUntil, reachScale: profile.reachScale }) }
   const sync = () => { const object = ensureVisual(); if (!object) return; const pose = poseNow(); object.setPosition?.(pose.x, pose.y); object.setAngle?.(pose.angle); object.setFlipX?.(pose.flipX); object.setDepth?.(pose.depth) }
   const anchor = () => poseNow().tip
+  const weaponVfx = installDungeonWeaponVfx(scene, { anchor })
   const swing = () => { const profile = weaponProfile(equippedItem(scene)); attackUntil = (scene.time?.now ?? 0) + profile.swingMs; sync(); scene.time?.delayedCall?.(profile.swingMs + 5, sync); return anchor() }
 
   for (const [archetype, rarities] of Object.entries(ART)) for (const [rarity, path] of Object.entries(rarities)) { const key = `dungeon-held-weapon-${archetype}-${rarity}`; if (!scene.textures?.exists?.(key)) scene.load?.image?.(key, path) }
   if (scene.load?.once && scene.load?.start) { scene.load.once('complete', () => { ready = true; sync() }); scene.load.start() } else { ready = true; sync() }
   scene.events?.on?.('update', sync)
-  const restore = () => { scene.events?.off?.('update', sync); visual?.destroy?.(); visual = null; scene.__dungeonWeaponCombat?.restore?.(); scene.__dungeonWeaponVisuals = null }
+  const restore = () => { scene.events?.off?.('update', sync); visual?.destroy?.(); visual = null; weaponVfx?.restore?.(); scene.__dungeonWeaponCombat?.restore?.(); scene.__dungeonWeaponVisuals = null }
   scene.events?.once?.('shutdown', restore); scene.events?.once?.('destroy', restore)
   const api = { sync, swing, anchor, isReady: () => ready, restore }; scene.__dungeonWeaponVisuals = api; return api
 }
