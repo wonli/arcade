@@ -19,27 +19,35 @@ export function weaponVisualProfile(item) {
   }
 }
 
-const POSES = {
-  right: { dx: 17, dy: 5, angle: 42, tipDx: 23, tipDy: -19 },
-  left: { dx: -17, dy: 5, angle: -42, tipDx: -23, tipDy: -19 },
-  up: { dx: 10, dy: -16, angle: -42, tipDx: 18, tipDy: -25 },
-  down: { dx: 10, dy: 17, angle: 42, tipDx: 18, tipDy: 25 },
+const IDLE_POSES = {
+  right: { dx: -15, dy: 6, angle: -38 },
+  left: { dx: 15, dy: 6, angle: 38 },
+  up: { dx: 8, dy: 15, angle: 38 },
+  down: { dx: 8, dy: -15, angle: -38 },
+}
+
+const ATTACK_POSES = {
+  right: { dx: 17, dy: 5, angle: 84, tipDx: 25, tipDy: -16 },
+  left: { dx: -17, dy: 5, angle: -84, tipDx: -25, tipDy: -16 },
+  up: { dx: 10, dy: -16, angle: -84, tipDx: 16, tipDy: -27 },
+  down: { dx: 10, dy: 17, angle: 84, tipDx: 16, tipDy: 27 },
 }
 
 export function weaponPose(player, facing = 'down', { attacking = false } = {}) {
-  const base = POSES[facing] ?? POSES.down
-  const swing = attacking ? (facing === 'left' || facing === 'up' ? -42 : 42) : 0
+  const base = (attacking ? ATTACK_POSES : IDLE_POSES)[facing] ?? (attacking ? ATTACK_POSES.down : IDLE_POSES.down)
   const x = (player?.x ?? 0) + base.dx
   const y = (player?.y ?? 0) + base.dy
+  const tipDx = base.tipDx ?? 0
+  const tipDy = base.tipDy ?? 0
   return {
     x,
     y,
-    angle: base.angle + swing,
-    flipX: facing === 'left',
-    depth: facing === 'up' ? 18 : 22,
+    angle: base.angle,
+    flipX: facing === 'right',
+    depth: attacking ? 22 : 18,
     tip: {
-      x: x + base.tipDx,
-      y: y + base.tipDy,
+      x: x + tipDx,
+      y: y + tipDy,
     },
   }
 }
