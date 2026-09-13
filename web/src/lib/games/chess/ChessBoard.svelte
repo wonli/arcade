@@ -23,6 +23,7 @@
   let captureAudio = null
   let actionBusy = false
   let actionError = ''
+  let resignConfirmOpen = false
 
   $: myIndex = room?.players?.findIndex((player) => player.id === identity.sessionId) ?? -1
   $: myColor = myIndex === 0 ? 'white' : myIndex === 1 ? 'black' : ''
@@ -30,6 +31,7 @@
   $: cells = flipped ? [...baseCells].reverse() : baseCells
   $: myTurn = state?.status === 'playing' && state?.turn === myColor
   $: if ((state?.ply ?? -1) !== observedPly) { observedPly = state?.ply ?? -1; selected = null; pendingPromotion = null }
+  $: if (state?.status !== 'playing') resignConfirmOpen = false
   $: if (state && (state.ply ?? -1) !== observedAudioPly) {
     const effect = chessMoveEffect(previousAudioState, state)
     if (effect) playChessEffect(effect)
@@ -57,7 +59,7 @@
 
   function chooseSquare(x, y) {
     unlockAudio()
-    if (!myTurn || pendingPromotion) return
+    if (!myTurn || pendingPromotion || resignConfirmOpen) return
     const piece = pieceAt(state, x, y)
     if (selected) {
       const targets = legalTo(state, x, y)
@@ -71,11 +73,15 @@
   }
 
   async function submit(move) { selected = null; pendingPromotion = null; await onMove?.(move) }
+  function requestResign() {
+    if (!myColor || state?.status !== 'playing' || actionBusy) return
+    actionError = ''
+    resignConfirmOpen = true
+  }
   async function resign() {
     if (!myColor || state?.status !== 'playing' || actionBusy) return
-    if (typeof window !== 'undefined' && !window.confirm('Resign this game?')) return
     actionBusy = true; actionError = ''
-    try { await socket.request('game.resign', { roomId: room.id }) } catch (error) { actionError = error?.message ?? 'Unable to resign' } finally { actionBusy = false }
+    try { await socket.request('game.resign', { roomId: room.id }); resignConfirmOpen = false } catch (error) { actionError = error?.message ?? 'Unable to resign' } finally { actionBusy = false }
   }
   async function rematch() {
     if (!myColor || actionBusy) return
@@ -112,10 +118,14 @@
     {/each}
   </div>
 
-  {#if state?.status === 'playing' && myColor}<div class="chess-actions"><button class="resign-button" onclick={resign} disabled={actionBusy}>Resign</button>{#if actionError}<span>{actionError}</span>{/if}</div>{/if}
+  {#if state?.status === 'playing' && myColor}<div class="chess-actions"><button class="resign-button" onclick={requestResign} disabled={actionBusy}>Resign</button>{#if actionError && !resignConfirmOpen}<span>{actionError}</span>{/if}</div>{/if}
 
   {#if pendingPromotion}
     <div class="promotion" role="dialog" aria-label="Choose promotion piece"><span>PROMOTE TO</span><div>{#each ['q', 'r', 'b', 'n'] as piece}<button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}><img class:white-piece={myColor !== 'black'} class:black-piece={myColor === 'black'} src={promotionAsset(piece)} alt="" draggable="false" /></button>{/each}</div><button class="cancel" onclick={() => (pendingPromotion = null)}>Cancel</button></div>
+  {/if}
+
+  {#if resignConfirmOpen}
+    <div class="chess-confirm-modal" role="dialog" aria-modal="true" aria-label="Confirm resignation"><div class="confirm-card"><span class="result-kicker">RESIGN GAME</span><h2>Give up?</h2><p>Opponent will win immediately.</p>{#if actionError}<div class="result-error">{actionError}</div>{/if}<div class="confirm-actions"><button class="cancel-resign" onclick={() => (resignConfirmOpen = false)} disabled={actionBusy}>Cancel</button><button class="confirm-resign" onclick={resign} disabled={actionBusy}>Resign</button></div></div></div>
   {/if}
 
   {#if state?.status === 'finished'}
@@ -124,5 +134,5 @@
 </div>
 
 <style>
-  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}.white-piece,.black-piece{filter:drop-shadow(0 2px 1px #0006)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.chess-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px}.chess-actions span,.result-error{color:#ff8a8a;font-size:12px}.resign-button{border:1px solid #734242;background:#171012;color:#d9a3a3;padding:9px 14px;font:inherit;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.resign-button:hover{border-color:#b25e5e;color:#ffd0d0}.resign-button:disabled{opacity:.5;cursor:default}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion>div img{width:74%;height:74%;object-fit:contain}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}.chess-result-modal{position:absolute;z-index:20;inset:0;display:grid;place-items:center;padding:20px;background:#050708b8;backdrop-filter:blur(4px)}.result-card{width:min(88%,380px);padding:30px;border:1px solid #4a525d;background:#111419;box-shadow:12px 12px 0 #050607;text-align:center}.result-kicker{display:block;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.18em}.result-card h2{margin:8px 0 4px;color:#f4f0e8;font-size:34px;line-height:1}.result-card p{margin:0 0 22px;color:#9ca6b1}.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.result-actions button,.result-actions a{display:grid;place-items:center;min-height:44px;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font:inherit;font-size:11px;font-weight:900;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;cursor:pointer}.result-actions .play-again{border-color:#799b45;background:#c1ff56;color:#10140c}.result-actions button:disabled{opacity:.5;cursor:default}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:80%;height:80%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}.result-actions{grid-template-columns:1fr}}
+  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}.white-piece,.black-piece{filter:drop-shadow(0 2px 1px #0006)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.chess-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px}.chess-actions span,.result-error{color:#ff8a8a;font-size:12px}.resign-button{border:1px solid #734242;background:#171012;color:#d9a3a3;padding:9px 14px;font:inherit;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.resign-button:hover{border-color:#b25e5e;color:#ffd0d0}.resign-button:disabled{opacity:.5;cursor:default}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion>div img{width:74%;height:74%;object-fit:contain}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}.chess-confirm-modal,.chess-result-modal{position:absolute;z-index:20;inset:0;display:grid;place-items:center;padding:20px;background:#050708b8;backdrop-filter:blur(4px)}.confirm-card,.result-card{width:min(88%,380px);padding:30px;border:1px solid #4a525d;background:#111419;box-shadow:12px 12px 0 #050607;text-align:center}.confirm-card h2,.result-card h2{margin:8px 0 4px;color:#f4f0e8;font-size:34px;line-height:1}.confirm-card p,.result-card p{margin:0 0 22px;color:#9ca6b1}.result-kicker{display:block;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.18em}.confirm-actions,.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.confirm-actions button,.result-actions button,.result-actions a{display:grid;place-items:center;min-height:44px;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font:inherit;font-size:11px;font-weight:900;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;cursor:pointer}.confirm-actions .confirm-resign{border-color:#8d4747;background:#6d2929;color:#ffe7e7}.confirm-actions .confirm-resign:hover{background:#823434}.confirm-actions .cancel-resign:hover{border-color:#727d89}.result-actions .play-again{border-color:#799b45;background:#c1ff56;color:#10140c}.confirm-actions button:disabled,.result-actions button:disabled{opacity:.5;cursor:default}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:80%;height:80%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}.confirm-actions,.result-actions{grid-template-columns:1fr}}
 </style>
