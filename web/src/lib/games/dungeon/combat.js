@@ -104,22 +104,35 @@ function rollWeaponArchetype(random) {
   return 'katana'
 }
 
-export function rollEquipment(floor, random = Math.random) {
+function equipmentThresholds(floor) {
   const level = Math.max(1, Math.min(5, Math.floor(floor || 1)))
+  const base = EQUIPMENT_TABLES[level]
+  const deepBonus = Math.min(0.28, Math.max(0, Math.floor(floor || 1) - 5) * 0.012)
+  return [
+    Math.max(0.03, base[0] - deepBonus * 0.15),
+    Math.max(0.08, base[1] - deepBonus * 0.10),
+    Math.min(0.62, base[2] + deepBonus * 0.35),
+    Math.min(0.72, base[3] + deepBonus),
+  ]
+}
+
+export function rollEquipment(floor, random = Math.random) {
+  const actualFloor = Math.max(1, Math.floor(floor || 1))
   const roll = random()
-  const [commonEnd, uncommonEnd, rareEnd, epicEnd] = EQUIPMENT_TABLES[level]
+  const [commonEnd, uncommonEnd, rareEnd, epicEnd] = equipmentThresholds(actualFloor)
   let rarity = null
   if (roll < commonEnd) rarity = 'common'
   else if (roll < uncommonEnd) rarity = 'uncommon'
   else if (roll < rareEnd) rarity = 'rare'
   else if (roll < epicEnd) rarity = 'epic'
   if (!rarity) return null
+  const depthBonus = Math.round(Math.max(0, actualFloor - 1) * 0.7)
   return {
     type: 'weapon.dungeon_blade',
     archetype: rollWeaponArchetype(random),
     rarity,
-    damage: damageForRarity(rarity, roll * 7.31),
-    affixes: rollAffixes(level, rarity, random),
+    damage: damageForRarity(rarity, roll * 7.31) + depthBonus,
+    affixes: rollAffixes(actualFloor, rarity, random, { forceBuild: rarity === 'epic' && actualFloor >= 5 }),
   }
 }
 
@@ -161,14 +174,18 @@ export function bossProfile(floor = 5) {
 }
 
 export function bossReward(random = Math.random, floor = 5) {
+  const actualFloor = Math.max(1, Math.floor(floor || 1))
+  const depth = Math.max(0, actualFloor - 1)
+  const epicThreshold = Math.max(0.40, 0.72 - Math.max(0, actualFloor - 5) * 0.015)
   const roll = random()
-  const rarity = roll >= 0.72 ? 'epic' : 'rare'
+  const rarity = roll >= epicThreshold ? 'epic' : 'rare'
+  const floorBonus = Math.round(depth * 1.15 + depth * depth * 0.018)
   return {
     type: 'weapon.dungeon_blade',
     archetype: rollWeaponArchetype(random),
     rarity,
-    damage: rarity === 'epic' ? 12 : 8,
-    affixes: rollAffixes(floor, rarity, random, { forceBuild: true }),
+    damage: (rarity === 'epic' ? 12 : 8) + floorBonus,
+    affixes: rollAffixes(actualFloor, rarity, random, { forceBuild: true }),
   }
 }
 

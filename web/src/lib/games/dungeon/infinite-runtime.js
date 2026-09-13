@@ -1,7 +1,7 @@
 import { placePlayerAtRoomSpawn, roomAnchor } from './room-anchors.js'
-import { rollAffixes } from './affixes.js'
+import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
-import { advanceProgress, createRunProgress, difficultyProfile, roomRoleAt } from './progression.js'
+import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
 
 const RARITIES = ['common', 'uncommon', 'rare', 'epic']
@@ -32,6 +32,40 @@ export function progressSnapshot(progress, fortunePending = false, fortuneActive
     fortunePending,
     fortuneActive,
   }
+}
+
+export function scalePlayerForProgress(scene, progress) {
+  const player = scene?.playerState
+  if (!player) return null
+  const floor = Math.max(1, Math.floor(progress?.floor || 1))
+  if (scene.__dungeonPlayerScaledFloor === floor) return player
+
+  const currentBase = player.baseStats ?? {
+    damage: player.damage ?? 10,
+    critChance: player.critChance ?? 0.18,
+    speed: player.speed ?? 190,
+    maxHp: player.maxHp ?? 100,
+  }
+  const naturalBase = scene.__dungeonNaturalPlayerBase ?? { ...currentBase }
+  scene.__dungeonNaturalPlayerBase ??= naturalBase
+  const previousScaled = scene.__dungeonLastScaledPlayerBase ?? naturalBase
+  const permanent = scene.__dungeonPermanentPlayerBonus ?? { damage: 0, maxHp: 0 }
+  permanent.damage += Math.max(0, (currentBase.damage ?? naturalBase.damage) - (previousScaled.damage ?? naturalBase.damage))
+  permanent.maxHp += Math.max(0, (currentBase.maxHp ?? naturalBase.maxHp) - (previousScaled.maxHp ?? naturalBase.maxHp))
+  scene.__dungeonPermanentPlayerBonus = permanent
+
+  const profile = playerProgressionProfile(progress)
+  const nextBase = {
+    ...currentBase,
+    damage: Math.max(1, Math.round((naturalBase.damage ?? 10) * profile.damageMultiplier + permanent.damage)),
+    maxHp: Math.max(1, Math.round((naturalBase.maxHp ?? 100) * profile.maxHpMultiplier + permanent.maxHp)),
+  }
+  const next = deriveEquipment(nextBase, player.equippedWeapon, player)
+  next.baseStats = nextBase
+  scene.playerState = next
+  scene.__dungeonLastScaledPlayerBase = { ...nextBase }
+  scene.__dungeonPlayerScaledFloor = floor
+  return next
 }
 
 export function bindRestChoicePointer(text, index, choose) {
@@ -274,6 +308,9 @@ export function installInfiniteDungeon(scene, {
       scene.drawArena()
       placePlayerAtRoomSpawn(scene)
     }
+
+    scalePlayerForProgress(scene, progress)
+    scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
 
     if (role === 'rest') {
       spawnRestRoom()

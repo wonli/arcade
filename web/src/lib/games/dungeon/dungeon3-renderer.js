@@ -3,6 +3,11 @@ import { dungeon3Rules as rules } from './dungeon3-rules.js'
 export const dungeon3TextureKey = name => `dungeon3-${name}`
 const isLand = cell => cell?.kind === 'floor' || cell?.kind === 'bridge'
 
+const FEATURE_MOTIFS = {
+  door: { tileset: 'doors', width: 2, height: 2, frames: [4, 5, 12, 13] },
+  statue: { tileset: 'Statue_fire', width: 2, height: 2, frames: [0, 1, 30, 31] },
+}
+
 // Pure render plan: coordinates are the upper-left of a native 16px TMX cell.
 // Keeping it separate from Phaser lets tests audit every tile against geometry.
 export function buildDungeon3TilePlan(geometry) {
@@ -54,6 +59,18 @@ export function buildDungeon3TilePlan(geometry) {
   const stamp = (motif, left, top, layer, depth, extra = {}) => {
     for (const cell of motif.cells) add(left + cell.x, top + cell.y, cell, layer, depth, { motifId: motif.id, ...extra })
   }
+  const stampFeature = (entry, kind, depth) => {
+    const motif = FEATURE_MOTIFS[kind]
+    if (!motif || !rules.tilesets[motif.tileset]) return
+    const left = Math.floor(entry.x / size - motif.width / 2)
+    const top = Math.floor(entry.y / size - motif.height / 2)
+    for (let y = 0; y < motif.height; y++) for (let x = 0; x < motif.width; x++) {
+      const tileId = motif.frames[y * motif.width + x]
+      if (!land(left + x, top + y)) continue
+      add(left + x, top + y, { tileset: motif.tileset, tileId }, kind, depth, { featureKind: kind, ownerX: entry.x, ownerY: entry.y })
+    }
+  }
+
   const paving = rules.motifs.plates.find(m => m.width === 2 && m.height === 2 && m.cells.length === 4)
   const paved = new Set()
   if (paving) for (const path of geometry.paths ?? []) {
@@ -68,7 +85,10 @@ export function buildDungeon3TilePlan(geometry) {
       paved.add(key); stamp(paving, x, y, 'path', 4)
     }
   }
+
+  for (const door of geometry.doors ?? []) stampFeature(door, 'door', 5.2)
   for (const prop of geometry.decorations ?? []) {
+    if (prop.kind === 'statue') { stampFeature(prop, 'statue', 6.3); continue }
     const motif = prop.motif
     if (!motif) continue
     stamp(motif, prop.x / size - motif.width / 2, prop.y / size - motif.height / 2, 'prop', 6, { ownerX: prop.x, ownerY: prop.y })
@@ -94,11 +114,11 @@ export function buildDungeon3TilePlan(geometry) {
 
 export function queueDungeon3Textures(scene) {
   const base = '/assets/dungeon-tileset/dungeon-pixel-tileset-for-rpg-and-roguelike-game/Tiled_files/'
-  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs']
+  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire']
   let queued = false
   for (const name of used) {
     const set = rules.tilesets[name], key = dungeon3TextureKey(name)
-    if (scene.textures.exists(key)) continue
+    if (!set || scene.textures.exists(key)) continue
     scene.load.spritesheet(key, base + set.image, { frameWidth: set.tileWidth, frameHeight: set.tileHeight })
     queued = true
   }

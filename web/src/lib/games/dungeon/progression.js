@@ -101,3 +101,14 @@ export function difficultyProfile({ floor = 1, chapter = 1, roomRole = 'combat' 
     bossCooldownMultiplier: clamp(1 - chapterDepth * 0.035, 0.58, 1),
   }
 }
+
+// Enemy scaling stays steeper. This curve keeps the player viable while gear,
+// affixes and rest choices remain the main way to get ahead of the curve.
+export function playerProgressionProfile({ floor = 1, chapter = 1 } = {}) {
+  const depth = Math.max(0, Math.floor(floor || 1) - 1)
+  const chapterDepth = Math.max(0, Math.floor(chapter || 1) - 1)
+  return {
+    maxHpMultiplier: clamp(1 + depth * 0.034 + chapterDepth * 0.035, 1, 4),
+    damageMultiplier: clamp(1 + depth * 0.014 + chapterDepth * 0.018, 1, 2.5),
+  }
+}

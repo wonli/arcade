@@ -11,6 +11,8 @@ test('tile plan places coasts on land, feet over water, and preserves full autho
   assert.ok(tiles.some(t=>t.layer==='coast'))
   assert.ok(tiles.some(t=>t.layer==='path' && t.tileset==='plates'))
   assert.ok(tiles.some(t=>t.layer==='floor' && t.tileset==='walls_floor'))
+  assert.ok(tiles.some(t=>t.featureKind==='door' && t.tileset==='doors'))
+  assert.ok(tiles.some(t=>t.featureKind==='statue' && t.tileset==='Statue_fire'))
   for (const t of tiles) {
     assert.equal(t.x%16,0); assert.equal(t.y%16,0)
     const set = dungeon3Rules.tilesets[t.tileset]
@@ -18,7 +20,7 @@ test('tile plan places coasts on land, feet over water, and preserves full autho
     if(t.layer==='coast') assert.ok(['floor','bridge'].includes(at(t.x,t.y)))
     if(t.layer==='cliff-foot') assert.equal(at(t.x,t.y),'water')
   }
-  for(const prop of g.decorations) {
+  for(const prop of g.decorations.filter(prop=>prop.motif)) {
     const rendered=tiles.filter(t=>t.motifId===prop.motif.id && t.ownerX===prop.x && t.ownerY===prop.y)
     assert.equal(rendered.length,prop.motif.cells.length)
     assert.deepEqual(rendered.map(t=>t.tileId),prop.motif.cells.map(t=>t.tileId))
@@ -27,7 +29,7 @@ test('tile plan places coasts on land, feet over water, and preserves full autho
 
 test('rectangle shorelines have correct compass corners with no coast on interior cells', () => {
   const cells=Array.from({length:49},(_,i)=>({kind:i%7>=1&&i%7<=5&&Math.floor(i/7)>=1&&Math.floor(i/7)<=5?'floor':'water',level:0}))
-  const tiles=renderer.buildDungeon3TilePlan({grid:{tileSize:16,columns:7,rows:7,cells},rooms:[],paths:[],stairs:[],decorations:[]})
+  const tiles=renderer.buildDungeon3TilePlan({grid:{tileSize:16,columns:7,rows:7,cells},rooms:[],paths:[],stairs:[],doors:[],decorations:[]})
   const frame=(x,y)=>tiles.find(t=>t.layer==='coast'&&t.x===x*16&&t.y===y*16)?.tileId
   assert.equal(frame(1,1),175); assert.equal(frame(5,1),177)
   assert.equal(frame(1,5),233); assert.equal(frame(5,5),235)
@@ -87,8 +89,8 @@ test('terrain renderer batches tile plan into render textures instead of one gam
   assert.equal(imageCalls, 0)
   assert.ok(tiles.length > 1000)
   assert.ok(renderTextures.length <= groups.length)
-  assert.ok(renderTextures.length <= 20)
-  assert.ok(tracked.length <= 21)
+  assert.ok(renderTextures.length <= 24)
+  assert.ok(tracked.length <= 25)
   assert.ok(renderTextures.every(target => target.renders >= 1))
 
   if (update) {

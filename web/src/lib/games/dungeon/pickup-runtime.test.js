@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { installPickupInteraction, prepareDropItem, weaponDamageForFloor } from './pickup-runtime.js'
+import { installPickupInteraction, prepareDropItem, resolveDropPosition, weaponDamageForFloor } from './pickup-runtime.js'
+import { hasRoute } from './pathfinding.js'
 
 const sequence = (values) => { let i = 0; return () => values[i++ % values.length] }
 
@@ -25,6 +26,48 @@ test('weapon rewards are floor-scaled even outside chests', () => {
   assert.ok(next.damage > 30)
 })
 
+test('drops are moved off blocked terrain to a reachable nearby point', () => {
+  const geometry = {
+    width: 240,
+    height: 180,
+    bounds: { x: 0, y: 0, width: 240, height: 180 },
+    solids: [{ x: 92, y: 62, width: 56, height: 56, kind: 'prop' }],
+    water: [],
+    bridges: [],
+  }
+  const scene = {
+    playerState: { x: 48, y: 90 },
+    __dungeonSpatial: { getGeometry: () => geometry },
+  }
+  const safe = resolveDropPosition(scene, 120, 90)
+  assert.notDeepEqual(safe, { x: 120, y: 90 })
+  assert.ok(safe.x < 92 || safe.x > 148 || safe.y < 62 || safe.y > 118)
+  assert.ok(Math.hypot(safe.x - 120, safe.y - 90) <= 80)
+})
+
+test('collision-safe loot on a disconnected island is relocated to the player reachable component', () => {
+  const geometry = {
+    width: 320,
+    height: 192,
+    bounds: { x: 0, y: 0, width: 320, height: 192 },
+    solids: [{ x: 144, y: 0, width: 32, height: 192, kind: 'wall' }],
+    water: [],
+    bridges: [],
+  }
+  const player = { x: 64, y: 96 }
+  const scene = {
+    playerState: player,
+    __dungeonSpatial: { getGeometry: () => geometry },
+  }
+  const requested = { x: 240, y: 96 }
+  assert.equal(hasRoute(geometry, player, requested, { cellSize: 16, actorRadius: 18 }), false)
+
+  const safe = resolveDropPosition(scene, requested.x, requested.y)
+  assert.notDeepEqual(safe, requested)
+  assert.equal(hasRoute(geometry, player, safe, { cellSize: 16, actorRadius: 18 }), true)
+  assert.ok(safe.x < 144)
+})
+
 test('equipping with E leaves the previous weapon on the ground', () => {
   let onDown = null
   const oldWeapon = { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 22, affixes: [{ id: 'power', tier: 1, value: 0.1 }] }
@@ -36,6 +79,7 @@ test('equipping with E leaves the previous weapon on the ground', () => {
     time: { now: 0 },
     input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
     events: { once() {} },
+    emitStats() {},
     spawnDrop(x, y, item) { this.drops.push({ x, y, item, visual: { scaleX: 1, scaleY: 1, setY() {}, setScale() {} }, glow: { setAlpha() {} } }) },
     updateDrops() {
       const drop = this.drops[0]

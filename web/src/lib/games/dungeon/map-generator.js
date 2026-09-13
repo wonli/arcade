@@ -10,7 +10,7 @@ const ROWS = Math.floor(HEIGHT / TILE)
 const RADIUS = 20
 const SLOT_COLUMNS = [176, 480, 784]
 const SLOT_ROWS = [144, 304, 464]
-const CORRIDOR = 64
+const CORRIDOR = 96
 const rect = (x, y, width, height, kind, extra = {}) => ({ x, y, width, height, kind, ...extra })
 const point = (x, y) => ({ x, y })
 
@@ -235,13 +235,33 @@ function build(seed, floor, attempt) {
   g.spawnPoints = rooms.map(room => ({ ...room.center }))
   g.chests = [{ ...rooms[chestRoom].center }]
 
+  for (const path of paths) {
+    const a = rooms[path.from], b = rooms[path.to]
+    const horizontal = a.center.y === b.center.y
+    if (horizontal) {
+      const left = a.center.x < b.center.x ? a : b
+      const right = left === a ? b : a
+      g.doors.push(
+        { x: left.x + left.width - TILE / 2, y: left.center.y, orientation: 'right' },
+        { x: right.x + TILE / 2, y: right.center.y, orientation: 'left' },
+      )
+    } else {
+      const top = a.center.y < b.center.y ? a : b
+      const bottom = top === a ? b : a
+      g.doors.push(
+        { x: top.center.x, y: top.y + top.height - TILE / 2, orientation: 'down' },
+        { x: bottom.center.x, y: bottom.y + TILE / 2, orientation: 'up' },
+      )
+    }
+  }
+
   for (const bridge of bridges) {
     const horizontal = bridge.orientation === 'horizontal'
     g.stairs.push({ x: horizontal ? bridge.x + TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + TILE, orientation: horizontal ? 'right' : 'down' })
     g.stairs.push({ x: horizontal ? bridge.x + bridge.width - TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + bridge.height - TILE, orientation: horizontal ? 'left' : 'up' })
   }
 
-  const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints]
+  const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints, ...g.doors]
   const motifs = [
     ...dungeon3Rules.motifs.coffins.map(motif => ({ kind: 'coffin', motif })),
     ...dungeon3Rules.motifs.otherObjects.map(motif => ({ kind: 'object', motif })),
@@ -267,7 +287,7 @@ function build(seed, floor, attempt) {
         const valid = inside(point(candidate.x, candidate.y), room, TILE) && inside(point(candidate.x + width, candidate.y + height), room, TILE) &&
           (!blocking || !paths.some(path => overlaps(collision, path))) &&
           !reserved.some(p => overlaps(candidate, rect(p.x - 28, p.y - 28, 56, 56, 'reserved'), 4)) &&
-          !g.decorations.some(d => overlaps(candidate, decorationArea(d), 4))
+          !g.decorations.some(d => d.footprint && overlaps(candidate, decorationArea(d), 4))
         if (valid) collisionArea = collision
         return valid
       })
@@ -288,6 +308,18 @@ function build(seed, floor, attempt) {
     for (let i = 0; i < smallCount; i++) placeDecoration(room, byScale.small.length ? byScale.small : motifs, false)
     g.torches.push(point(room.center.x, room.y + TILE * 2))
   }
+
+  const landmarkRooms = [rooms[chestRoom], ...(rooms.length >= 7 ? [rooms[finish]] : [])]
+  for (let index = 0; index < landmarkRooms.length; index++) {
+    const room = landmarkRooms[index]
+    const side = index % 2 === 0 ? 1 : -1
+    g.decorations.push({
+      x: room.center.x + side * Math.max(48, room.width / 2 - 40),
+      y: room.y + 34,
+      kind: 'statue', scale: 'landmark', footprint: { width: 32, height: 48 }, blocking: false,
+    })
+  }
+
   const wallMotif = perimeterWallMotif(g.bounds)
   g.decorations.push({
     x: g.bounds.x + g.bounds.width / 2, y: g.bounds.y + g.bounds.height / 2,
@@ -317,7 +349,7 @@ export function generateDungeonGeometry({ runSeed = 1, floor = 1 } = {}) {
     if (validate(geometry)) return geometry
   }
   const fallback = build(seed, floor, 0)
-  fallback.decorations = fallback.decorations.filter(d => d.kind === 'wall')
+  fallback.decorations = fallback.decorations.filter(d => d.kind === 'wall' || d.kind === 'statue')
   fallback.solids = fallback.solids.filter(s => !s.authored)
   if (!validate(fallback)) throw new Error(`Dungeon3 map is disconnected: ${seed}/${floor}`)
   return fallback

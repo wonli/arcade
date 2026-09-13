@@ -1,6 +1,8 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
 import { healthPotionPickupMode, useStoredHealthPotion } from './inventory.js'
+import { circleHitsSolid } from './spatial.js'
+import { buildNavGrid, findPath } from './pathfinding.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -8,6 +10,11 @@ const DAMAGE_RANGES = {
   rare: [10, 16],
   epic: [16, 24],
 }
+
+const DROP_RADIUS = 18
+const DROP_SEARCH_STEP = 16
+const DROP_SEARCH_RADIUS = 160
+const DROP_NAV_CELL = 16
 
 function clamp01(value) { return Math.max(0, Math.min(0.999999, value)) }
 
@@ -32,6 +39,72 @@ export function prepareDropItem(scene, x, y, item, random = Math.random) {
   if (!item.type?.startsWith('weapon.')) return item
   const rolled = weaponDamageForFloor(item.rarity, scene?.floor ?? 1, random)
   return { ...item, damage: Math.max(item.damage ?? 0, rolled), affixes: [...(item.affixes ?? [])] }
+}
+
+function insideGeometryBounds(position, geometry, radius = DROP_RADIUS) {
+  const bounds = geometry?.bounds ?? { x: 0, y: 0, width: geometry?.width ?? 0, height: geometry?.height ?? 0 }
+  return position.x >= bounds.x + radius && position.x <= bounds.x + bounds.width - radius &&
+    position.y >= bounds.y + radius && position.y <= bounds.y + bounds.height - radius
+}
+
+function dropPositionIsSafe(position, geometry) {
+  return insideGeometryBounds(position, geometry) && !circleHitsSolid(position, DROP_RADIUS, geometry)
+}
+
+function dropNavGrid(scene, geometry) {
+  const cached = scene?.__dungeonDropNavGrid
+  if (cached?.geometry === geometry) return cached.grid
+  const grid = buildNavGrid(geometry, { cellSize: DROP_NAV_CELL, actorRadius: DROP_RADIUS, profile: 'ground' })
+  if (scene) scene.__dungeonDropNavGrid = { geometry, grid }
+  return grid
+}
+
+function dropPositionIsReachable(position, geometry, player, grid) {
+  if (!player || !dropPositionIsSafe(position, geometry)) return false
+  return findPath(grid, player, position).length > 0
+}
+
+function candidateRing(origin, radius) {
+  const candidates = []
+  for (let offset = -radius; offset <= radius; offset += DROP_SEARCH_STEP) {
+    candidates.push(
+      { x: origin.x + offset, y: origin.y - radius },
+      { x: origin.x + offset, y: origin.y + radius },
+      { x: origin.x - radius, y: origin.y + offset },
+      { x: origin.x + radius, y: origin.y + offset },
+    )
+  }
+  const unique = new Map(candidates.map((candidate) => [`${candidate.x},${candidate.y}`, candidate]))
+  return [...unique.values()].sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y))
+}
+
+// A collision-safe point may still sit on an isolated patch of land. Drops must
+// live in the player's current connected component, otherwise a rare/epic item
+// can be visible but impossible to collect.
+export function resolveDropPosition(scene, x, y) {
+  const geometry = scene?.__dungeonSpatial?.getGeometry?.()
+  const requested = { x: Number(x) || 0, y: Number(y) || 0 }
+  if (!geometry) return requested
+
+  const player = scene?.playerState
+  if (!player) return requested
+  const grid = dropNavGrid(scene, geometry)
+
+  if (dropPositionIsReachable(requested, geometry, player, grid)) return requested
+
+  for (let radius = DROP_SEARCH_STEP; radius <= DROP_SEARCH_RADIUS; radius += DROP_SEARCH_STEP) {
+    const reachable = candidateRing(requested, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, player, grid))
+    if (reachable) return reachable
+  }
+
+  if (dropPositionIsReachable(player, geometry, player, grid)) return { x: player.x, y: player.y }
+
+  for (let radius = DROP_SEARCH_STEP; radius <= DROP_SEARCH_RADIUS; radius += DROP_SEARCH_STEP) {
+    const reachable = candidateRing(player, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, player, grid))
+    if (reachable) return reachable
+  }
+
+  return requested
 }
 
 function currentWeapon(scene) {
@@ -63,15 +136,16 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
+    const position = resolveDropPosition(scene, x, y)
     const before = scene.drops?.length ?? 0
-    originalSpawnDrop(x, y, prepare ? prepareDropItem(scene, x, y, item, random) : item)
+    originalSpawnDrop(position.x, position.y, prepare ? prepareDropItem(scene, position.x, position.y, item, random) : item)
     const drop = scene.drops?.[before]
     if (!drop) return null
     drop.spawnedAt = scene.time?.now ?? 0
-    drop.groundY = y
+    drop.groundY = position.y
     drop.baseScaleX = drop.visual?.scaleX ?? 1
     drop.baseScaleY = drop.visual?.scaleY ?? 1
-    drop.visual?.setY?.(y - 72)
+    drop.visual?.setY?.(position.y - 72)
     drop.visual?.setScale?.(drop.baseScaleX * 0.82, drop.baseScaleY * 0.82)
     drop.glow?.setAlpha?.(0)
     return drop
@@ -169,6 +243,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
     publish(null)
+    scene.__dungeonDropNavGrid = null
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
 
