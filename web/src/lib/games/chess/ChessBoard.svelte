@@ -1,6 +1,7 @@
 <script>
   import { onDestroy } from 'svelte'
   import { socket } from '$lib/ws/arcade'
+  import { chessPieceAsset } from './pieces.js'
   import { chessAudioSources, chessMoveEffect } from './audio.js'
 
   export let room
@@ -8,9 +9,8 @@
   export let identity
   export let onMove
 
-  const whitePieces = ['','♙','♘','♗','♖','♕','♔']
-  const blackPieces = ['','♟','♞','♝','♜','♛','♚']
   const baseCells = Array.from({ length: 64 }, (_, index) => ({ x: index % 8, y: Math.floor(index / 8) }))
+  const promotionValues = { q: 5, r: 4, b: 3, n: 2 }
 
   let selected = null
   let pendingPromotion = null
@@ -29,11 +29,7 @@
   $: flipped = myColor === 'black'
   $: cells = flipped ? [...baseCells].reverse() : baseCells
   $: myTurn = state?.status === 'playing' && state?.turn === myColor
-  $: if ((state?.ply ?? -1) !== observedPly) {
-    observedPly = state?.ply ?? -1
-    selected = null
-    pendingPromotion = null
-  }
+  $: if ((state?.ply ?? -1) !== observedPly) { observedPly = state?.ply ?? -1; selected = null; pendingPromotion = null }
   $: if (state && (state.ply ?? -1) !== observedAudioPly) {
     const effect = chessMoveEffect(previousAudioState, state)
     if (effect) playChessEffect(effect)
@@ -42,46 +38,22 @@
     if (state.status === 'finished') bgm?.pause()
   }
 
-  function snapshotAudioState(value) {
-    return { ply: value?.ply ?? -1, board: value?.board?.map((row) => [...row]) ?? [] }
-  }
-
+  function snapshotAudioState(value) { return { ply: value?.ply ?? -1, board: value?.board?.map((row) => [...row]) ?? [] } }
   function ensureAudio() {
     if (typeof window === 'undefined') return
     if (!bgm) { bgm = new Audio(chessAudioSources.bgm); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = 0.08 }
     if (!moveAudio) { moveAudio = new Audio(chessAudioSources.move); moveAudio.preload = 'auto'; moveAudio.volume = 0.55 }
     if (!captureAudio) { captureAudio = new Audio(chessAudioSources.capture); captureAudio.preload = 'auto'; captureAudio.volume = 0.62 }
   }
-
-  function unlockAudio() {
-    if (typeof window === 'undefined') return
-    audioUnlocked = true
-    ensureAudio()
-    if (bgm?.paused && state?.status !== 'finished') bgm.play().catch(() => {})
-  }
-
-  function playChessEffect(effect) {
-    if (!audioUnlocked) return
-    ensureAudio()
-    const audio = effect === 'capture' ? captureAudio : moveAudio
-    if (!audio) return
-    audio.pause(); audio.currentTime = 0; audio.play().catch(() => {})
-  }
+  function unlockAudio() { if (typeof window === 'undefined') return; audioUnlocked = true; ensureAudio(); if (bgm?.paused && state?.status !== 'finished') bgm.play().catch(() => {}) }
+  function playChessEffect(effect) { if (!audioUnlocked) return; ensureAudio(); const audio = effect === 'capture' ? captureAudio : moveAudio; if (!audio) return; audio.pause(); audio.currentTime = 0; audio.play().catch(() => {}) }
 
   function pieceAt(currentState, x, y) { return currentState?.board?.[y]?.[x] ?? 0 }
-  function pieceGlyph(piece) {
-    if (piece > 0) return whitePieces[piece] ?? ''
-    if (piece < 0) return blackPieces[-piece] ?? ''
-    return ''
-  }
   function pieceColor(piece) { return piece > 0 ? 'white' : piece < 0 ? 'black' : '' }
   function legalFrom(currentState, x, y) { return (currentState?.legalMoves ?? []).filter((move) => move.from.x === x && move.from.y === y) }
   function legalTo(currentState, x, y) { return selected ? legalFrom(currentState, selected.x, selected.y).filter((move) => move.to.x === x && move.to.y === y) : [] }
   function isLegalTarget(currentState, x, y) { return legalTo(currentState, x, y).length > 0 }
-  function isLastSquare(currentState, x, y) {
-    const last = currentState?.last
-    return !!last && ((last.from.x === x && last.from.y === y) || (last.to.x === x && last.to.y === y))
-  }
+  function isLastSquare(currentState, x, y) { const last = currentState?.last; return !!last && ((last.from.x === x && last.from.y === y) || (last.to.x === x && last.to.y === y)) }
 
   function chooseSquare(x, y) {
     unlockAudio()
@@ -99,24 +71,17 @@
   }
 
   async function submit(move) { selected = null; pendingPromotion = null; await onMove?.(move) }
-
   async function resign() {
     if (!myColor || state?.status !== 'playing' || actionBusy) return
     if (typeof window !== 'undefined' && !window.confirm('Resign this game?')) return
     actionBusy = true; actionError = ''
-    try { await socket.request('game.resign', { roomId: room.id }) }
-    catch (error) { actionError = error?.message ?? 'Unable to resign' }
-    finally { actionBusy = false }
+    try { await socket.request('game.resign', { roomId: room.id }) } catch (error) { actionError = error?.message ?? 'Unable to resign' } finally { actionBusy = false }
   }
-
   async function rematch() {
     if (!myColor || actionBusy) return
     actionBusy = true; actionError = ''
-    try { await socket.request('room.rematch', { roomId: room.id }) }
-    catch (error) { actionError = error?.message ?? 'Unable to start a new game' }
-    finally { actionBusy = false }
+    try { await socket.request('room.rematch', { roomId: room.id }) } catch (error) { actionError = error?.message ?? 'Unable to start a new game' } finally { actionBusy = false }
   }
-
   function resultTitle() { if (!state?.winner) return 'Draw'; return state.winner === myColor ? 'You win' : 'You lose' }
   function resultDetail() {
     if (state?.drawReason === 'resignation') return state.winner === myColor ? 'Opponent resigned' : 'You resigned'
@@ -127,16 +92,10 @@
     if (state?.drawReason === 'insufficient-material') return 'Insufficient material'
     return 'Game over'
   }
-
   function promoteTo(piece) { const move = pendingPromotion?.moves?.find((candidate) => candidate.promotion === piece); if (move) submit(move) }
-  function promotionGlyph(piece) {
-    const values = { q: 5, r: 4, b: 3, n: 2 }
-    const value = values[piece] ?? 5
-    return myColor === 'black' ? blackPieces[value] : whitePieces[value]
-  }
+  function promotionAsset(piece) { const value = promotionValues[piece] ?? 5; return chessPieceAsset(myColor === 'black' ? -value : value) }
   function fileLabel(x) { return String.fromCharCode(97 + x) }
   function rankLabel(y) { return String(8 - y) }
-
   onDestroy(() => { for (const audio of [bgm, moveAudio, captureAudio]) { if (!audio) continue; audio.pause(); audio.src = '' } })
 </script>
 
@@ -147,7 +106,7 @@
         {#if cell.x === (flipped ? 7 : 0)}<span class="rank">{rankLabel(cell.y)}</span>{/if}
         {#if cell.y === (flipped ? 0 : 7)}<span class="file">{fileLabel(cell.x)}</span>{/if}
         {#if pieceAt(state, cell.x, cell.y) !== 0}
-          <span class:white-piece={pieceAt(state, cell.x, cell.y) > 0} class:black-piece={pieceAt(state, cell.x, cell.y) < 0} class="piece">{pieceGlyph(pieceAt(state, cell.x, cell.y))}</span>
+          <img class="piece" class:white-piece={pieceAt(state, cell.x, cell.y) > 0} class:black-piece={pieceAt(state, cell.x, cell.y) < 0} src={chessPieceAsset(pieceAt(state, cell.x, cell.y))} alt="" draggable="false" />
         {:else if isLegalTarget(state, cell.x, cell.y)}<span class="move-dot"></span>{/if}
       </button>
     {/each}
@@ -156,11 +115,7 @@
   {#if state?.status === 'playing' && myColor}<div class="chess-actions"><button class="resign-button" onclick={resign} disabled={actionBusy}>Resign</button>{#if actionError}<span>{actionError}</span>{/if}</div>{/if}
 
   {#if pendingPromotion}
-    <div class="promotion" role="dialog" aria-label="Choose promotion piece">
-      <span>PROMOTE TO</span>
-      <div>{#each ['q', 'r', 'b', 'n'] as piece}<button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}>{promotionGlyph(piece)}</button>{/each}</div>
-      <button class="cancel" onclick={() => (pendingPromotion = null)}>Cancel</button>
-    </div>
+    <div class="promotion" role="dialog" aria-label="Choose promotion piece"><span>PROMOTE TO</span><div>{#each ['q', 'r', 'b', 'n'] as piece}<button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}><img class:white-piece={myColor !== 'black'} class:black-piece={myColor === 'black'} src={promotionAsset(piece)} alt="" draggable="false" /></button>{/each}</div><button class="cancel" onclick={() => (pendingPromotion = null)}>Cancel</button></div>
   {/if}
 
   {#if state?.status === 'finished'}
@@ -169,5 +124,5 @@
 </div>
 
 <style>
-  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;font-size:clamp(30px,7.8vw,66px);line-height:1;transform:translateY(-2%);font-family:'Times New Roman','Noto Sans Symbols 2',serif;user-select:none;pointer-events:none;filter:drop-shadow(0 2px 1px #0005)}.white-piece{color:#fff9e8;text-shadow:0 1px 0 #222,1px 0 0 #222,0 -1px 0 #222,-1px 0 0 #222}.black-piece{color:#151719;text-shadow:0 1px 0 #ffffff70}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.chess-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px}.chess-actions span,.result-error{color:#ff8a8a;font-size:12px}.resign-button{border:1px solid #734242;background:#171012;color:#d9a3a3;padding:9px 14px;font:inherit;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.resign-button:hover{border-color:#b25e5e;color:#ffd0d0}.resign-button:disabled{opacity:.5;cursor:default}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font-size:38px;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}.chess-result-modal{position:absolute;z-index:20;inset:0;display:grid;place-items:center;padding:20px;background:#050708b8;backdrop-filter:blur(4px)}.result-card{width:min(88%,380px);padding:30px;border:1px solid #4a525d;background:#111419;box-shadow:12px 12px 0 #050607;text-align:center}.result-kicker{display:block;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.18em}.result-card h2{margin:8px 0 4px;color:#f4f0e8;font-size:34px;line-height:1}.result-card p{margin:0 0 22px;color:#9ca6b1}.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.result-actions button,.result-actions a{display:grid;place-items:center;min-height:44px;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font:inherit;font-size:11px;font-weight:900;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;cursor:pointer}.result-actions .play-again{border-color:#799b45;background:#c1ff56;color:#10140c}.result-actions button:disabled{opacity:.5;cursor:default}@media(max-width:640px){.chess-board{border-width:6px}.piece{font-size:clamp(28px,10vw,50px)}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}.result-actions{grid-template-columns:1fr}}
+  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}.white-piece{filter:invert(1) drop-shadow(0 2px 1px #0008)}.black-piece{filter:drop-shadow(0 2px 1px #fff5)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.chess-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:12px}.chess-actions span,.result-error{color:#ff8a8a;font-size:12px}.resign-button{border:1px solid #734242;background:#171012;color:#d9a3a3;padding:9px 14px;font:inherit;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.resign-button:hover{border-color:#b25e5e;color:#ffd0d0}.resign-button:disabled{opacity:.5;cursor:default}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion>div img{width:74%;height:74%;object-fit:contain}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}.chess-result-modal{position:absolute;z-index:20;inset:0;display:grid;place-items:center;padding:20px;background:#050708b8;backdrop-filter:blur(4px)}.result-card{width:min(88%,380px);padding:30px;border:1px solid #4a525d;background:#111419;box-shadow:12px 12px 0 #050607;text-align:center}.result-kicker{display:block;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.18em}.result-card h2{margin:8px 0 4px;color:#f4f0e8;font-size:34px;line-height:1}.result-card p{margin:0 0 22px;color:#9ca6b1}.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.result-actions button,.result-actions a{display:grid;place-items:center;min-height:44px;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font:inherit;font-size:11px;font-weight:900;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;cursor:pointer}.result-actions .play-again{border-color:#799b45;background:#c1ff56;color:#10140c}.result-actions button:disabled{opacity:.5;cursor:default}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:80%;height:80%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}.result-actions{grid-template-columns:1fr}}
 </style>
