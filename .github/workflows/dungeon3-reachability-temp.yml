@@ -1,0 +1,17 @@
+name: Dungeon3 reachability temp
+
+on:
+  push:
+    branches:
+      - fix/dungeon3-room-reachability
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Dungeon3 richness tests
+        run: node --test web/src/lib/games/dungeon/dungeon3-richness.test.js
