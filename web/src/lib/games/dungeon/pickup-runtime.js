@@ -228,12 +228,16 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     const x = selected.x
     const y = selected.y
     const rest = scene.drops.filter((drop) => drop !== selected)
+
+    // Clear the selected texture while the visual is still alive. originalUpdateDrops()
+    // destroys the picked drop, so publishing after it would call setTexture() on a
+    // destroyed Phaser GameObject and crash inside TextureManager (scene.sys missing).
+    publish(null)
     scene.drops = [selected]
     originalUpdateDrops()
     const equipped = scene.drops.length === 0
     scene.drops = equipped ? rest : [selected, ...rest]
     if (equipped && previous) spawnDropWithMotion(x, y, previous, { prepare: false })
-    if (equipped) publish(null)
   }
 
   key?.on?.('down', equipSelected)
