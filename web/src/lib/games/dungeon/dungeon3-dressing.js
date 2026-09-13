@@ -6,6 +6,10 @@ const overlaps = (a,b) => a.x < b.x+b.width && a.x+a.width > b.x && a.y < b.y+b.
 const anchorArea = p => ({x:p.x-32,y:p.y-32,width:64,height:64})
 const roomAnchors = g => [g.spawn,g.exit,g.rest,...g.spawnPoints,...g.chests]
 
+function shuffled(random, entries) {
+  return entries.map(value=>({value,order:random()})).sort((a,b)=>a.order-b.order).map(entry=>entry.value)
+}
+
 function addPaving(g, room, kind, x, y, width, height) {
   g.pavingAreas.push({roomId:room.id,kind,x,y,width,height})
 }
@@ -26,8 +30,8 @@ function floodArea(g, room, area) {
 }
 
 // Themes own their landmark, hazard and route footprint before random clutter is
-// considered. Every composition leaves the room centre and a broad route to it
-// clear because spawn/exit/rest/encounter anchors all live there.
+// considered. Density is intentionally variable, but every random choice comes
+// from pre-vetted slots that preserve the same broad routes for radius-26 actors.
 export function dressThemedRooms(g, random) {
   const coffinPool = rules.motifs.coffins.filter(m => m.width === 3 && m.height === 2)
   const addProp = (room,kind,motif,left,top,collision) => {
@@ -41,43 +45,44 @@ export function dressThemedRooms(g, random) {
       const motif = rules.assemblies.statue
       const left = room.x + TILE
       const top = room.y + TILE
-      // Statue_fire is one authored 5x5 composition. Keep all 25 cells inside
-      // the room instead of letting a wall crop the upper-left fragment. The
-      // whole landmark stays to one side so its base cannot seal the main lane.
       addProp(room,'statue',motif,left,top,{
         x:left+TILE,y:top+(motif.height-1)*TILE,width:(motif.width-2)*TILE,height:TILE,
       })
-      // A processional slab path uses the connected paving mask rather than a
-      // repeated source corner, producing a readable continuous route.
-      addPaving(g,room,'processional',room.center.x-32,room.y+64,64,96)
+      // The landmark remains recognizable, while the approach can be short,
+      // medium or long so shrine rooms do not all read as the same composition.
+      const pathHeight = pick(random,[64,96,128])
+      addPaving(g,room,'processional',room.center.x-32,room.y+room.height-pathHeight,64,pathHeight)
       room.layout = {type:'altar',landmark:{x:left,y:top,width:motif.width*TILE,height:motif.height*TILE},safeLane:{x:room.center.x-32,y:room.y+32,width:64,height:128}}
       continue
     }
 
     if (room.theme === 'crypt') {
-      // Four complete coffins still frame the room, but the two burial rows are
-      // deliberately separated around the east-west centre line. Their visual
-      // footprint remains 3x2; only the lower stone base is collision-active so
-      // a radius-26 actor can enter from either side without a solid coffin wall.
-      const placements = [
+      // A crypt may be sparse or dense. Pick 1-4 complete coffins from four
+      // safe burial slots rather than filling all four every time. The slots
+      // stay separated around the east-west centre line and only the lower
+      // stone base is collision-active, preserving both horizontal entrances.
+      const placements = shuffled(random,[
         [room.x+32,room.y+16],[room.x+32,room.y+112],
         [room.x+room.width-80,room.y+16],[room.x+room.width-80,room.y+112],
-      ]
-      for (const [left,top] of placements) {
+      ])
+      const coffinCount = 1 + Math.floor(random()*4)
+      for (const [left,top] of placements.slice(0,coffinCount)) {
         const motif = pick(random,coffinPool)
         addProp(room,'coffin',motif,left,top,{x:left,y:top+TILE,width:48,height:TILE})
       }
       addPaving(g,room,'burial-aisle',room.center.x-48,room.y+32,96,128)
-      room.layout = {type:'burial',safeLane:{x:room.center.x-48,y:room.y+24,width:96,height:136},groups:2}
+      room.layout = {type:'burial',safeLane:{x:room.center.x-48,y:room.y+24,width:96,height:136},groups:coffinCount}
       continue
     }
 
     if (room.theme === 'gauntlet') {
-      // Build a contiguous 4x3 spike field on one side of the corridor. The
-      // opposite half remains a straight, readable bypass for a radius-26 actor.
+      // One to three adjacent rows produce anything from a warning strip to a
+      // full 4x3 bank. The hazard stays on one side and the opposite bypass is
+      // unchanged, so density never turns into compulsory damage.
       const motif = rules.assemblies.spikes
       const left = room.x + TILE
-      for (let row=0; row<3; row++) {
+      const bankCount = 1 + Math.floor(random()*3)
+      for (let row=0; row<bankCount; row++) {
         const y = room.y + 48 + row*TILE
         const damageArea = {x:left,y,width:motif.width*TILE,height:TILE}
         if (roomAnchors(g).some(p=>overlaps(damageArea,anchorArea(p)))) continue
@@ -85,25 +90,35 @@ export function dressThemedRooms(g, random) {
           x:left+motif.width*8,y:y+8,damageArea,animationOffset:row*300,planned:true})
       }
       addPaving(g,room,'gauntlet-bypass',room.center.x+16,room.y+32,64,128)
-      room.layout = {type:'trap-corridor',hazardLane:{x:left,y:room.y+48,width:motif.width*TILE,height:TILE*3},safeLane:{x:room.center.x+16,y:room.y+24,width:64,height:136}}
+      room.layout = {type:'trap-corridor',hazardLane:{x:left,y:room.y+48,width:motif.width*TILE,height:TILE*bankCount},safeLane:{x:room.center.x+16,y:room.y+24,width:64,height:136}}
       continue
     }
 
     if (room.theme === 'flooded') {
-      // The generator already cuts two southern bites. Add an asymmetric north
-      // pocket here so flooded rooms cannot collapse into the same rectangular pond.
-      const extra = {x:room.x+TILE,y:room.y+TILE*2,width:TILE*2,height:TILE*2,kind:'inlet'}
-      if (!(room.inlets ?? []).some(area=>overlaps(area,extra))) floodArea(g,room,extra)
+      // Two southern cuts come from the base generator. Add zero, one or two
+      // asymmetric northern pockets from safe edge slots; the central spine is
+      // never touched, yielding 2-4 inlets without risking disconnection.
+      const extras = shuffled(random,[
+        {x:room.x+TILE,y:room.y+TILE*2,width:TILE*2,height:TILE*2,kind:'inlet'},
+        {x:room.x+room.width-TILE*3,y:room.y+TILE,width:TILE*2,height:TILE*3,kind:'inlet'},
+      ])
+      const extraCount = Math.floor(random()*3)
+      for (const extra of extras.slice(0,extraCount)) {
+        if (!(room.inlets ?? []).some(area=>overlaps(area,extra))) floodArea(g,room,extra)
+      }
       addPaving(g,room,'flooded-spine',room.center.x-32,room.y+32,64,128)
       room.layout = {type:'flood-basin',safeLane:{x:room.center.x-32,y:room.y+24,width:64,height:136}}
       continue
     }
 
-    // Galleries are the only rooms where a loose coffin is part of the theme.
+    // Galleries are allowed to be genuinely empty. Half receive one complete
+    // coffin composition, half keep the visual breathing room.
     if (room.theme === 'gallery') {
-      const motif = pick(random,coffinPool)
-      const left = room.x+room.width-80, top = room.y+32
-      addProp(room,'coffin',motif,left,top,{x:left,y:top,width:48,height:32})
+      if (random()<0.5) {
+        const motif = pick(random,coffinPool)
+        const left = room.x+room.width-80, top = room.y+32
+        addProp(room,'coffin',motif,left,top,{x:left,y:top+TILE,width:48,height:TILE})
+      }
       room.layout = {type:'gallery',safeLane:{x:room.center.x-32,y:room.y+24,width:64,height:136}}
     }
   }
@@ -114,7 +129,6 @@ export function populateWater(g, random) {
   const water = (x,y) => x>=0&&y>=0&&x<columns&&y<rows&&cells[y*columns+x].kind==='water'
   const occupied = new Set()
   const variants = [rules.assemblies.waterRipple,rules.assemblies.waterFoam,rules.assemblies.waterLong,rules.assemblies.waterSmall]
-  // A shuffled list yields clusters and quiet water instead of a repeated grid.
   const candidates = []
   for(let y=3;y<rows-2;y++) for(let x=3;x<columns-3;x++) if(water(x,y)) candidates.push({x,y,order:random()})
   candidates.sort((a,b)=>a.order-b.order)
@@ -128,12 +142,12 @@ export function populateWater(g, random) {
       count++
     }
   }
-  // Water gets several authored surface languages per floor rather than one
-  // repeated ripple. Large/long motifs are attempted first so small details do
-  // not consume every viable footprint.
-  const detailLimit = Math.max(4,Math.floor(candidates.length/55))
+  // Quiet and busy floors both occur: the divisor changes detail density while
+  // the complete authored motifs and their non-overlap rules stay identical.
+  const densityDivisor = pick(random,[45,55,70])
+  const detailLimit = Math.max(3,Math.floor(candidates.length/densityDivisor))
   for(const motif of variants) place(motif,'water-detail',detailLimit)
-  // Masonry is a separate underwater layer and can sit beneath moving ripples.
   occupied.clear()
-  place(rules.assemblies.underwaterRuin,'underwater-ruin',Math.max(4,g.rooms.length+1))
+  const ruinLimit = Math.max(3,Math.floor(g.rooms.length*(0.65+random()*0.7)))
+  place(rules.assemblies.underwaterRuin,'underwater-ruin',ruinLimit)
 }
