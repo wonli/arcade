@@ -1,5 +1,6 @@
 import { installDungeonWeaponCatalog } from './weapon-catalog-runtime.js'
 import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
+import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
 import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
 
@@ -51,6 +52,7 @@ export function weaponVisualProfile(item) {
     textureKey: `dungeon-held-weapon-${art.artArchetype}-${art.artRarity}`,
     scale: profile.visualScale * rarityScale,
     depth: 22,
+    procedural: !ART[archetype],
   }
 }
 
@@ -81,6 +83,37 @@ export function weaponPose(player, facing = 'down', { attacking = false, reachSc
   }
 }
 
+function part(scene, kind, ...args) {
+  return scene.add?.[kind]?.(...args) ?? null
+}
+
+function createProceduralWeapon(scene, archetype, x, y) {
+  const children = []
+  const push = (object) => { if (object) children.push(object); return object }
+  if (archetype === 'greatsword') {
+    push(part(scene, 'rectangle', 0, -8, 7, 34, 0xdce6ec, 1))
+    push(part(scene, 'rectangle', 0, 7, 18, 4, 0xc9a85c, 1))
+    push(part(scene, 'rectangle', 0, 17, 4, 16, 0x6f4b37, 1))
+  } else if (archetype === 'spear') {
+    push(part(scene, 'rectangle', 0, 2, 3, 44, 0x8b633f, 1))
+    push(part(scene, 'rectangle', 0, -22, 8, 13, 0xdde9ef, 1)?.setAngle?.(45))
+  } else if (archetype === 'axe') {
+    push(part(scene, 'rectangle', 0, 4, 4, 38, 0x7a5237, 1))
+    push(part(scene, 'rectangle', 7, -13, 16, 11, 0xcfd9df, 1))
+    push(part(scene, 'rectangle', 11, -13, 7, 17, 0xaebac2, 1))
+  } else if (archetype === 'bow') {
+    push(part(scene, 'arc', 0, 0, 15, -72, 72, false, 0x9a683f, 0)?.setStrokeStyle?.(3, 0xc99a63, 1))
+    push(part(scene, 'rectangle', 4, 0, 2, 28, 0xe6ddc7, 0.8))
+  } else if (archetype === 'staff') {
+    push(part(scene, 'rectangle', 0, 4, 4, 40, 0x785640, 1))
+    push(part(scene, 'circle', 0, -18, 7, 0xc984ff, 0.95)?.setStrokeStyle?.(2, 0xf0d9ff, 0.9))
+    push(part(scene, 'circle', 0, -18, 12, 0xc984ff, 0.12))
+  }
+  const container = scene.add?.container?.(x, y, children)
+  container?.setSize?.(40, 52)
+  return container
+}
+
 function equippedItem(scene) {
   if (!scene?.playerState?.weapon) return null
   return scene.playerState.equippedWeapon ?? {
@@ -100,14 +133,22 @@ export function installDungeonWeaponVisuals(scene) {
 
   const ensureVisual = () => {
     const profile = weaponVisualProfile(equippedItem(scene))
-    if (!profile || !scene.textures?.exists?.(profile.textureKey)) {
+    if (!profile) {
       visual?.setVisible?.(false)
       return null
     }
-    if (!visual || currentKey !== profile.textureKey) {
+    const nextKey = `${profile.archetype}:${profile.textureKey}`
+    if (!visual || currentKey !== nextKey) {
       visual?.destroy?.()
-      visual = scene.add.image(scene.playerState.x, scene.playerState.y, profile.textureKey).setOrigin?.(0.5, 0.78) ?? null
-      currentKey = profile.textureKey
+      if (profile.procedural && scene.add?.container) {
+        visual = createProceduralWeapon(scene, profile.archetype, scene.playerState.x, scene.playerState.y)
+      } else if (scene.textures?.exists?.(profile.textureKey)) {
+        visual = scene.add.image(scene.playerState.x, scene.playerState.y, profile.textureKey)
+        visual?.setOrigin?.(0.5, 0.78)
+      } else {
+        visual = null
+      }
+      currentKey = nextKey
     }
     visual?.setScale?.(profile.scale)
     visual?.setVisible?.(true)
@@ -132,6 +173,7 @@ export function installDungeonWeaponVisuals(scene) {
   }
   const anchor = () => poseNow().tip
   const weaponVfx = installDungeonWeaponVfx(scene, { anchor })
+  const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor })
   const swing = () => {
     const profile = weaponProfile(equippedItem(scene))
     attackUntil = (scene.time?.now ?? 0) + profile.swingMs
@@ -163,6 +205,7 @@ export function installDungeonWeaponVisuals(scene) {
     scene.events?.off?.('update', sync)
     visual?.destroy?.()
     visual = null
+    weaponProjectiles?.restore?.()
     weaponVfx?.restore?.()
     scene.__dungeonWeaponCombat?.restore?.()
     weaponCatalog?.restore?.()
