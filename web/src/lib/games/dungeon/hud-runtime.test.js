@@ -1,31 +1,54 @@
 import { describe, expect, it } from 'vitest'
-import { dungeonHudModel, HUD_INSET } from './hud-runtime.js'
+import { dungeonHudModel, HUD_INSET, HUD_WEAPON_ICON_URL } from './hud-runtime.js'
 
 describe('dungeon HUD model', () => {
-  it('anchors the HUD inside the 48px dungeon border', () => {
+  it('keeps the compact HUD inside the playable area', () => {
     const model = dungeonHudModel({
-      stats: { hp: 84, maxHp: 100, kills: 3, healthPotions: 2, weapon: null },
-      progress: { floor: 1, roomRole: 'combat' },
-      labels: { hp: 'HP', weapon: 'WEAPON', details: 'STATS', none: 'None', emptyWeapon: 'No weapon', combat: 'Combat' },
+      stats: {
+        healthPotions: 2,
+        weapon: { type: 'weapon.dungeon_blade' },
+        weaponRarity: 'rare',
+        weaponDamage: 18,
+      },
+      labels: {
+        dungeonBlade: 'Dungeon Blade',
+        baseDamage: 'DMG',
+        'rarity:rare': 'Rare',
+      },
     })
 
     expect(HUD_INSET).toBe(56)
-    expect(model.bounds.left).toEqual({ x: 56, y: 56, width: 286, height: 72 })
-    expect(model.bounds.right).toEqual({ x: 618, y: 56, width: 286, height: 72 })
+    expect(model.bounds.weapon).toEqual({ x: 56, y: 56, width: 176, height: 48 })
+    expect(model.bounds.potion).toEqual({ x: 240, y: 56, width: 58, height: 48 })
   })
 
-  it('formats live combat state for Phaser text objects', () => {
+  it('does not expose HP or room metadata in the compact HUD', () => {
     const model = dungeonHudModel({
-      stats: { hp: 84, maxHp: 100, kills: 3, healthPotions: 2, weapon: null },
-      progress: { floor: 1, roomRole: 'combat' },
-      labels: { weapon: 'WEAPON', details: 'STATS', none: 'None', emptyWeapon: 'No weapon', combat: 'Combat' },
+      stats: {
+        hp: 84,
+        maxHp: 100,
+        kills: 3,
+        healthPotions: 2,
+        weapon: { type: 'weapon.dungeon_blade' },
+        weaponRarity: 'rare',
+        weaponDamage: 18,
+      },
+      labels: {
+        dungeonBlade: 'Dungeon Blade',
+        baseDamage: 'DMG',
+        'rarity:rare': 'Rare',
+      },
     })
 
-    expect(model.hpText).toBe('84/100')
-    expect(model.hpRatio).toBe(0.84)
-    expect(model.metaText).toBe('F1  ·  Combat  ·  ☠ 3')
+    expect(model).not.toHaveProperty('hpText')
+    expect(model).not.toHaveProperty('hpRatio')
+    expect(model).not.toHaveProperty('metaText')
+    expect(model.weaponTitle).toBe('Rare Dungeon Blade')
+    expect(model.weaponDetail).toBe('+18 DMG')
     expect(model.potionText).toBe('2')
-    expect(model.weaponTitle).toBe('None')
-    expect(model.weaponDetail).toBe('No weapon')
+  })
+
+  it('bundles the committed dagger icon as the weapon HUD asset', () => {
+    expect(HUD_WEAPON_ICON_URL).toContain('dagger_01.png')
   })
 })
