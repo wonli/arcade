@@ -11,4 +11,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test web/src/lib/games/dungeon/dungeon3-statue-real-geometry.test.js
+      - name: Run focused Dungeon3 regressions
+        run: node --test web/src/lib/games/dungeon/dungeon3-statue-collision.test.js web/src/lib/games/dungeon/dungeon3-richness.test.js web/src/lib/games/dungeon/dungeon3-walkability.test.js
