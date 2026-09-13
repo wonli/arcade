@@ -1,8 +1,9 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
-import { healthPotionPickupMode, useStoredHealthPotion } from './inventory.js'
+import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
+import { weaponVisualProfile } from './weapon-visual-runtime.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -35,7 +36,7 @@ function nearOpenedChest(scene, x, y) {
 export function prepareDropItem(scene, x, y, item, random = Math.random) {
   if (!item) return item
   if (scene?.__restoringFloor) return item
-  if (nearOpenedChest(scene, x, y) && random() < 0.20) return { type: 'consumable.health_potion', rarity: 'common', heal: 28 }
+  if (nearOpenedChest(scene, x, y) && random() < 0.20) return { type: 'consumable.health_potion', rarity: 'common', healRatio: 0.30 }
   if (!item.type?.startsWith('weapon.')) return item
   const rolled = weaponDamageForFloor(item.rarity, scene?.floor ?? 1, random)
   return { ...item, damage: Math.max(item.damage ?? 0, rolled), affixes: [...(item.affixes ?? [])] }
@@ -78,9 +79,6 @@ function candidateRing(origin, radius) {
   return [...unique.values()].sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y))
 }
 
-// A collision-safe point may still sit on an isolated patch of land. Drops must
-// live in the player's current connected component, otherwise a rare/epic item
-// can be visible but impossible to collect.
 export function resolveDropPosition(scene, x, y) {
   const geometry = scene?.__dungeonSpatial?.getGeometry?.()
   const requested = { x: Number(x) || 0, y: Number(y) || 0 }
@@ -119,6 +117,16 @@ function currentWeapon(scene) {
   }
 }
 
+function syncGroundWeaponVisual(scene, drop, position) {
+  const profile = weaponVisualProfile(drop?.item)
+  if (!profile || !scene?.textures?.exists?.(profile.textureKey) || !scene.add?.image) return
+  const visual = scene.add.image(position.x, position.y, profile.textureKey)
+  visual?.setDepth?.(15)
+  visual?.setScale?.(profile.scale)
+  drop.visual?.destroy?.()
+  drop.visual = visual
+}
+
 export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random } = {}) {
   if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
@@ -137,10 +145,12 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
     const position = resolveDropPosition(scene, x, y)
+    const preparedItem = prepare ? prepareDropItem(scene, position.x, position.y, item, random) : item
     const before = scene.drops?.length ?? 0
-    originalSpawnDrop(position.x, position.y, prepare ? prepareDropItem(scene, position.x, position.y, item, random) : item)
+    originalSpawnDrop(position.x, position.y, preparedItem)
     const drop = scene.drops?.[before]
     if (!drop) return null
+    syncGroundWeaponVisual(scene, drop, position)
     drop.spawnedAt = scene.time?.now ?? 0
     drop.groundY = position.y
     drop.baseScaleX = drop.visual?.scaleX ?? 1
@@ -153,13 +163,8 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
 
-  const emitInventoryStats = () => {
-    originalEmitStats()
-    scene.__dungeonInventoryStats?.(scene.playerState.healthPotions ?? 0)
-  }
-
   const useHealthPotion = () => {
-    const next = useStoredHealthPotion(scene.playerState, 28)
+    const next = useStoredHealthPotion(scene.playerState)
     if (!next.used) return false
     scene.playerState.hp = next.hp
     scene.playerState.healthPotions = next.healthPotions
@@ -170,9 +175,15 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     return true
   }
 
+  const autoUseHealthPotion = () => {
+    if (scene.dead || scene.runComplete || !shouldAutoUseHealthPotion(scene.playerState)) return false
+    return useHealthPotion()
+  }
+
   const api = {
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     useHealthPotion,
+    autoUseHealthPotion,
     getHealthPotions() { return scene.playerState.healthPotions ?? 0 },
   }
   scene.__dungeonPickupRuntime = api
@@ -224,6 +235,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
         scene.destroyDrop?.(drop)
         scene.__dungeonInventoryStats?.(scene.playerState.healthPotions)
         scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
+        autoUseHealthPotion()
         continue
       }
       remainingAutomatic.push(drop)
@@ -235,6 +247,9 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     publish(nearestConfirmableDrop(scene.playerState, confirmDrops, 34))
   }
 
+  const autoPotionUpdate = () => autoUseHealthPotion()
+  scene.events?.on?.('update', autoPotionUpdate)
+
   scene.clearDrops = function clearDropsWithSelectionReset() {
     publish(null)
     originalClearDrops()
@@ -242,6 +257,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
+    scene.events?.off?.('update', autoPotionUpdate)
     publish(null)
     scene.__dungeonDropNavGrid = null
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
