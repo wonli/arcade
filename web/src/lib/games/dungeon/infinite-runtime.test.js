@@ -71,4 +71,11 @@ test('player runtime baseline follows floor progression without compounding twic
   scalePlayerForProgress(scene, { floor: 20, chapter: 4 })
   assert.equal(scene.playerState.maxHp, deep.maxHp)
   assert.equal(scene.playerState.damage, deep.damage)
+
+  scene.playerState.baseStats = { ...scene.playerState.baseStats, damage: scene.playerState.baseStats.damage + 1 }
+  scene.playerState.damage += 1
+  scalePlayerForProgress(scene, { floor: 21, chapter: 4 })
+  assert.equal(scene.playerState.damage, 14)
+  scalePlayerForProgress(scene, { floor: 22, chapter: 4 })
+  assert.equal(scene.playerState.damage, 14)
 })
