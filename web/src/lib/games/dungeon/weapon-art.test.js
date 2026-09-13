@@ -13,9 +13,11 @@ test('all twelve named weapons have stable base and selected art', () => {
   for (const type of ids) {
     const art = namedWeaponArt(type)
     assert.ok(art, type)
-    assert.match(art.base, /Weapons Asset 16x16\/\d{3}\.png$/)
-    assert.match(art.selected, /Weapons Asset 16x16\/Selected Version\/\d{3}\.png$/)
+    assert.match(art.base, /Weapons%20Asset%2016x16\/\d{3}\.png$/)
+    assert.match(art.selected, /Weapons%20Asset%2016x16\/Selected%20Version\/\d{3}\.png$/)
     assert.equal(art.base.match(/(\d{3})\.png$/)[1], art.selected.match(/(\d{3})\.png$/)[1])
+    assert.match(art.base, /^file:/)
+    assert.match(art.selected, /^file:/)
   }
 })
 
