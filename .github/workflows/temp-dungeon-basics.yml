@@ -1,0 +1,33 @@
+name: temp dungeon basics verification
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Dungeon basic regression
+        run: >-
+          node --test
+          src/lib/games/dungeon/ambient.test.js
+          src/lib/games/dungeon/inventory.test.js
+          src/lib/games/dungeon/touch-runtime.test.js
+          src/lib/games/dungeon/pickup-runtime.test.js
+          src/lib/games/dungeon/progression.test.js
+          src/lib/games/dungeon/infinite-runtime.test.js
+          src/lib/games/dungeon/weapon-visual-runtime.test.js
+      - name: Production build
+        run: npm run build
