@@ -5,40 +5,34 @@ export function createDungeonAmbient({ windowImpl = globalThis.window } = {}) {
   let state = 'idle'
 
   async function start() {
-    if (state === 'running') return
+    if (state === 'running' || state === 'closed') return
     if (!windowImpl?.Audio) {
       state = 'unsupported'
       return
     }
-
     if (!audio) {
       audio = new windowImpl.Audio(DUNGEON_MUSIC_PATH)
       audio.loop = true
       audio.preload = 'auto'
       audio.volume = 0.58
     }
-
     try {
       await audio.play()
-      state = 'running'
+      if (state !== 'closed') state = 'running'
+      else audio.pause()
     } catch {
-      state = 'suspended'
+      if (state !== 'closed') state = 'suspended'
     }
   }
 
   function stop() {
+    state = 'closed'
     if (audio) {
       audio.pause()
-      try {
-        audio.currentTime = 0
-      } catch {}
+      try { audio.currentTime = 0 } catch {}
     }
-    state = 'closed'
   }
 
-  function getState() {
-    return state
-  }
-
+  function getState() { return state }
   return { start, stop, getState }
 }
