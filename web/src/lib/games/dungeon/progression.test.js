@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { advanceProgress, createChapterPlan, createRunProgress, difficultyProfile, roomRoleAt } from './progression.js'
+import { advanceProgress, createChapterPlan, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 
 function sequenceRandom(values) {
   let index = 0
@@ -55,4 +55,16 @@ test('difficulty scaling stays bounded on deep floors', () => {
   const elite = difficultyProfile({ floor: 20, chapter: 4, roomRole: 'elite' })
   assert.ok(elite.hpMultiplier > combat.hpMultiplier)
   assert.ok(elite.damageMultiplier > combat.damageMultiplier)
+})
+
+test('player baseline grows with floor but remains below runaway enemy scaling', () => {
+  const first = playerProgressionProfile({ floor: 1, chapter: 1 })
+  const mid = playerProgressionProfile({ floor: 20, chapter: 4 })
+  const deep = playerProgressionProfile({ floor: 80, chapter: 14 })
+  assert.deepEqual(first, { maxHpMultiplier: 1, damageMultiplier: 1 })
+  assert.ok(mid.maxHpMultiplier > 1.6)
+  assert.ok(mid.damageMultiplier > 1.2)
+  assert.ok(deep.maxHpMultiplier <= 4)
+  assert.ok(deep.damageMultiplier <= 2.5)
+  assert.ok(deep.maxHpMultiplier > mid.maxHpMultiplier)
 })
