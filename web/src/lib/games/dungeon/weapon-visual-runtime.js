@@ -92,10 +92,15 @@ const ATTACK_POSES = {
   down: { dx: 10, dy: 17, angle: 84, tipDx: 16, tipDy: 27 },
 }
 
+function idleCarryLift(reachScale = 1) {
+  return Math.min(14, Math.max(0, Math.round((reachScale - 1) * 28)))
+}
+
 export function weaponPose(player, facing = 'down', { attacking = false, reachScale = 1 } = {}) {
   const base = (attacking ? ATTACK_POSES : IDLE_POSES)[facing] ?? (attacking ? ATTACK_POSES.down : IDLE_POSES.down)
+  const carryLift = attacking ? 0 : idleCarryLift(reachScale)
   const x = (player?.x ?? 0) + base.dx
-  const y = (player?.y ?? 0) + base.dy
+  const y = (player?.y ?? 0) + base.dy - carryLift
   return {
     x,
     y,
