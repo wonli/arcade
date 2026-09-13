@@ -1,13 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chessPieceGlyph } from './pieces.js'
+import { chessPieceAsset } from './pieces.js'
 
-test('white pieces use solid glyphs so moved pieces stay visible', () => {
-  assert.equal(chessPieceGlyph(1), '♟')
-  assert.equal(chessPieceGlyph(6), '♚')
+test('white pieces map to local SVG assets', () => {
+  assert.equal(chessPieceAsset(1), '/assets/chess/pieces/pawn.svg')
+  assert.equal(chessPieceAsset(4), '/assets/chess/pieces/rook.svg')
+  assert.equal(chessPieceAsset(6), '/assets/chess/pieces/king.svg')
 })
 
-test('black pieces use the same solid glyph geometry', () => {
-  assert.equal(chessPieceGlyph(-1), '♟')
-  assert.equal(chessPieceGlyph(-6), '♚')
+test('black pieces reuse the same SVG geometry', () => {
+  assert.equal(chessPieceAsset(-1), '/assets/chess/pieces/pawn.svg')
+  assert.equal(chessPieceAsset(-5), '/assets/chess/pieces/queen.svg')
+  assert.equal(chessPieceAsset(-6), '/assets/chess/pieces/king.svg')
 })
