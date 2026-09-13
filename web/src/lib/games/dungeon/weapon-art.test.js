@@ -19,6 +19,14 @@ test('all twelve named weapons have stable base and selected art', () => {
   }
 })
 
+test('corrected polearm greatsword and staff identities use intended sprite rows', () => {
+  assert.equal(namedWeaponArt('weapon.storm_lance').number, '087')
+  assert.equal(namedWeaponArt('weapon.starfall_spear').number, '090')
+  assert.equal(namedWeaponArt('weapon.ember_maul').number, '094')
+  assert.equal(namedWeaponArt('weapon.blood_reaver').number, '095')
+  assert.equal(namedWeaponArt('weapon.arcane_spire').number, '060')
+})
+
 test('legacy and unknown weapon types do not claim named art', () => {
   assert.equal(namedWeaponArt('weapon.dungeon_blade'), null)
   assert.equal(namedWeaponArt('weapon.nope'), null)

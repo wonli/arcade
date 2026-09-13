@@ -6,13 +6,13 @@ const NUMBERS = Object.freeze({
   'weapon.ash_saber': '101',
   'weapon.grave_cleaver': '034',
   'weapon.frostbite': '020',
-  'weapon.storm_lance': '084',
-  'weapon.ember_maul': '096',
+  'weapon.storm_lance': '087',
+  'weapon.ember_maul': '094',
   'weapon.void_edge': '103',
-  'weapon.blood_reaver': '100',
-  'weapon.arcane_spire': '054',
+  'weapon.blood_reaver': '095',
+  'weapon.arcane_spire': '060',
   'weapon.tempest_bow': '106',
-  'weapon.starfall_spear': '089',
+  'weapon.starfall_spear': '090',
 })
 
 export function namedWeaponArt(type) {
