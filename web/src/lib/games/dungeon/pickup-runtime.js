@@ -51,6 +51,14 @@ function dropPositionIsSafe(position, geometry) {
   return insideGeometryBounds(position, geometry) && !circleHitsSolid(position, DROP_RADIUS, geometry)
 }
 
+function dropNavGrid(scene, geometry) {
+  const cached = scene?.__dungeonDropNavGrid
+  if (cached?.geometry === geometry) return cached.grid
+  const grid = buildNavGrid(geometry, { cellSize: DROP_NAV_CELL, actorRadius: DROP_RADIUS, profile: 'ground' })
+  if (scene) scene.__dungeonDropNavGrid = { geometry, grid }
+  return grid
+}
+
 function dropPositionIsReachable(position, geometry, player, grid) {
   if (!player || !dropPositionIsSafe(position, geometry)) return false
   return findPath(grid, player, position).length > 0
@@ -79,8 +87,8 @@ export function resolveDropPosition(scene, x, y) {
   if (!geometry) return requested
 
   const player = scene?.playerState
-  if (!player) return dropPositionIsSafe(requested, geometry) ? requested : requested
-  const grid = buildNavGrid(geometry, { cellSize: DROP_NAV_CELL, actorRadius: DROP_RADIUS, profile: 'ground' })
+  if (!player) return requested
+  const grid = dropNavGrid(scene, geometry)
 
   if (dropPositionIsReachable(requested, geometry, player, grid)) return requested
 
@@ -235,6 +243,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
     publish(null)
+    scene.__dungeonDropNavGrid = null
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
 
