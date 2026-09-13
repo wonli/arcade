@@ -3,6 +3,7 @@ import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
 import { installDungeonSfx } from './sfx-runtime.js'
+import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -48,6 +49,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
   if (!scene || scene.__dungeonAttackRuntimeInstalled) return scene?.__dungeonAttackRuntime ?? null
   scene.__dungeonAttackRuntimeInstalled = true
   installDungeonSfx(scene)
+  installDungeonWorldVfx(scene)
 
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
@@ -115,7 +117,8 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     if (effects.chain > 0 && random() < effects.chain) {
       const target = secondaryTarget(primary, scene.enemies, 165)
       if (target) {
-        scene.effectLine(primary, target, 0x7bc5ff, 3)
+        if (scene.__dungeonVfx?.lightning) scene.__dungeonVfx.lightning(primary, target, { primary: false })
+        else scene.effectLine(primary, target, 0x7bc5ff, 3)
         scene.damageEnemy(target, Math.max(1, Math.round(damage * 0.56)), false, 8, { direct: false, canProc: false, source: 'chain' })
       }
     }
@@ -152,6 +155,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       scene.slash = originalSlash
       scene.damageEnemy = originalDamageEnemy
       scene.applyWeaponProcs = originalApplyWeaponProcs
+      scene.__dungeonWorldVfx?.restore?.()
       audio.close()
     },
   }
