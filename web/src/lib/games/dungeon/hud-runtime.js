@@ -15,6 +15,8 @@ const HUD_WEAPON_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
 const HUD_ACHIEVEMENT_TEXTURE_KEY = 'dungeon-hud-achievement-icon'
 const ACHIEVEMENT_CELL_WIDTH = 93
 const ACHIEVEMENT_CELL_HEIGHT = 104
+const ACHIEVEMENT_FRAME_NORMAL = 'progress-normal'
+const ACHIEVEMENT_FRAME_BOSS = 'progress-boss'
 
 function equippedWeaponName(weapon, labels) {
   const type = typeof weapon === 'string' ? weapon : weapon?.type
@@ -84,10 +86,22 @@ function loadHudTexture(scene, key, url) {
   })
 }
 
-function achievementCrop(boss) {
-  return boss
-    ? { x: ACHIEVEMENT_CELL_WIDTH * 4, y: 0, width: ACHIEVEMENT_CELL_WIDTH, height: ACHIEVEMENT_CELL_HEIGHT }
-    : { x: 0, y: 0, width: ACHIEVEMENT_CELL_WIDTH, height: ACHIEVEMENT_CELL_HEIGHT }
+function ensureAchievementFrames(scene) {
+  const texture = scene.textures?.get?.(HUD_ACHIEVEMENT_TEXTURE_KEY)
+  if (!texture?.add) return
+  if (!texture.has?.(ACHIEVEMENT_FRAME_NORMAL)) {
+    texture.add(ACHIEVEMENT_FRAME_NORMAL, 0, 0, 0, ACHIEVEMENT_CELL_WIDTH, ACHIEVEMENT_CELL_HEIGHT)
+  }
+  if (!texture.has?.(ACHIEVEMENT_FRAME_BOSS)) {
+    texture.add(
+      ACHIEVEMENT_FRAME_BOSS,
+      0,
+      ACHIEVEMENT_CELL_WIDTH * 4,
+      0,
+      ACHIEVEMENT_CELL_WIDTH,
+      ACHIEVEMENT_CELL_HEIGHT,
+    )
+  }
 }
 
 export function installDungeonHud(scene, {
@@ -165,8 +179,11 @@ export function installDungeonHud(scene, {
 
   loadHudTexture(scene, HUD_ACHIEVEMENT_TEXTURE_KEY, achievementIconUrl).then((loaded) => {
     if (!loaded || destroyed) return
+    ensureAchievementFrames(scene)
     badgeSlot.removeAll(true)
-    achievementImage = scene.add.image(21, 21, HUD_ACHIEVEMENT_TEXTURE_KEY).setOrigin(0.5).setDisplaySize(38, 42)
+    achievementImage = scene.add.image(21, 21, HUD_ACHIEVEMENT_TEXTURE_KEY, ACHIEVEMENT_FRAME_NORMAL)
+      .setOrigin(0.5)
+      .setDisplaySize(38, 42)
     badgeSlot.add(achievementImage)
     update()
   })
@@ -193,11 +210,8 @@ export function installDungeonHud(scene, {
     floorText.setText(model.progressBadge.floorLabel).setColor(model.progressBadge.boss ? '#ffd0c7' : '#f4f0e8')
     bossText.setText(model.progressBadge.bossLabel.toUpperCase())
     progressBg.setStrokeStyle(1, model.progressBadge.boss ? 0xff746c : 0x33404a, model.progressBadge.boss ? 0.82 : 0.5)
-    if (achievementImage) {
-      const crop = achievementCrop(model.progressBadge.boss)
-      achievementImage.setCrop(crop.x, crop.y, crop.width, crop.height)
-      achievementImage.setAlpha(model.progressBadge.boss ? 1 : 0.92)
-    }
+    achievementImage?.setFrame?.(model.progressBadge.boss ? ACHIEVEMENT_FRAME_BOSS : ACHIEVEMENT_FRAME_NORMAL)
+    achievementImage?.setAlpha?.(model.progressBadge.boss ? 1 : 0.92)
     return model
   }
 
