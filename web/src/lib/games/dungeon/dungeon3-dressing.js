@@ -96,11 +96,12 @@ export function dressThemedRooms(g, random) {
 
     if (room.theme === 'flooded') {
       // Two southern cuts come from the base generator. Add zero, one or two
-      // asymmetric northern pockets from safe edge slots; the central spine is
-      // never touched, yielding 2-4 inlets without risking disconnection.
+      // asymmetric northern pockets from safe edge slots. Keeping both pockets
+      // within the first 48px of the room also preserves radius-26 clearance on
+      // an east-west corridor centred at y+80.
       const extras = shuffled(random,[
-        {x:room.x+TILE,y:room.y+TILE*2,width:TILE*2,height:TILE*2,kind:'inlet'},
-        {x:room.x+room.width-TILE*3,y:room.y+TILE,width:TILE*2,height:TILE*3,kind:'inlet'},
+        {x:room.x+TILE,y:room.y+TILE,width:TILE*2,height:TILE*2,kind:'inlet'},
+        {x:room.x+room.width-TILE*3,y:room.y+TILE,width:TILE*2,height:TILE*2,kind:'inlet'},
       ])
       const extraCount = Math.floor(random()*3)
       for (const extra of extras.slice(0,extraCount)) {
