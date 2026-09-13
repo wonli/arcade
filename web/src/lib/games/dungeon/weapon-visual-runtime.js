@@ -115,6 +115,20 @@ function createProceduralWeapon(scene, archetype, x, y) {
   return container
 }
 
+export function createWeaponVisual(scene, item, x, y) {
+  const profile = weaponVisualProfile(item)
+  if (!profile) return null
+  let visual = null
+  if (profile.procedural && scene.add?.container) {
+    visual = createProceduralWeapon(scene, profile.archetype, x, y)
+  } else if (scene.textures?.exists?.(profile.textureKey) && scene.add?.image) {
+    visual = scene.add.image(x, y, profile.textureKey)
+    visual?.setOrigin?.(0.5, 0.78)
+  }
+  visual?.setScale?.(profile.scale)
+  return visual
+}
+
 function equippedItem(scene) {
   if (!scene?.playerState?.weapon) return null
   return scene.playerState.equippedWeapon ?? {
@@ -133,7 +147,8 @@ export function installDungeonWeaponVisuals(scene) {
   let ready = false
 
   const ensureVisual = () => {
-    const profile = weaponVisualProfile(equippedItem(scene))
+    const item = equippedItem(scene)
+    const profile = weaponVisualProfile(item)
     if (!profile) {
       visual?.setVisible?.(false)
       return null
@@ -141,17 +156,9 @@ export function installDungeonWeaponVisuals(scene) {
     const nextKey = `${profile.archetype}:${profile.textureKey}`
     if (!visual || currentKey !== nextKey) {
       visual?.destroy?.()
-      if (profile.procedural && scene.add?.container) {
-        visual = createProceduralWeapon(scene, profile.archetype, scene.playerState.x, scene.playerState.y)
-      } else if (scene.textures?.exists?.(profile.textureKey)) {
-        visual = scene.add.image(scene.playerState.x, scene.playerState.y, profile.textureKey)
-        visual?.setOrigin?.(0.5, 0.78)
-      } else {
-        visual = null
-      }
+      visual = createWeaponVisual(scene, item, scene.playerState.x, scene.playerState.y)
       currentKey = nextKey
     }
-    visual?.setScale?.(profile.scale)
     visual?.setVisible?.(true)
     return visual
   }
