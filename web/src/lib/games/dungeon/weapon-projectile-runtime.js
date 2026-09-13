@@ -34,6 +34,11 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
   const originalSlash = scene.slash?.bind(scene)
   if (!originalSlash) return null
   const projectiles = []
+  const originalVfxSlash = scene.__dungeonVfx?.slash?.bind(scene.__dungeonVfx)
+
+  if (originalVfxSlash) {
+    scene.__dungeonVfx.slash = (...args) => weaponProjectileSpec(scene.playerState) ? null : originalVfxSlash(...args)
+  }
 
   const destroyProjectile = (projectile) => {
     projectile.visual?.destroy?.()
@@ -140,6 +145,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     for (const projectile of projectiles) destroyProjectile(projectile)
     projectiles.length = 0
     scene.slash = originalSlash
+    if (originalVfxSlash && scene.__dungeonVfx) scene.__dungeonVfx.slash = originalVfxSlash
     scene.__dungeonWeaponProjectiles = null
   }
   scene.events?.once?.('shutdown', restore)
