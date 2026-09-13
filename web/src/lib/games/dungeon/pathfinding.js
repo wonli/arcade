@@ -60,6 +60,40 @@ function heuristic(a, b) {
   return Math.abs(a.cellX - b.cellX) + Math.abs(a.cellY - b.cellY)
 }
 
+const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+
+function canTraverseEdge(grid, current, neighbor) {
+  if (!neighbor || neighbor.blocked || !Number.isFinite(neighbor.cost)) return false
+  if (!grid.collisionGeometry) return true
+  const steps = Math.ceil(grid.cellSize / 4)
+  for (let i = 1; i < steps; i++) {
+    const position = {
+      x: current.x + (neighbor.x - current.x) * i / steps,
+      y: current.y + (neighbor.y - current.y) * i / steps,
+    }
+    if (circleHitsSolid(position, grid.actorRadius, grid.collisionGeometry)) return false
+  }
+  return true
+}
+
+export function reachableCells(grid, start) {
+  if (!grid?.cells?.size) return new Set()
+  const startNode = closestCell(grid, start)
+  if (!startNode || startNode.blocked || !Number.isFinite(startNode.cost)) return new Set()
+  const reachable = new Set([startNode])
+  const queue = [startNode]
+  for (let index = 0; index < queue.length; index++) {
+    const current = queue[index]
+    for (const [dx, dy] of directions) {
+      const neighbor = grid.cells.get(key(current.cellX + dx, current.cellY + dy))
+      if (reachable.has(neighbor) || !canTraverseEdge(grid, current, neighbor)) continue
+      reachable.add(neighbor)
+      queue.push(neighbor)
+    }
+  }
+  return reachable
+}
+
 function reconstruct(cameFrom, current, grid) {
   const out = [current]
   let currentKey = key(current.cellX, current.cellY)
@@ -90,7 +124,6 @@ export function findPath(grid, start, goal) {
   const cameFrom = new Map()
   const gScore = new Map([[startKey, 0]])
   const fScore = new Map([[startKey, heuristic(startNode, goalNode)]])
-  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
   while (open.size) {
     let currentKey = null
@@ -112,17 +145,7 @@ export function findPath(grid, start, goal) {
       const ny = current.cellY + dy
       const neighborKey = key(nx, ny)
       const neighbor = grid.cells.get(neighborKey)
-      if (!neighbor || neighbor.blocked || !Number.isFinite(neighbor.cost)) continue
-      // Adjacent cell centers can straddle a narrow obstacle. Verify the edge too.
-      if (grid.collisionGeometry) {
-        const steps = Math.ceil(grid.cellSize / 4)
-        let blockedEdge = false
-        for (let i = 1; i < steps; i++) {
-          const position = { x: current.x + (neighbor.x - current.x) * i / steps, y: current.y + (neighbor.y - current.y) * i / steps }
-          if (circleHitsSolid(position, grid.actorRadius, grid.collisionGeometry)) { blockedEdge = true; break }
-        }
-        if (blockedEdge) continue
-      }
+      if (!canTraverseEdge(grid, current, neighbor)) continue
       const tentative = (gScore.get(currentKey) ?? Infinity) + neighbor.cost
       if (tentative >= (gScore.get(neighborKey) ?? Infinity)) continue
       cameFrom.set(neighborKey, currentKey)
