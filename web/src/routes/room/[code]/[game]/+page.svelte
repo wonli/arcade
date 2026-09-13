@@ -67,9 +67,8 @@
       if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
       else if (gameState.moves > previous.moves) playMoveSound()
     }
-    if (gameName === 'chess') {
-      if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
-      else if (gameState.ply > previous.ply) playMoveSound()
+    if (gameName === 'chess' && gameState.status === 'finished' && previous.status !== 'finished') {
+      playFinishSound(gameState.winner, snapshot)
     }
   }
 
