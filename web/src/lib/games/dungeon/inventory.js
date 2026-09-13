@@ -8,8 +8,8 @@ export function shouldAutoUseHealthPotion(state = {}, threshold = AUTO_POTION_TH
   return hp > 0 && maxHp > 0 && healthPotions > 0 && hp / maxHp <= threshold
 }
 
-export function healthPotionPickupMode(state = {}) {
-  return shouldAutoUseHealthPotion(state) ? 'consume' : 'store'
+export function healthPotionPickupMode() {
+  return 'store'
 }
 
 export function useStoredHealthPotion(state = {}, healRatio = HEALTH_POTION_HEAL_RATIO) {
@@ -19,7 +19,8 @@ export function useStoredHealthPotion(state = {}, healRatio = HEALTH_POTION_HEAL
   if (healthPotions <= 0 || hp <= 0 || hp >= maxHp) {
     return { ...state, hp, maxHp, healthPotions, healed: 0, used: false }
   }
-  const heal = Math.max(1, Math.round(maxHp * Math.max(0, healRatio)))
+  const ratio = healRatio > 1 ? HEALTH_POTION_HEAL_RATIO : Math.max(0, healRatio)
+  const heal = Math.max(1, Math.round(maxHp * ratio))
   const nextHp = Math.min(maxHp, hp + heal)
   return {
     ...state,
