@@ -3,7 +3,7 @@ import { lootMotion } from './combat-feel.js'
 import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
-import { createWeaponVisual } from './weapon-visual-runtime.js'
+import { createWeaponVisual, setWeaponVisualSelected } from './weapon-visual-runtime.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -186,9 +186,16 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
   scene.__dungeonPickupRuntime = api
 
+  const applySelectionArt = (drop, active) => {
+    if (!drop?.visual || !drop?.item?.type?.startsWith?.('weapon.')) return
+    setWeaponVisualSelected(scene, drop.visual, drop.item, active)
+  }
+
   const publish = (next) => {
     if (selected === next) return
+    applySelectionArt(selected, false)
     selected = next
+    applySelectionArt(selected, true)
     onSelection(next ? { current: currentWeapon(scene), candidate: next.item } : null)
   }
 

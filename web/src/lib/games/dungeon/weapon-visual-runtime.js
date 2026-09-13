@@ -3,6 +3,7 @@ import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
 import { installDungeonWeaponMelee } from './weapon-melee-runtime.js'
 import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
 import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
+import { namedWeaponArt, namedWeaponArtEntries } from './weapon-art.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
 
 const ART = {
@@ -29,31 +30,52 @@ const ART = {
   },
 }
 
-function artSelection(archetype, rarity) {
+function legacyArtSelection(archetype, rarity) {
   const artArchetype = ART[archetype] ? archetype : 'sword'
   const rarities = ART[artArchetype]
   const artRarity = rarities[rarity] ? rarity : (rarities.epic ? 'epic' : 'common')
-  return { artArchetype, artRarity, path: rarities[artRarity] }
+  return {
+    artArchetype,
+    artRarity,
+    path: rarities[artRarity],
+    textureKey: `dungeon-held-weapon-${artArchetype}-${artRarity}`,
+    named: false,
+  }
 }
 
-export function weaponVisualProfile(item) {
+function artSelection(item, archetype, rarity, selected = false) {
+  const named = namedWeaponArt(item?.type)
+  if (!named) return legacyArtSelection(archetype, rarity)
+  const relativePath = selected ? named.selected : named.base
+  return {
+    artArchetype: archetype,
+    artRarity: rarity,
+    path: new URL(relativePath, import.meta.url).href,
+    textureKey: `dungeon-named-weapon-${named.number}-${selected ? 'selected' : 'base'}`,
+    named: true,
+  }
+}
+
+export function weaponVisualProfile(item, { selected = false } = {}) {
   if (!item?.type?.startsWith?.('weapon.')) return null
   const archetype = weaponArchetype(item)
   const rarity = item.rarity ?? 'common'
   const profile = weaponProfile(item)
-  const art = artSelection(archetype, rarity)
+  const art = artSelection(item, archetype, rarity, selected)
   const rarityScale = rarity === 'legendary' ? 1.28 : rarity === 'epic' ? 1.18 : rarity === 'rare' ? 1.1 : 1
   return {
     archetype,
     rarity,
     artArchetype: art.artArchetype,
     artRarity: art.artRarity,
-    placeholderArt: art.artArchetype !== archetype,
+    placeholderArt: !art.named && art.artArchetype !== archetype,
+    namedArt: art.named,
+    selected,
     path: art.path,
-    textureKey: `dungeon-held-weapon-${art.artArchetype}-${art.artRarity}`,
-    scale: profile.visualScale * rarityScale,
+    textureKey: art.textureKey,
+    scale: profile.visualScale * rarityScale * (art.named ? 2 : 1),
     depth: 22,
-    procedural: !ART[archetype],
+    procedural: !art.named && !ART[archetype],
   }
 }
 
@@ -115,8 +137,8 @@ function createProceduralWeapon(scene, archetype, x, y) {
   return container
 }
 
-export function createWeaponVisual(scene, item, x, y) {
-  const profile = weaponVisualProfile(item)
+export function createWeaponVisual(scene, item, x, y, { selected = false } = {}) {
+  const profile = weaponVisualProfile(item, { selected })
   if (!profile) return null
   let visual = null
   if (profile.procedural && scene.add?.container) {
@@ -127,6 +149,15 @@ export function createWeaponVisual(scene, item, x, y) {
   }
   visual?.setScale?.(profile.scale)
   return visual
+}
+
+export function setWeaponVisualSelected(scene, visual, item, selected) {
+  if (!visual || !item) return false
+  const profile = weaponVisualProfile(item, { selected })
+  if (!profile?.namedArt || !scene?.textures?.exists?.(profile.textureKey) || !visual.setTexture) return false
+  visual.setTexture(profile.textureKey)
+  visual.__dungeonWeaponSelected = Boolean(selected)
+  return true
 }
 
 function equippedItem(scene) {
@@ -196,6 +227,12 @@ export function installDungeonWeaponVisuals(scene) {
       const key = `dungeon-held-weapon-${archetype}-${rarity}`
       if (!scene.textures?.exists?.(key)) scene.load?.image?.(key, path)
     }
+  }
+  for (const art of namedWeaponArtEntries()) {
+    const baseKey = `dungeon-named-weapon-${art.number}-base`
+    const selectedKey = `dungeon-named-weapon-${art.number}-selected`
+    if (!scene.textures?.exists?.(baseKey)) scene.load?.image?.(baseKey, new URL(art.base, import.meta.url).href)
+    if (!scene.textures?.exists?.(selectedKey)) scene.load?.image?.(selectedKey, new URL(art.selected, import.meta.url).href)
   }
 
   if (scene.load?.once && scene.load?.start) {
