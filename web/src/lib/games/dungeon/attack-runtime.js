@@ -6,6 +6,7 @@ import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
 import { installDungeonPlayerFacing } from './player-facing-runtime.js'
+import { installDungeonEnemyFeedback } from './enemy-feedback-runtime.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -54,6 +55,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
   installDungeonWorldVfx(scene)
   installDungeonWeaponVisuals(scene)
   installDungeonPlayerFacing(scene)
+  installDungeonEnemyFeedback(scene)
 
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
@@ -78,11 +80,14 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     const killed = enemy.hp <= 0
     const elite = Boolean(enemy.elite || enemy.boss)
     const feedback = hitFeedback({ critical, boss: enemy.boss, damage })
-    const heavy = killed || context?.source === 'corpse_burst'
-    scene.__dungeonVfx?.impact?.(impactX, impactY, { explosion: heavy, seed: `${enemy.id ?? ''}:${beforeHp}:${damage}` })
+    const corpseBurst = context?.source === 'corpse_burst'
+    scene.__dungeonVfx?.impact?.(impactX, impactY, { explosion: corpseBurst, seed: `${enemy.id ?? ''}:${beforeHp}:${damage}` })
     if (critical || (elite && killed)) scene.__dungeonVfx?.critical?.(impactX, impactY, { seed: `${enemy.id ?? ''}:${beforeHp}` })
-    if (context?.source === 'corpse_burst') scene.__dungeonVfx?.smoke?.(impactX, impactY, { seed: `${enemy.id ?? ''}:corpse` })
+    if (corpseBurst) scene.__dungeonVfx?.smoke?.(impactX, impactY, { seed: `${enemy.id ?? ''}:corpse` })
     if (context?.direct || critical || killed) audio.play({ damage, critical, killed, elite })
+
+    if (killed) scene.__dungeonEnemyFeedback?.death?.(enemy, { critical, damage, source: context?.source })
+    else scene.__dungeonEnemyFeedback?.hit?.(enemy, scene.playerState, { critical, damage, source: context?.source })
 
     if (enemy.visual?.setTintFill && enemy.visual?.clearTint) {
       enemy.visual.setTintFill(critical || elite ? 0xffe18a : 0xffffff)
@@ -163,6 +168,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       scene.slash = originalSlash
       scene.damageEnemy = originalDamageEnemy
       scene.applyWeaponProcs = originalApplyWeaponProcs
+      scene.__dungeonEnemyFeedback?.restore?.()
       scene.__dungeonPlayerFacing?.restore?.()
       scene.__dungeonWeaponVisuals?.restore?.()
       scene.__dungeonWorldVfx?.restore?.()
