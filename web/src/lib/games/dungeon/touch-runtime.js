@@ -4,11 +4,27 @@ import { installPhaser4FillTintCompat } from './phaser4-tint-runtime.js'
 
 export { joystickVector } from '../touch/joystick.js'
 
+function resetInputState(scene, state) {
+  scene.input?.keyboard?.resetKeys?.()
+  for (const name of ['A', 'D', 'W', 'S']) {
+    if (scene.keys?.[name]) scene.keys[name].isDown = false
+  }
+  if (scene.keys?.SPACE) scene.keys.SPACE._justDown = false
+  state.x = 0
+  state.y = 0
+  state.skillPending = false
+  scene.playerMoving = false
+  scene.playerAttacking = false
+}
+
 export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   if (!scene) return null
   if (scene.__dungeonTouchInput) return scene.__dungeonTouchInput
   const state = { x: 0, y: 0, skillPending: false }
+  resetInputState(scene, state)
+
   const ensureAudio = () => {
+    if (scene.dead || scene.runComplete) return
     scene.ambient?.start?.().catch?.(() => {})
     scene.sound?.context?.resume?.().catch?.(() => {})
   }
@@ -53,6 +69,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
       state.y = vector.y
     },
     stopMove() { state.x = 0; state.y = 0 },
+    reset() { resetInputState(scene, state) },
     triggerSkill() { ensureAudio(); state.skillPending = true },
     triggerInteract() {
       ensureAudio()
@@ -68,7 +85,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   scene.events?.once?.('shutdown', () => {
     perf?.destroy?.()
     tintCompat?.destroy?.()
-    api.stopMove()
+    api.reset()
     if (scene.updatePlayer === updatePlayerWithTouch) scene.updatePlayer = originalUpdatePlayer
     if (scene.trySkill === trySkillWithTouch) scene.trySkill = originalTrySkill
     scene.__dungeonTouchInput = null
