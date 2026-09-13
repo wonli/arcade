@@ -152,6 +152,10 @@
     return chessPieceAsset(myColor === 'black' ? -value : value)
   }
 
+  function pieceStyle(asset) {
+    return `--piece-mask:url("${asset}")`
+  }
+
   function fileLabel(x) {
     return String.fromCharCode(97 + x)
   }
@@ -186,14 +190,13 @@
         {#if cell.x === (flipped ? 7 : 0)}<span class="rank">{rankLabel(cell.y)}</span>{/if}
         {#if cell.y === (flipped ? 0 : 7)}<span class="file">{fileLabel(cell.x)}</span>{/if}
         {#if pieceAt(state, cell.x, cell.y) !== 0}
-          <img
+          <span
             class="piece"
             class:white-piece={pieceAt(state, cell.x, cell.y) > 0}
             class:black-piece={pieceAt(state, cell.x, cell.y) < 0}
-            src={chessPieceAsset(pieceAt(state, cell.x, cell.y))}
-            alt=""
-            draggable="false"
-          />
+            style={pieceStyle(chessPieceAsset(pieceAt(state, cell.x, cell.y)))}
+            aria-hidden="true"
+          ></span>
         {:else if isLegalTarget(state, cell.x, cell.y)}
           <span class="move-dot"></span>
         {/if}
@@ -207,13 +210,13 @@
       <div>
         {#each ['q', 'r', 'b', 'n'] as piece}
           <button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}>
-            <img
+            <span
+              class="piece promotion-piece"
               class:white-piece={myColor !== 'black'}
               class:black-piece={myColor === 'black'}
-              src={promotionAsset(piece)}
-              alt=""
-              draggable="false"
-            />
+              style={pieceStyle(promotionAsset(piece))}
+              aria-hidden="true"
+            ></span>
           </button>
         {/each}
       </div>
@@ -223,5 +226,5 @@
 </div>
 
 <style>
-  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}.white-piece{filter:invert(1) drop-shadow(0 2px 1px #0008)}.black-piece{filter:drop-shadow(0 2px 1px #fff5)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion>div img{width:74%;height:74%;object-fit:contain}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:80%;height:80%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}}
+  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;pointer-events:none;filter:drop-shadow(0 4px 2px #0006) drop-shadow(0 1px 0 #0007)}.piece:before,.piece:after{content:'';position:absolute;inset:0;-webkit-mask:var(--piece-mask) center/contain no-repeat;mask:var(--piece-mask) center/contain no-repeat}.piece:before{background:var(--piece-outline);transform:scale(1.045);transform-origin:center}.piece:after{background:linear-gradient(145deg,var(--piece-highlight) 0 24%,var(--piece-fill) 48%,var(--piece-shade) 100%)}.white-piece{--piece-fill:#f3e7cf;--piece-highlight:#fff9ea;--piece-shade:#c9b691;--piece-outline:#655844}.black-piece{--piece-fill:#26333b;--piece-highlight:#65737a;--piece-shade:#11191e;--piece-outline:#080d10}.chess-cell.selected .piece{filter:drop-shadow(0 4px 2px #0006) drop-shadow(0 0 5px #c1ff5688)}.chess-cell.last .piece{filter:drop-shadow(0 4px 2px #0006) drop-shadow(0 0 3px #f0d97c70)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span:not(.piece){display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion-piece{width:74%;height:74%}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:82%;height:82%}.promotion-piece{width:74%;height:74%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}}
 </style>
