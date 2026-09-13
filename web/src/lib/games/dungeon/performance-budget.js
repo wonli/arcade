@@ -1,1 +1,35 @@
-export function createPerformanceBudget(limits={}){const max={cosmetics:limits.cosmetics??28,projectiles:limits.projectiles??24};const used={cosmetics:0,projectiles:0};return{acquire(kind){if(!(kind in max))return true;if(used[kind]>=max[kind])return false;used[kind]++;return true},release(kind){if(kind in used)used[kind]=Math.max(0,used[kind]-1)},available(kind){return kind in max?Math.max(0,max[kind]-used[kind]):Infinity},snapshot(){return{...used}},allowGameplay(){return true}}}
+export function createPerformanceBudget(limits = {}) {
+  const max = {
+    cosmetics: limits.cosmetics ?? 28,
+    projectiles: limits.projectiles ?? 24,
+  }
+  const used = {
+    cosmetics: 0,
+    projectiles: 0,
+  }
+
+  return {
+    acquire(kind) {
+      if (!(kind in max)) return true
+      if (used[kind] >= max[kind]) return false
+      used[kind]++
+      return true
+    },
+
+    release(kind) {
+      if (kind in used) used[kind] = Math.max(0, used[kind] - 1)
+    },
+
+    available(kind) {
+      return kind in max ? Math.max(0, max[kind] - used[kind]) : Infinity
+    },
+
+    snapshot() {
+      return { ...used }
+    },
+
+    allowGameplay() {
+      return true
+    },
+  }
+}
