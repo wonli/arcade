@@ -49,15 +49,16 @@ export function scalePlayerForProgress(scene, progress) {
   const naturalBase = scene.__dungeonNaturalPlayerBase ?? { ...currentBase }
   scene.__dungeonNaturalPlayerBase ??= naturalBase
   const previousScaled = scene.__dungeonLastScaledPlayerBase ?? naturalBase
-  const profile = playerProgressionProfile(progress)
+  const permanent = scene.__dungeonPermanentPlayerBonus ?? { damage: 0, maxHp: 0 }
+  permanent.damage += Math.max(0, (currentBase.damage ?? naturalBase.damage) - (previousScaled.damage ?? naturalBase.damage))
+  permanent.maxHp += Math.max(0, (currentBase.maxHp ?? naturalBase.maxHp) - (previousScaled.maxHp ?? naturalBase.maxHp))
+  scene.__dungeonPermanentPlayerBonus = permanent
 
-  // Keep permanent rest/temper gains while replacing only the floor-derived part.
-  const earnedDamage = Math.max(0, (currentBase.damage ?? naturalBase.damage) - (previousScaled.damage ?? naturalBase.damage))
-  const earnedMaxHp = Math.max(0, (currentBase.maxHp ?? naturalBase.maxHp) - (previousScaled.maxHp ?? naturalBase.maxHp))
+  const profile = playerProgressionProfile(progress)
   const nextBase = {
     ...currentBase,
-    damage: Math.max(1, Math.round((naturalBase.damage ?? 10) * profile.damageMultiplier + earnedDamage)),
-    maxHp: Math.max(1, Math.round((naturalBase.maxHp ?? 100) * profile.maxHpMultiplier + earnedMaxHp)),
+    damage: Math.max(1, Math.round((naturalBase.damage ?? 10) * profile.damageMultiplier + permanent.damage)),
+    maxHp: Math.max(1, Math.round((naturalBase.maxHp ?? 100) * profile.maxHpMultiplier + permanent.maxHp)),
   }
   const next = deriveEquipment(nextBase, player.equippedWeapon, player)
   next.baseStats = nextBase
