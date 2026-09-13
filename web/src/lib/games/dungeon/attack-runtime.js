@@ -4,6 +4,7 @@ import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
+import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -50,6 +51,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
   scene.__dungeonAttackRuntimeInstalled = true
   installDungeonSfx(scene)
   installDungeonWorldVfx(scene)
+  installDungeonWeaponVisuals(scene)
 
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
@@ -58,7 +60,8 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
 
   scene.slash = function spatialSlash(target) {
     if (!target || target.hp <= 0) return
-    scene.__dungeonVfx?.slash?.(scene.playerState, target, false)
+    const bladeTip = scene.__dungeonWeaponVisuals?.swing?.() ?? scene.playerState
+    scene.__dungeonVfx?.slash?.(bladeTip, target, false)
     originalSlash(target)
   }
 
@@ -158,6 +161,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       scene.slash = originalSlash
       scene.damageEnemy = originalDamageEnemy
       scene.applyWeaponProcs = originalApplyWeaponProcs
+      scene.__dungeonWeaponVisuals?.restore?.()
       scene.__dungeonWorldVfx?.restore?.()
       audio.close()
     },
