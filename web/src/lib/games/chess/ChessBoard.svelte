@@ -83,8 +83,8 @@
     audio.play().catch(() => {})
   }
 
-  function pieceAt(x, y) {
-    return state?.board?.[y]?.[x] ?? 0
+  function pieceAt(currentState, x, y) {
+    return currentState?.board?.[y]?.[x] ?? 0
   }
 
   function pieceColor(piece) {
@@ -93,31 +93,31 @@
     return ''
   }
 
-  function legalFrom(x, y) {
-    return (state?.legalMoves ?? []).filter((move) => move.from.x === x && move.from.y === y)
+  function legalFrom(currentState, x, y) {
+    return (currentState?.legalMoves ?? []).filter((move) => move.from.x === x && move.from.y === y)
   }
 
-  function legalTo(x, y) {
+  function legalTo(currentState, x, y) {
     if (!selected) return []
-    return legalFrom(selected.x, selected.y).filter((move) => move.to.x === x && move.to.y === y)
+    return legalFrom(currentState, selected.x, selected.y).filter((move) => move.to.x === x && move.to.y === y)
   }
 
-  function isLegalTarget(x, y) {
-    return legalTo(x, y).length > 0
+  function isLegalTarget(currentState, x, y) {
+    return legalTo(currentState, x, y).length > 0
   }
 
-  function isLastSquare(x, y) {
-    const last = state?.last
+  function isLastSquare(currentState, x, y) {
+    const last = currentState?.last
     return !!last && ((last.from.x === x && last.from.y === y) || (last.to.x === x && last.to.y === y))
   }
 
   function chooseSquare(x, y) {
     unlockAudio()
     if (!myTurn || pendingPromotion) return
-    const piece = pieceAt(x, y)
+    const piece = pieceAt(state, x, y)
 
     if (selected) {
-      const targets = legalTo(x, y)
+      const targets = legalTo(state, x, y)
       if (targets.length > 0) {
         const promotions = [...new Set(targets.map((move) => move.promotion).filter(Boolean))]
         if (promotions.length > 1) {
@@ -129,7 +129,7 @@
       }
     }
 
-    if (pieceColor(piece) === myColor && legalFrom(x, y).length > 0) {
+    if (pieceColor(piece) === myColor && legalFrom(state, x, y).length > 0) {
       selected = { x, y }
     } else {
       selected = null
@@ -177,24 +177,24 @@
         class:light={(cell.x + cell.y) % 2 === 0}
         class:dark={(cell.x + cell.y) % 2 === 1}
         class:selected={selected?.x === cell.x && selected?.y === cell.y}
-        class:target={isLegalTarget(cell.x, cell.y)}
-        class:capture={isLegalTarget(cell.x, cell.y) && pieceAt(cell.x, cell.y) !== 0}
-        class:last={isLastSquare(cell.x, cell.y)}
+        class:target={isLegalTarget(state, cell.x, cell.y)}
+        class:capture={isLegalTarget(state, cell.x, cell.y) && pieceAt(state, cell.x, cell.y) !== 0}
+        class:last={isLastSquare(state, cell.x, cell.y)}
         onclick={() => chooseSquare(cell.x, cell.y)}
         aria-label={`${fileLabel(cell.x)}${rankLabel(cell.y)}`}
       >
         {#if cell.x === (flipped ? 7 : 0)}<span class="rank">{rankLabel(cell.y)}</span>{/if}
         {#if cell.y === (flipped ? 0 : 7)}<span class="file">{fileLabel(cell.x)}</span>{/if}
-        {#if pieceAt(cell.x, cell.y) !== 0}
+        {#if pieceAt(state, cell.x, cell.y) !== 0}
           <img
             class="piece"
-            class:white-piece={pieceAt(cell.x, cell.y) > 0}
-            class:black-piece={pieceAt(cell.x, cell.y) < 0}
-            src={chessPieceAsset(pieceAt(cell.x, cell.y))}
+            class:white-piece={pieceAt(state, cell.x, cell.y) > 0}
+            class:black-piece={pieceAt(state, cell.x, cell.y) < 0}
+            src={chessPieceAsset(pieceAt(state, cell.x, cell.y))}
             alt=""
             draggable="false"
           />
-        {:else if isLegalTarget(cell.x, cell.y)}
+        {:else if isLegalTarget(state, cell.x, cell.y)}
           <span class="move-dot"></span>
         {/if}
       </button>
