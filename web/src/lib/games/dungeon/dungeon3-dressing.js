@@ -29,6 +29,14 @@ function floodArea(g, room, area) {
   g.water.push({...area,kind:'water'})
 }
 
+// Keep the collision half of a coffin on the side furthest from the room's
+// centre route. The complete 3x2 motif is still rendered, but its blocking
+// footprint no longer reaches into paving that visually reads as walkable.
+function coffinCollision(room, left, top) {
+  const upperHalf = top + TILE <= room.center.y
+  return {x:left,y:upperHalf ? top : top+TILE,width:48,height:TILE}
+}
+
 // Themes own their landmark, hazard and route footprint before random clutter is
 // considered. Density is intentionally variable, but every random choice comes
 // from pre-vetted slots that preserve the same broad routes for radius-26 actors.
@@ -58,9 +66,8 @@ export function dressThemedRooms(g, random) {
 
     if (room.theme === 'crypt') {
       // A crypt may be sparse or dense. Pick 1-4 complete coffins from four
-      // safe burial slots rather than filling all four every time. The slots
-      // stay separated around the east-west centre line and only the lower
-      // stone base is collision-active, preserving both horizontal entrances.
+      // burial slots. Their collision half faces away from the central route,
+      // so the visible paving remains usable instead of hiding a 20px halo.
       const placements = shuffled(random,[
         [room.x+32,room.y+16],[room.x+32,room.y+112],
         [room.x+room.width-80,room.y+16],[room.x+room.width-80,room.y+112],
@@ -68,7 +75,7 @@ export function dressThemedRooms(g, random) {
       const coffinCount = 1 + Math.floor(random()*4)
       for (const [left,top] of placements.slice(0,coffinCount)) {
         const motif = pick(random,coffinPool)
-        addProp(room,'coffin',motif,left,top,{x:left,y:top+TILE,width:48,height:TILE})
+        addProp(room,'coffin',motif,left,top,coffinCollision(room,left,top))
       }
       addPaving(g,room,'burial-aisle',room.center.x-48,room.y+32,96,128)
       room.layout = {type:'burial',safeLane:{x:room.center.x-48,y:room.y+24,width:96,height:136},groups:coffinCount}
@@ -117,8 +124,8 @@ export function dressThemedRooms(g, random) {
     if (room.theme === 'gallery') {
       if (random()<0.5) {
         const motif = pick(random,coffinPool)
-        const left = room.x+room.width-80, top = room.y+32
-        addProp(room,'coffin',motif,left,top,{x:left,y:top+TILE,width:48,height:TILE})
+        const left = room.x+room.width-80, top = room.y+16
+        addProp(room,'coffin',motif,left,top,coffinCollision(room,left,top))
       }
       room.layout = {type:'gallery',safeLane:{x:room.center.x-32,y:room.y+24,width:64,height:136}}
     }
