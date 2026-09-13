@@ -5,21 +5,51 @@ import { buildDungeon3TilePlan } from './dungeon3-renderer.js'
 import { activeTrapAt } from './dungeon3-hazards.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
 
-test('every dungeon reserves themed rooms, a complete fire statue, coffin groups and continuous spike banks', () => {
-  for(let seed=1;seed<=30;seed++) {
+test('themed room density varies across seeds while complete motifs and safe routes remain intact', () => {
+  const coffinCounts = new Set()
+  const spikeCounts = new Set()
+  const inletCounts = new Set()
+  const shrinePathHeights = new Set()
+
+  for(let seed=1;seed<=120;seed++) {
     const g=generateDungeonGeometry({runSeed:seed})
     assert.ok(new Set(g.rooms.map(r=>r.theme)).size>=4,`seed ${seed}: room themes`)
     const statues=g.decorations.filter(d=>d.kind==='statue')
     assert.ok(statues.some(s=>s.motif?.width===5&&s.motif?.height===5&&s.motif.cells.length===25),`seed ${seed}: incomplete statue`)
-    assert.ok(g.decorations.filter(d=>d.kind==='coffin').length>=4,`seed ${seed}: sparse coffins`)
-    const banks=g.traps.filter(t=>t.kind==='spikes')
-    assert.ok(banks.length>=3,`seed ${seed}: missing spike bank array`)
+
+    const crypts=g.rooms.filter(room=>room.theme==='crypt')
+    assert.ok(crypts.length>=1,`seed ${seed}: missing crypt`)
+    for(const crypt of crypts) {
+      const count=g.decorations.filter(d=>d.roomId===crypt.id&&d.kind==='coffin').length
+      assert.ok(count>=1&&count<=4,`seed ${seed}: crypt coffin count ${count}`)
+      coffinCounts.add(count)
+    }
+
+    const gauntlet=g.rooms.find(room=>room.theme==='gauntlet')
+    const banks=g.traps.filter(t=>t.roomId===gauntlet.id&&t.kind==='spikes')
+    assert.ok(banks.length>=1&&banks.length<=3,`seed ${seed}: spike bank count ${banks.length}`)
+    spikeCounts.add(banks.length)
     for(const bank of banks) assert.ok(bank.motif.width>=4&&bank.motif.cells.length===bank.motif.width)
+
+    const flooded=g.rooms.find(room=>room.theme==='flooded')
+    assert.ok((flooded.inlets?.length??0)>=2&&(flooded.inlets?.length??0)<=4,`seed ${seed}: flooded inlet count ${flooded.inlets?.length??0}`)
+    inletCounts.add(flooded.inlets.length)
+
+    const shrine=g.rooms.find(room=>room.theme==='shrine')
+    const processional=g.pavingAreas.find(a=>a.roomId===shrine.id&&a.kind==='processional')
+    assert.ok(processional,`seed ${seed}: missing shrine path`)
+    assert.ok(processional.height>=64&&processional.height<=128,`seed ${seed}: shrine path height ${processional.height}`)
+    shrinePathHeights.add(processional.height)
+
     assert.ok(g.waterFeatures.length>=6,`seed ${seed}: empty water`)
     assert.ok(new Set(g.waterFeatures.map(f=>f.motif.id)).size>=3,`seed ${seed}: uniform water`)
-    assert.ok(g.rooms.some(r=>(r.inlets?.length??0)>=3),`seed ${seed}: rectangular shorelines only`)
     for(const p of g.criticalPath) assert.equal(activeTrapAt(p,g,1100),null,`seed ${seed}: compulsory damage on main route`)
   }
+
+  assert.ok(coffinCounts.size>1,'crypt density never varies')
+  assert.ok(spikeCounts.size>1,'gauntlet density never varies')
+  assert.ok(inletCounts.size>1,'flooded shoreline never varies')
+  assert.ok(shrinePathHeights.size>1,'shrine path length never varies')
 })
 
 test('room themes reserve landmark, hazard and safe-route footprints before loose dressing', () => {
@@ -36,18 +66,19 @@ test('room themes reserve landmark, hazard and safe-route footprints before loos
 
     assert.equal(crypt.layout?.type,'burial',`seed ${seed}: crypt layout`)
     assert.ok(crypt.layout.safeLane.width>=80,`seed ${seed}: crypt aisle too narrow`)
-    assert.ok(g.decorations.filter(d=>d.roomId===crypt.id&&d.kind==='coffin').length>=4,`seed ${seed}: crypt lacks a coffin composition`)
+    const coffins=g.decorations.filter(d=>d.roomId===crypt.id&&d.kind==='coffin')
+    assert.ok(coffins.length>=1&&coffins.length<=4,`seed ${seed}: crypt density out of range`)
 
     assert.equal(gauntlet.layout?.type,'trap-corridor',`seed ${seed}: gauntlet layout`)
     assert.ok(gauntlet.layout.safeLane.width>=64,`seed ${seed}: gauntlet bypass too narrow`)
     const gauntletBanks=g.traps.filter(t=>t.roomId===gauntlet.id&&t.kind==='spikes')
-    assert.ok(gauntletBanks.length>=3,`seed ${seed}: gauntlet lacks a continuous trap array`)
+    assert.ok(gauntletBanks.length>=1&&gauntletBanks.length<=3,`seed ${seed}: gauntlet density out of range`)
 
     assert.equal(flooded.layout?.type,'flood-basin',`seed ${seed}: flooded layout`)
-    assert.ok((flooded.inlets?.length??0)>=3,`seed ${seed}: flooded room shoreline lacks variation`)
+    assert.ok((flooded.inlets?.length??0)>=2&&(flooded.inlets?.length??0)<=4,`seed ${seed}: flooded shoreline out of range`)
 
     const shrinePaving=g.pavingAreas.filter(a=>a.roomId===shrine.id&&a.kind==='processional')
-    assert.ok(shrinePaving.some(a=>a.height>=96&&a.width>=48),`seed ${seed}: shrine path is still a small paving patch`)
+    assert.ok(shrinePaving.some(a=>a.height>=64&&a.height<=128&&a.width>=48),`seed ${seed}: shrine path invalid`)
     for(const p of g.criticalPath) assert.equal(activeTrapAt(p,g,1100),null,`seed ${seed}: themed layout blocks the safe route`)
   }
 })
@@ -71,12 +102,14 @@ test('crypt coffin groups never seal an east-west room connection for the larges
   }
 })
 
-test('the rendered assets contain full statues, coffin groups, connected plate paths and spike rows', () => {
-  const g=generateDungeonGeometry({runSeed:33}),plan=buildDungeon3TilePlan(g)
-  const statue=g.decorations.find(d=>d.kind==='statue')
-  assert.equal(plan.filter(t=>t.ownerX===statue.x&&t.ownerY===statue.y&&t.tileset==='Statue_fire').length,25)
-  assert.ok(plan.filter(t=>t.tileset==='coffins').length>=24)
-  assert.ok(plan.filter(t=>t.tileset==='Spikes').length>=12)
-  assert.ok(new Set(plan.filter(t=>t.layer==='path').map(t=>t.tileId)).size>=7)
-  for(const t of plan.filter(t=>t.layer==='water-detail'||t.layer==='underwater-ruin')) assert.equal(g.grid.cells[t.y/16*g.grid.columns+t.x/16].kind,'water')
+test('the rendered assets keep complete motifs at every randomized density', () => {
+  for (const seed of [5,13,33,57,91]) {
+    const g=generateDungeonGeometry({runSeed:seed}),plan=buildDungeon3TilePlan(g)
+    const statue=g.decorations.find(d=>d.kind==='statue')
+    assert.equal(plan.filter(t=>t.ownerX===statue.x&&t.ownerY===statue.y&&t.tileset==='Statue_fire').length,25)
+    assert.ok(plan.filter(t=>t.tileset==='coffins').length>=6,`seed ${seed}: coffin motif cropped`)
+    assert.ok(plan.filter(t=>t.tileset==='Spikes').length>=4,`seed ${seed}: spike motif cropped`)
+    assert.ok(new Set(plan.filter(t=>t.layer==='path').map(t=>t.tileId)).size>=5,`seed ${seed}: path tiles lack connected variation`)
+    for(const t of plan.filter(t=>t.layer==='water-detail'||t.layer==='underwater-ruin')) assert.equal(g.grid.cells[t.y/16*g.grid.columns+t.x/16].kind,'water')
+  }
 })
