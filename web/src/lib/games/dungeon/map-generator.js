@@ -302,6 +302,7 @@ function build(seed, floor, attempt) {
   const placeDecoration = (room, pool, blocking = true, preferLargest = false) => {
     if (!pool.length) return false
     const entries = shuffle(random, pool)
+    const safeLane = room.layout?.safeLane ?? null
     if (preferLargest) entries.sort((a, b) => b.motif.width * b.motif.height - a.motif.width * a.motif.height)
     for (const entry of entries) {
       const width = entry.motif.width * TILE, height = entry.motif.height * TILE
@@ -312,6 +313,7 @@ function build(seed, floor, attempt) {
         const collisionHeight = scale === 'large' ? Math.min(height, TILE) : height
         const collision = rect(candidate.x + (width - collisionWidth) / 2, candidate.y + height - collisionHeight, collisionWidth, collisionHeight, 'prop')
         const valid = inside(point(candidate.x, candidate.y), room, TILE) && inside(point(candidate.x + width, candidate.y + height), room, TILE) &&
+          (!safeLane || !overlaps(candidate, safeLane, 4)) &&
           (!blocking || !paths.some(path => overlaps(collision, path))) &&
           Array.from({ length: width / TILE * (height / TILE) }, (_, i) => cells[(candidate.y / TILE + Math.floor(i / (width / TILE))) * COLS + candidate.x / TILE + i % (width / TILE)]).every(c => c?.kind === 'floor') &&
           !g.solids.some(s => overlaps(candidate, s)) &&
