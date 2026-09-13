@@ -42,5 +42,5 @@ func TestChessResignAwardsWinToOpponent(t *testing.T) {
 	state := r.Game().State().(chess.State)
 	if state.Status != game.StatusFinished { t.Fatalf("status = %s", state.Status) }
 	if state.Winner != chess.Black { t.Fatalf("winner = %s, want black", state.Winner) }
-	if state.EndReason != "resignation" { t.Fatalf("endReason = %q", state.EndReason) }
+	if state.DrawReason != "resignation" { t.Fatalf("terminal reason = %q", state.DrawReason) }
 }
