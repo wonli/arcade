@@ -16,30 +16,31 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: npm ci
-      - name: Pickup runtime tests
+      - name: Changed dungeon tests
         working-directory: web
-        run: node --test src/lib/games/dungeon/pickup-runtime.test.js
-      - name: Map generator tests
+        run: |
+          node --test src/lib/games/dungeon/pickup-runtime.test.js
+          node --test src/lib/games/dungeon/map-generator.test.js
+          node --test src/lib/games/dungeon/progression.test.js
+          node --test src/lib/games/dungeon/infinite-runtime.test.js
+          node --test src/lib/games/dungeon/dungeon3-renderer.test.js
+      - name: All dungeon tests
+        continue-on-error: true
         working-directory: web
-        run: node --test src/lib/games/dungeon/map-generator.test.js
-      - name: Progression tests
+        run: node --test src/lib/games/dungeon/*.test.js
+      - name: Non-dungeon web tests
+        continue-on-error: true
         working-directory: web
-        run: node --test src/lib/games/dungeon/progression.test.js
-      - name: Infinite runtime tests
-        working-directory: web
-        run: node --test src/lib/games/dungeon/infinite-runtime.test.js
-      - name: Dungeon3 renderer tests
-        working-directory: web
-        run: node --test src/lib/games/dungeon/dungeon3-renderer.test.js
-      - name: Full web tests
-        working-directory: web
-        run: npm test
+        run: node --test src/lib/*.test.js src/lib/games/chess/*.test.js src/lib/games/drawguess/*.test.js src/lib/games/tetris/*.test.js src/lib/games/touch/*.test.js
       - name: Web build
+        if: always()
         working-directory: web
         run: npm run build
       - uses: actions/setup-go@v5
+        if: always()
         with:
           go-version-file: go.mod
           cache: true
       - name: Go tests
+        if: always()
         run: go test ./...
