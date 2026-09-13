@@ -1,20 +1,51 @@
-import { describe, expect, it } from 'vitest'
-import { healthPotionPickupMode, useStoredHealthPotion } from './inventory.js'
+import test from 'node:test'
+import assert from 'node:assert/strict'
 
-describe('dungeon health potion inventory', () => {
-  it('stores a potion pickup at full health', () => {
-    expect(healthPotionPickupMode({ hp: 100, maxHp: 100 })).toBe('store')
+import {
+  AUTO_POTION_THRESHOLD,
+  HEALTH_POTION_HEAL_RATIO,
+  healthPotionPickupMode,
+  shouldAutoUseHealthPotion,
+  useStoredHealthPotion,
+} from './inventory.js'
+
+test('healthy potion pickups are stored instead of wasted', () => {
+  assert.equal(healthPotionPickupMode({ hp: 100, maxHp: 100, healthPotions: 0 }), 'store')
+  assert.equal(healthPotionPickupMode({ hp: 72, maxHp: 100, healthPotions: 0 }), 'store')
+})
+
+test('auto potion triggers at thirty percent health when inventory is available', () => {
+  assert.equal(AUTO_POTION_THRESHOLD, 0.30)
+  assert.equal(shouldAutoUseHealthPotion({ hp: 30, maxHp: 100, healthPotions: 1 }), true)
+  assert.equal(shouldAutoUseHealthPotion({ hp: 31, maxHp: 100, healthPotions: 1 }), false)
+  assert.equal(shouldAutoUseHealthPotion({ hp: 20, maxHp: 100, healthPotions: 0 }), false)
+  assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 1 }), 'consume')
+})
+
+test('stored potion heals thirty percent of max hp and decrements inventory', () => {
+  assert.equal(HEALTH_POTION_HEAL_RATIO, 0.30)
+  assert.deepEqual(useStoredHealthPotion({ hp: 60, maxHp: 200, healthPotions: 2 }), {
+    hp: 120,
+    maxHp: 200,
+    healthPotions: 1,
+    healed: 60,
+    used: true,
   })
+})
 
-  it('keeps auto-consume behavior while injured', () => {
-    expect(healthPotionPickupMode({ hp: 72, maxHp: 100 })).toBe('consume')
+test('percentage healing clamps at max hp and never wastes a potion at full health', () => {
+  assert.deepEqual(useStoredHealthPotion({ hp: 185, maxHp: 200, healthPotions: 2 }), {
+    hp: 200,
+    maxHp: 200,
+    healthPotions: 1,
+    healed: 15,
+    used: true,
   })
-
-  it('uses a stored potion and decrements inventory', () => {
-    expect(useStoredHealthPotion({ hp: 60, maxHp: 100, healthPotions: 2 }, 28)).toEqual({ hp: 88, maxHp: 100, healthPotions: 1, healed: 28, used: true })
-  })
-
-  it('does not waste a stored potion at full health', () => {
-    expect(useStoredHealthPotion({ hp: 100, maxHp: 100, healthPotions: 2 }, 28)).toEqual({ hp: 100, maxHp: 100, healthPotions: 2, healed: 0, used: false })
+  assert.deepEqual(useStoredHealthPotion({ hp: 200, maxHp: 200, healthPotions: 2 }), {
+    hp: 200,
+    maxHp: 200,
+    healthPotions: 2,
+    healed: 0,
+    used: false,
   })
 })
