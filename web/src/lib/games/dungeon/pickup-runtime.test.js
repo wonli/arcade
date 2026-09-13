@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { installPickupInteraction, prepareDropItem, weaponDamageForFloor } from './pickup-runtime.js'
+import { installPickupInteraction, prepareDropItem, resolveDropPosition, weaponDamageForFloor } from './pickup-runtime.js'
 
 const sequence = (values) => { let i = 0; return () => values[i++ % values.length] }
 
@@ -23,6 +23,25 @@ test('weapon rewards are floor-scaled even outside chests', () => {
   const item = { type: 'weapon.dungeon_blade', rarity: 'uncommon', damage: 5, affixes: [] }
   const next = prepareDropItem(scene, 0, 0, item, sequence([0.5, 0.9, 0.5]))
   assert.ok(next.damage > 30)
+})
+
+test('drops are moved off blocked terrain to a reachable nearby point', () => {
+  const geometry = {
+    width: 240,
+    height: 180,
+    bounds: { x: 0, y: 0, width: 240, height: 180 },
+    solids: [{ x: 92, y: 62, width: 56, height: 56, kind: 'prop' }],
+    water: [],
+    bridges: [],
+  }
+  const scene = {
+    playerState: { x: 48, y: 90 },
+    __dungeonSpatial: { getGeometry: () => geometry },
+  }
+  const safe = resolveDropPosition(scene, 120, 90)
+  assert.notDeepEqual(safe, { x: 120, y: 90 })
+  assert.ok(safe.x < 92 || safe.x > 148 || safe.y < 62 || safe.y > 118)
+  assert.ok(Math.hypot(safe.x - 120, safe.y - 90) <= 80)
 })
 
 test('equipping with E leaves the previous weapon on the ground', () => {
