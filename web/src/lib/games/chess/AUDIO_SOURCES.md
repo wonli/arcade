@@ -1,9 +1,9 @@
 # Chess audio sources
 
-These assets are loaded directly from public CC0 sources hosted on GitHub.
+Chess audio is stored under `assets/chess/audio/` and copied to `web/static/assets/chess/audio/` by `scripts/prepare-chess-assets.mjs` before the frontend build.
 
-- Background music: `menu_music_loop.ogg` — "Menu Music" by wipics, CC0. Original source: OpenGameArt `menu-music-1`.
-- Move sound: `sfx-card-play.ogg` — `card-place-2.ogg` from Kenney Casino Audio, CC0.
-- Capture sound: `sfx-damage.ogg` — `impactMining_002.ogg` from Kenney Impact Sounds, CC0.
+- `music_loop.mp3` — background loop used by the chess board.
+- `move.ogg` — move sound, sourced from Kenney Casino Audio (`card-place-2.ogg`, CC0).
+- `capture.ogg` — capture sound, sourced from Kenney Impact Sounds (`impactMining_002.ogg`, CC0).
 
-The source repository documents these licenses in `src/assets/audio/README.md`.
+The runtime never depends on remote audio URLs.
