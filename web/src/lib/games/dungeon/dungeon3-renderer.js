@@ -1,12 +1,8 @@
+import { animatedTileFrame } from './dungeon3-hazards.js'
 import { dungeon3Rules as rules } from './dungeon3-rules.js'
 
 export const dungeon3TextureKey = name => `dungeon3-${name}`
 const isLand = cell => cell?.kind === 'floor' || cell?.kind === 'bridge'
-
-const FEATURE_MOTIFS = {
-  door: { tileset: 'doors', width: 2, height: 2, frames: [4, 5, 12, 13] },
-  statue: { tileset: 'Statue_fire', width: 2, height: 2, frames: [0, 1, 30, 31] },
-}
 
 // Pure render plan: coordinates are the upper-left of a native 16px TMX cell.
 // Keeping it separate from Phaser lets tests audit every tile against geometry.
@@ -23,7 +19,7 @@ export function buildDungeon3TilePlan(geometry) {
     if (cell.kind === 'boundary') continue
     add(x, y, rules.water.body, 'water', 1)
     if (!isLand(cell)) continue
-    const skin = rules.floorSkins[cell.level % rules.floorSkins.length]
+    const skin = rules.floorSkins[rules.floorSkins.length - 1 - cell.level % rules.floorSkins.length]
     add(x, y, skin.center, 'floor', 2)
     const n = land(x, y - 1), e = land(x + 1, y), s = land(x, y + 1), w = land(x - 1, y)
     const side = !n ? (!w ? 'nw' : !e ? 'ne' : 'n') : !s ? (!w ? 'sw' : !e ? 'se' : 's') : !w ? 'w' : !e ? 'e' : null
@@ -40,7 +36,7 @@ export function buildDungeon3TilePlan(geometry) {
       }
       else {
         const hash = ((geometry.seed ?? 0) + x * 31 + y * 97) >>> 0
-        if (hash % 11 === 0 && skin.details.length) add(x, y, skin.details[hash % skin.details.length], 'detail', 2.2)
+        if (hash % 11 === 0 && skin.details.length) add(x, y, skin.details[hash % skin.details.length], 'detail', 2.4)
       }
     }
     if (!s && at(x, y + 1)?.kind === 'water') add(x, y + 1, rules.water.southFoot[!w ? 0 : !e ? 2 : 1], 'cliff-foot', 3)
@@ -52,6 +48,7 @@ export function buildDungeon3TilePlan(geometry) {
     const width = room.width / size - inset * 2, height = room.height / size - 4
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const role = y === 0 ? (x === 0 ? 'nw' : x === width - 1 ? 'ne' : 'n') : y === height - 1 ? (x === 0 ? 'sw' : x === width - 1 ? 'se' : 's') : x === 0 ? 'w' : x === width - 1 ? 'e' : 'center'
+      if (!land(left + x, top + y)) continue
       add(left + x, top + y, rules.floorDark[role], 'floor-panel', 2.3)
     }
   }
@@ -59,62 +56,96 @@ export function buildDungeon3TilePlan(geometry) {
   const stamp = (motif, left, top, layer, depth, extra = {}) => {
     for (const cell of motif.cells) add(left + cell.x, top + cell.y, cell, layer, depth, { motifId: motif.id, ...extra })
   }
-  const stampFeature = (entry, kind, depth) => {
-    const motif = FEATURE_MOTIFS[kind]
-    if (!motif || !rules.tilesets[motif.tileset]) return
-    const left = Math.floor(entry.x / size - motif.width / 2)
-    const top = Math.floor(entry.y / size - motif.height / 2)
-    for (let y = 0; y < motif.height; y++) for (let x = 0; x < motif.width; x++) {
-      const tileId = motif.frames[y * motif.width + x]
-      if (!land(left + x, top + y)) continue
-      add(left + x, top + y, { tileset: motif.tileset, tileId }, kind, depth, { featureKind: kind, ownerX: entry.x, ownerY: entry.y })
-    }
+  for (const feature of geometry.waterFeatures ?? []) {
+    stamp(feature.motif, feature.x / size, feature.y / size, feature.layer,
+      feature.layer === 'underwater-ruin' ? 1.25 : 1.5, { animationOffset: feature.animationOffset })
   }
 
-  const paving = rules.motifs.plates.find(m => m.width === 2 && m.height === 2 && m.cells.length === 4)
+  for (const bridge of geometry.bridges ?? []) {
+    const horizontal = bridge.orientation === 'horizontal'
+    for (let y = bridge.y / size; y < (bridge.y + bridge.height) / size; y++) for (let x = bridge.x / size; x < (bridge.x + bridge.width) / size; x++) {
+      if (at(x, y)?.kind !== 'bridge') continue
+      const edge = horizontal ? y === bridge.y / size ? 121 : y === (bridge.y + bridge.height) / size - 1 ? 155 : 138
+        : x === bridge.x / size ? 137 : x === (bridge.x + bridge.width) / size - 1 ? 139 : 138
+      add(x, y, { tileset: 'walls_floor', tileId: edge }, 'bridge-deck', 3.5)
+    }
+    if (horizontal) {
+      const arch = rules.assemblies.bridgeArch
+      const left = Math.floor((bridge.x + bridge.width / 2) / size - arch.width / 2), top = (bridge.y + bridge.height) / size
+      if (arch.cells.every(c => at(left + c.x, top + c.y)?.kind === 'water')) stamp(arch, left, top, 'bridge-support', 3.6)
+    }
+  }
+  for (const elevation of geometry.elevations ?? []) {
+    for (let x = elevation.x; x < elevation.x + elevation.width; x += size) {
+      if (x >= elevation.opening.x && x < elevation.opening.x + elevation.opening.width) continue
+      if (!land(x / size, elevation.y / size)) continue
+      stamp(rules.assemblies.terrace, x / size, elevation.y / size, 'elevation-face', 4.1)
+    }
+  }
+  for (const wall of geometry.walls ?? []) {
+    const motif = rules.assemblies.wall
+    for (let x = wall.x; x < wall.x + wall.width; x += size) {
+      if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
+      for (let y = 0; y < motif.height; y++) {
+        const ref = motif.cells.find(c => c.x === (x / size % motif.width) && c.y === y)
+        add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id })
+      }
+    }
+  }
+  for (const door of geometry.doors ?? []) {
+    stamp(door.motif, door.x / size - door.motif.width / 2, door.y / size - door.motif.height / 2, 'door', 5.2, { static: true, featureKind: 'door', wallId: door.wallId })
+  }
+  for (const trap of geometry.traps ?? []) {
+    stamp(trap.motif, trap.x / size - trap.motif.width / 2, trap.y / size - trap.motif.height / 2,
+      trap.kind === 'wall-trap' ? 'wall-trap' : 'floor-trap', trap.kind === 'wall-trap' ? 5.3 : 4.3, { trapId: trap.id, animationOffset: trap.animationOffset ?? 0 })
+  }
+
+  // A connected paving mask selects edge/center/end tiles once per cell.
+  // Repeating the old plates4 corner motif produced disconnected round dots.
   const paved = new Set()
-  if (paving) for (const path of geometry.paths ?? []) {
-    const from = geometry.rooms[path.from].center, to = geometry.rooms[path.to].center
-    const horizontal = from.y === to.y
-    const length = horizontal ? Math.abs(to.x - from.x) : Math.abs(to.y - from.y)
-    for (let distance = 0; distance <= length; distance += size * 2) {
-      const x = (horizontal ? Math.min(from.x, to.x) + distance : from.x) / size - 1
-      const y = (horizontal ? from.y : Math.min(from.y, to.y) + distance) / size - 1
-      const key = `${x},${y}`
-      if (paved.has(key) || !paving.cells.every(c => land(x + c.x, y + c.y))) continue
-      paved.add(key); stamp(paving, x, y, 'path', 4)
+  const paveArea = area => {
+    for (let y = area.y / size; y < (area.y + area.height) / size; y++) for (let x = area.x / size; x < (area.x + area.width) / size; x++) {
+      if (land(x, y) && !(geometry.solids ?? []).some(s => s.kind === 'wall' && x * size >= s.x && x * size < s.x+s.width && y*size >= s.y && y*size < s.y+s.height)) paved.add(`${x},${y}`)
     }
   }
+  for (const path of geometry.paths ?? []) {
+    const a = geometry.rooms[path.from].center, b = geometry.rooms[path.to].center
+    const horizontal = a.y === b.y
+    paveArea(horizontal ? {x:Math.min(a.x,b.x)-32,y:a.y-32,width:Math.abs(a.x-b.x)+64,height:64}
+      : {x:a.x-32,y:Math.min(a.y,b.y)-32,width:64,height:Math.abs(a.y-b.y)+64})
+  }
+  for (const area of geometry.pavingAreas ?? []) paveArea(area)
+  for (const key of paved) {
+    const [x,y] = key.split(',').map(Number)
+    const n=paved.has(`${x},${y-1}`),e=paved.has(`${x+1},${y}`),s=paved.has(`${x},${y+1}`),w=paved.has(`${x-1},${y}`)
+    const role = !n ? (!w?'nw':!e?'ne':'n') : !s ? (!w?'sw':!e?'se':'s') : !w?'w':!e?'e':'center'
+    add(x,y,rules.paving[role],'path',4)
+  }
 
-  for (const door of geometry.doors ?? []) stampFeature(door, 'door', 5.2)
   for (const prop of geometry.decorations ?? []) {
-    if (prop.kind === 'statue') { stampFeature(prop, 'statue', 6.3); continue }
     const motif = prop.motif
     if (!motif) continue
-    stamp(motif, prop.x / size - motif.width / 2, prop.y / size - motif.height / 2, 'prop', 6, { ownerX: prop.x, ownerY: prop.y })
+    stamp(motif, prop.x / size - motif.width / 2, prop.y / size - motif.height / 2, 'prop', 6, { ownerX: prop.x, ownerY: prop.y, featureKind: prop.kind })
   }
   const stepMotif = rules.motifs.stairs.find(m => m.width === 5 && m.height === 3)
   if (stepMotif) for (const stair of geometry.stairs ?? []) {
-    const horizontal = stair.orientation === 'right' || stair.orientation === 'left'
-    const width = horizontal ? stepMotif.height : stepMotif.width
-    const height = horizontal ? stepMotif.width : stepMotif.height
-    const left = Math.floor(stair.x / size - width / 2), top = Math.floor(stair.y / size - height / 2)
-    const rotation = stair.orientation === 'right' ? -90 : stair.orientation === 'left' ? 90 : stair.orientation === 'up' ? 180 : 0
-    const rotated = stepMotif.cells.map(c => {
-      const x = rotation === 90 ? stepMotif.height - 1 - c.y : rotation === -90 ? c.y : rotation === 180 ? stepMotif.width - 1 - c.x : c.x
-      const y = rotation === 90 ? c.x : rotation === -90 ? stepMotif.width - 1 - c.x : rotation === 180 ? stepMotif.height - 1 - c.y : c.y
-      return { ...c, x, y }
-    })
-    if (rotated.every(c => land(left + c.x, top + c.y))) {
-      for (const c of rotated) add(left + c.x, top + c.y, c, 'stairs', 4.2, { motifId: stepMotif.id, rotation })
+    const width = (stair.width ?? stepMotif.width * size) / size
+    const left = Math.floor(stair.x / size - width / 2), top = Math.floor(stair.y / size - stepMotif.height / 2)
+    // Repeat only the authored middle columns; retain both end caps and all
+    // three vertical rows. Perspective stairs must never be rotated in 2D.
+    for (let y = 0; y < stepMotif.height; y++) for (let x = 0; x < width; x++) {
+      const sourceX = x === 0 ? 0 : x === width - 1 ? stepMotif.width - 1 : 1 + (x - 1) % (stepMotif.width - 2)
+      const ref = stepMotif.cells.find(c => c.x === sourceX && c.y === y)
+      add(left + x, top + y, ref, 'stairs', 4.2, { motifId: stepMotif.id, pathId: stair.pathId })
     }
   }
+
   return tiles
 }
 
 export function queueDungeon3Textures(scene) {
   const base = '/assets/dungeon-tileset/dungeon-pixel-tileset-for-rpg-and-roguelike-game/Tiled_files/'
-  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire']
+  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire', 'Water_detilazation', 'plate_trap', 'dragon_trap', 'Spikes']
   let queued = false
   for (const name of used) {
     const set = rules.tilesets[name], key = dungeon3TextureKey(name)
@@ -126,6 +157,7 @@ export function queueDungeon3Textures(scene) {
 }
 
 function tileFrames(tile) {
+  if (tile.static) return null
   return rules.tilesets[tile.tileset]?.animations?.[String(tile.tileId)] ?? null
 }
 
@@ -181,17 +213,15 @@ function renderLegacyTerrain(scene, geometry) {
     }
     const frames = tileFrames(tile)
     if (frames?.length) {
-      const groupKey = `${key}/${tile.tileId}`
-      if (!animated.has(groupKey)) animated.set(groupKey, { frames, sprites: [], duration: frames.reduce((total, f) => total + f.duration, 0), lastFrame: -1 })
+      const groupKey = `${key}/${tile.tileId}/${tile.animationOffset ?? 0}`
+      if (!animated.has(groupKey)) animated.set(groupKey, { tile, frames, sprites: [], duration: frames.reduce((total, f) => total + f.duration, 0), lastFrame: -1 })
       animated.get(groupKey).sprites.push(sprite)
     }
   }
   if (animated.size) {
     const update = time => {
       for (const group of animated.values()) {
-        let elapsed = time % group.duration
-        let frame = group.frames[0].tileId
-        for (const entry of group.frames) { frame = entry.tileId; if (elapsed < entry.duration) break; elapsed -= entry.duration }
+        const frame = animatedTileFrame(group.tile, time)
         if (frame === group.lastFrame) continue
         group.lastFrame = frame
         for (const sprite of group.sprites) sprite.setFrame(frame)
@@ -258,13 +288,7 @@ export function renderDungeon3Terrain(scene, geometry) {
     for (const batch of animatedBatches) {
       let dirty = false
       for (const entry of batch.entries) {
-        let elapsed = time % entry.duration
-        let frame = entry.frames[0].tileId
-        for (const candidate of entry.frames) {
-          frame = candidate.tileId
-          if (elapsed < candidate.duration) break
-          elapsed -= candidate.duration
-        }
+        const frame = animatedTileFrame(entry.tile, time)
         if (frame === entry.currentFrame) continue
         entry.currentFrame = frame
         dirty = true

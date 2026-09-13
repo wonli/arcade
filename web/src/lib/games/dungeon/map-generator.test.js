@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateDungeonGeometry } from './map-generator.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
-import { circleHitsSolid } from './spatial.js'
+import { circleHitsSolid, movementWithCollision } from './spatial.js'
 
 function graphDistances(g, start) {
   const adjacency = Array.from({ length: g.rooms.length }, () => [])
@@ -38,17 +38,14 @@ test('room graph stays connected and exit is chosen from the farthest graph laye
   }
 })
 
-test('perimeter walls frame the dungeon and props are denser with oversized authored motifs', () => {
+test('authored walls frame the rooms and props are denser with complete multi-tile motifs', () => {
   const scales = new Set()
   let decoratedRooms = 0, totalRooms = 0, totalDecorations = 0
   for (let seed = 1; seed <= 40; seed++) {
     const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })
     totalRooms += g.rooms.length
-    const wall = g.decorations.find(d => d.kind === 'wall')
-    assert.ok(wall, `seed ${seed}: missing perimeter wall`)
-    assert.equal(wall.motif.id, 'perimeter-wall')
-    assert.equal(wall.footprint.width, g.bounds.width)
-    assert.equal(wall.footprint.height, g.bounds.height)
+    assert.equal(g.walls.length, g.rooms.length)
+    assert.ok(g.walls.every(w => w.height === 48 && w.roomId != null))
     const props = g.decorations.filter(d => d.kind !== 'wall')
     totalDecorations += props.length
     for (const d of props) if (d.footprint) scales.add(`${d.footprint.width}x${d.footprint.height}`)
@@ -57,16 +54,16 @@ test('perimeter walls frame the dungeon and props are denser with oversized auth
   assert.ok(totalDecorations / totalRooms >= 3.25, `expected denser dressing, got ${(totalDecorations / totalRooms).toFixed(2)} props/room`)
   assert.ok(decoratedRooms / totalRooms >= 0.8, 'most rooms should receive decoration')
   assert.ok(scales.size >= 5, `expected varied decoration footprints, saw ${[...scales]}`)
-  assert.ok([...scales].some(size => size.split('x').map(Number).some(value => value >= 80)), `expected oversized native props, saw ${[...scales]}`)
+  assert.ok([...scales].some(size => size.split('x').map(Number).some(value => value >= 64)), `expected complete multi-tile props, saw ${[...scales]}`)
 })
 
 test('room connections keep a generous walkable throat and expose doors and landmarks', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })
-    assert.ok(g.bridges.every(bridge => (bridge.orientation === 'horizontal' ? bridge.height : bridge.width) >= 96), `seed ${seed}: narrow bridge throat`)
-    assert.ok(g.doors.length >= g.paths.length * 2, `seed ${seed}: each connection should have two door frames`)
+    assert.ok(g.bridges.every(bridge => (bridge.orientation === 'horizontal' ? bridge.height : bridge.width) >= 64), `seed ${seed}: narrow bridge throat`)
+    assert.ok(g.doors.length > 0 && g.doors.every(d => g.walls.some(w => w.id === d.wallId)), `seed ${seed}: doors must belong to walls`)
     assert.ok(g.decorations.some(entry => entry.kind === 'statue'), `seed ${seed}: missing statue landmark`)
-    for (const door of g.doors) assert.equal(circleHitsSolid(door, 18, g), false, `seed ${seed}: door blocks its own passage`)
+    for (const door of g.doors) assert.equal(door.role, 'alcove', `seed ${seed}: closed doors must not seal bridge connections`)
   }
 })
 
@@ -84,6 +81,23 @@ test('regression: geometry stays deterministic, tile-aligned, multi-level and co
     for (const anchor of anchors) {
       assert.equal(circleHitsSolid(anchor, 20, g), false, `seed ${seed}: blocked anchor`)
       assert.ok(findPath(nav, g.spawn, anchor).length, `seed ${seed}: unreachable anchor`)
+    }
+  }
+})
+
+
+test('the actual movement solver traverses terrace stairs and bridges for players and bosses', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const g = generateDungeonGeometry({runSeed:seed})
+    for (const radius of [20,26]) {
+      const nav = buildNavGrid(g,{cellSize:16,actorRadius:radius})
+      const path = findPath(nav,g.spawn,g.exit)
+      assert.ok(path.length, `seed ${seed}, radius ${radius}: missing route`)
+      let p = g.spawn
+      for (const target of [...path,g.exit]) {
+        p = movementWithCollision(p,{x:target.x-p.x,y:target.y-p.y},radius,g)
+        assert.ok(Math.hypot(p.x-target.x,p.y-target.y)<0.1, `seed ${seed}, radius ${radius}: movement diverges from navigation`)
+      }
     }
   }
 })

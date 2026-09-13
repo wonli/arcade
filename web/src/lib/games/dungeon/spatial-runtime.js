@@ -1,3 +1,4 @@
+import { activeTrapAt } from './dungeon3-hazards.js'
 import { queueDungeon3Textures, renderDungeon3Terrain } from './dungeon3-renderer.js'
 import { placePlayerAtRoomSpawn, safeEnemySpawn } from './room-anchors.js'
 import { rollAffixes } from './affixes.js'
@@ -10,7 +11,6 @@ const PLAYER_RADIUS = 18
 const ENEMY_RADIUS = 15
 const PATH_REFRESH_MS = 520
 const CHEST_RANGE = 48
-const TRAP_RANGE = 22
 
 const RARITY_DAMAGE = {
   common: [2, 3],
@@ -469,7 +469,6 @@ function enemyIsFlying(enemy) {
   return /(?:bat|dragon|ghost|wing|fly)/i.test(String(enemy?.type ?? enemy?.archetype ?? enemy?.id ?? ''))
 }
 function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry }
-function playerTrapAt(position, geometry) { return (geometry?.traps ?? []).find((trap) => Math.hypot(trap.x - position.x, trap.y - position.y) <= TRAP_RANGE) ?? null }
 
 export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
   if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
@@ -492,7 +491,12 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
     if (!fixedGeometry) placePlayerAtRoomSpawn(scene)
-    scene.__navGrids = { ground: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'ground' }), flying: buildNavGrid(geometry, { cellSize: 32, actorRadius: ENEMY_RADIUS, profile: 'flying' }) }
+    const cellSize = geometry.grid?.tileSize ?? 32
+    scene.__navGrids = {
+      ground: buildNavGrid(geometry, { cellSize, actorRadius: ENEMY_RADIUS, profile: 'ground' }),
+      boss: buildNavGrid(geometry, { cellSize, actorRadius: 26, profile: 'ground' }),
+      flying: buildNavGrid(geometry, { cellSize, actorRadius: ENEMY_RADIUS, profile: 'flying' }),
+    }
     scene.__navGrid = scene.__navGrids.ground
     scene.spawnPoints = geometry.spawnPoints.map((entry) => [entry.x, entry.y])
     if (progress.roomRole !== 'rest') chests = geometry.chests.slice(0, 1).map((anchor, index) => renderChest(scene, anchor, index))
@@ -519,10 +523,10 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     scene.playerState.x = next.x; scene.playerState.y = next.y
     scene.player?.setPosition?.(next.x, next.y)
     scene.updateHealthBar?.(scene.playerBar, next.x, next.y - 42, scene.playerState.hp, scene.playerState.maxHp)
-    const trap = playerTrapAt(next, scene.__roomGeometry)
+    const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
     if (trap && scene.time.now >= trapCooldownUntil) {
       trapCooldownUntil = scene.time.now + 850
-      scene.hitPlayer?.(trap.kind === 'spikes' ? 6 : 4)
+      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4)
       onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
     }
   }
@@ -538,10 +542,10 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     if (directEnd.blocked || forcePath) {
       const needsRefresh = !enemy.navPath?.length || time >= (enemy.navRefreshAt ?? 0)
       if (needsRefresh) {
-        enemy.navPath = findPath(scene.__navGrids?.[flying ? 'flying' : 'ground'] ?? scene.__navGrid, enemy, target)
+        enemy.navPath = findPath(scene.__navGrids?.[flying ? 'flying' : enemy.boss ? 'boss' : 'ground'] ?? scene.__navGrid, enemy, target)
         enemy.navRefreshAt = time + PATH_REFRESH_MS + ((enemy.id?.length ?? 0) % 7) * 37
       }
-      destination = nextWaypoint(enemy.navPath, enemy, 20) ?? target
+      destination = nextWaypoint(enemy.navPath, enemy, geometry.grid ? 8 : 20) ?? target
     } else enemy.navPath = []
     const dx = destination.x - enemy.x, dy = destination.y - enemy.y, distance = Math.hypot(dx, dy) || 1
     const next = movementWithCollision(enemy, { x: (dx / distance) * enemy.speed * dt, y: (dy / distance) * enemy.speed * dt }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)

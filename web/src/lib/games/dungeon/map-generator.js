@@ -1,3 +1,4 @@
+import { dressThemedRooms, populateWater } from './dungeon3-dressing.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
 import { circleHitsSolid } from './spatial.js'
 import { dungeon3Rules } from './dungeon3-rules.js'
@@ -7,7 +8,8 @@ const WIDTH = 960
 const HEIGHT = 600
 const COLS = WIDTH / TILE
 const ROWS = Math.floor(HEIGHT / TILE)
-const RADIUS = 20
+// Validate the largest grounded actor, including the navigation-cell margin.
+const RADIUS = 26
 const SLOT_COLUMNS = [176, 480, 784]
 const SLOT_ROWS = [144, 304, 464]
 const CORRIDOR = 96
@@ -60,10 +62,10 @@ function weightedRoomCount(random) {
   return 9
 }
 function growRoomGraph(random, targetCount) {
-  const start = { row: Math.floor(random() * 3), column: Math.floor(random() * 3) }
-  const slots = [start]
-  const occupied = new Map([[slotKey(start.row, start.column), 0]])
-  const edges = []
+  const column = Math.floor(random() * 3)
+  const slots = [0, 1, 2].map(row => ({ row, column }))
+  const occupied = new Map(slots.map((slot, id) => [slotKey(slot.row, slot.column), id]))
+  const edges = [[0, 1], [1, 2]]
   while (slots.length < targetCount) {
     const frontier = []
     for (let parent = 0; parent < slots.length; parent++) {
@@ -149,20 +151,6 @@ function decorationScale(motif) {
   if (area >= 4) return 'medium'
   return 'small'
 }
-function perimeterWallMotif(bounds) {
-  const width = bounds.width / TILE, height = bounds.height / TILE
-  const cells = []
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    if (x !== 0 && x !== width - 1 && y !== 0 && y !== height - 1) continue
-    const role = y === 0
-      ? (x === 0 ? 'nw' : x === width - 1 ? 'ne' : 'n')
-      : y === height - 1
-        ? (x === 0 ? 'sw' : x === width - 1 ? 'se' : 's')
-        : x === 0 ? 'w' : 'e'
-    cells.push({ x, y, ...dungeon3Rules.floorDark[role] })
-  }
-  return { id: 'perimeter-wall', width, height, cells }
-}
 
 function build(seed, floor, attempt) {
   const random = rng(seed + Math.imul(attempt, 0x9e3779b9))
@@ -172,12 +160,13 @@ function build(seed, floor, attempt) {
   })
   const targetCount = weightedRoomCount(random)
   const topology = growRoomGraph(random, targetCount)
-  const levelOrder = shuffle(random, Array.from({ length: targetCount }, (_, i) => i % 3))
+  const themes = shuffle(random, ['shrine', 'crypt', 'gauntlet', 'flooded', ...Array.from({ length: Math.max(0, targetCount - 4) }, (_, i) => i % 2 ? 'crypt' : 'gallery')])
   const rooms = topology.slots.map((slot, id) => {
     const cx = SLOT_COLUMNS[slot.column], cy = SLOT_ROWS[slot.row]
-    const width = pick(random, [192, 224, 256]), height = pick(random, [96, 128])
+    const theme = themes[id]
+    const width = theme === 'flooded' ? 224 : 256, height = 160
     return rect(cx - width / 2, cy - height / 2, width, height, 'room', {
-      id, level: levelOrder[id], center: point(cx, cy), slot: { ...slot },
+      id, theme, level: 2 - slot.row, center: point(cx, cy), slot: { ...slot },
     })
   })
   const carve = (area, kind, level, onlyWater = false) => {
@@ -196,17 +185,24 @@ function build(seed, floor, attempt) {
     const from = rooms[a].center, to = rooms[b].center
     const horizontal = from.y === to.y, half = CORRIDOR / 2
     const path = horizontal
-      ? rect(Math.min(from.x, to.x) - half, from.y - half, Math.abs(to.x - from.x) + CORRIDOR, CORRIDOR, 'path')
+      ? rect(Math.min(from.x, to.x) - half, from.y - half, Math.abs(to.x - from.x) + half * 2, half * 2, 'path')
       : rect(from.x - half, Math.min(from.y, to.y) - half, CORRIDOR, Math.abs(to.y - from.y) + CORRIDOR, 'path')
-    path.from = a; path.to = b; path.level = rooms[a].level
+    path.id = paths.length; path.from = a; path.to = b; path.level = Math.min(rooms[a].level, rooms[b].level)
     paths.push(path)
     const lower = horizontal ? (from.x < to.x ? rooms[a] : rooms[b]) : (from.y < to.y ? rooms[a] : rooms[b])
     const upper = lower === rooms[a] ? rooms[b] : rooms[a]
     const bridge = horizontal
-      ? rect(lower.x + lower.width - TILE, from.y - half, Math.max(TILE * 2, upper.x - lower.x - lower.width + TILE * 2), CORRIDOR, 'bridge', { orientation: 'horizontal' })
+      ? rect(lower.x + lower.width - TILE, from.y - half, Math.max(TILE * 2, upper.x - lower.x - lower.width + TILE * 2), half * 2, 'bridge', { orientation: 'horizontal' })
       : rect(from.x - half, lower.y + lower.height - TILE, CORRIDOR, Math.max(TILE * 2, upper.y - lower.y - lower.height + TILE * 2), 'bridge', { orientation: 'vertical' })
+    bridge.pathId = path.id; bridge.level = path.level
     bridges.push(bridge)
     carve(path, 'bridge', path.level, true)
+  }
+
+  for (const room of rooms.filter(r => r.theme === 'flooded')) {
+    room.inlets = [rect(room.x, room.y + room.height - 32, 32, 32, 'inlet'),
+      rect(room.x + room.width - 48, room.y + room.height - 32, 48, 32, 'inlet')]
+    for (const inlet of room.inlets) carve(inlet, 'water', 0)
   }
 
   const g = {
@@ -215,7 +211,7 @@ function build(seed, floor, attempt) {
     grid: { tileSize: TILE, columns: COLS, rows: ROWS, cells }, rooms, paths, bridges,
     water: rectanglesFor(cells, 'water'),
     solids: [...rectanglesFor(cells, 'boundary'), rect(0, ROWS * TILE, WIDTH, HEIGHT - ROWS * TILE, 'boundary')],
-    stairs: [], doors: [], traps: [], decorations: [], torches: [], chests: [], spawnPoints: [], criticalPath: [],
+    waterFeatures: [], pavingAreas: [], walls: [], elevations: [], stairs: [], doors: [], traps: [], decorations: [], torches: [], chests: [], spawnPoints: [], criticalPath: [],
   }
 
   const degrees = topology.slots.map((_, id) => topology.edges.reduce((count, [a, b]) => count + (a === id || b === id ? 1 : 0), 0))
@@ -230,36 +226,67 @@ function build(seed, floor, attempt) {
   const chestRoom = sideLeaves.length ? pick(random, sideLeaves) : info.distances
     .map((distance, id) => ({ distance, id })).filter(entry => entry.id !== start && entry.id !== finish)
     .sort((a, b) => b.distance - a.distance)[0]?.id ?? restRoom
-  const anchor = room => point(room.center.x + pick(random, [-16, 0, 16]), room.center.y + pick(random, [-16, 0, 16]))
+  const anchor = room => ({ ...room.center })
   g.spawn = anchor(rooms[start]); g.exit = anchor(rooms[finish]); g.rest = { ...rooms[restRoom].center }
   g.spawnPoints = rooms.map(room => ({ ...room.center }))
   g.chests = [{ ...rooms[chestRoom].center }]
 
+  // A floor is a physical terrace: upper rows descend south by one level.
+  // Same-level spans are bridges; only elevation changes receive stairs.
   for (const path of paths) {
     const a = rooms[path.from], b = rooms[path.to]
-    const horizontal = a.center.y === b.center.y
-    if (horizontal) {
-      const left = a.center.x < b.center.x ? a : b
-      const right = left === a ? b : a
-      g.doors.push(
-        { x: left.x + left.width - TILE / 2, y: left.center.y, orientation: 'right' },
-        { x: right.x + TILE / 2, y: right.center.y, orientation: 'left' },
-      )
-    } else {
-      const top = a.center.y < b.center.y ? a : b
-      const bottom = top === a ? b : a
-      g.doors.push(
-        { x: top.center.x, y: top.y + top.height - TILE / 2, orientation: 'down' },
-        { x: bottom.center.x, y: bottom.y + TILE / 2, orientation: 'up' },
-      )
+    if (a.level === b.level) continue
+    const high = a.level > b.level ? a : b, low = high === a ? b : a
+    const stair = {
+      x: high.center.x, y: high.y + high.height - TILE / 2,
+      width: 96, height: 48, orientation: 'down', pathId: path.id,
+      highLevel: high.level, lowLevel: low.level,
+    }
+    g.stairs.push(stair)
+    // Reserve the transition in the navigation model. Its lip is the only
+    // opening in this terrace face; no sideways access through a vertical drop.
+    const left = stair.x - 48, edgeY = high.y + high.height - TILE
+    for (const [x, width] of [[high.x, left - high.x], [stair.x + 48, high.x + high.width - stair.x - 48]]) {
+      if (width > 0) g.solids.push(rect(x, edgeY, width, TILE, 'elevation'))
+    }
+    g.elevations.push({ roomId: high.id, x: high.x, y: edgeY, width: high.width, height: 32, opening: { x: left, width: 96 }, highLevel: high.level, lowLevel: low.level })
+    for (let y = (stair.y - 24) / TILE; y < (stair.y + 24) / TILE; y++) {
+      for (let x = (stair.x - 48) / TILE; x < (stair.x + 48) / TILE; x++) {
+        const cell = cells[y * COLS + x]
+        if (cell) cell.transition = { high: high.level, low: low.level, pathId: path.id }
+      }
     }
   }
 
-  for (const bridge of bridges) {
-    const horizontal = bridge.orientation === 'horizontal'
-    g.stairs.push({ x: horizontal ? bridge.x + TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + TILE, orientation: horizontal ? 'right' : 'down' })
-    g.stairs.push({ x: horizontal ? bridge.x + bridge.width - TILE : bridge.x + bridge.width / 2, y: horizontal ? bridge.y + bridge.height / 2 : bridge.y + bridge.height - TILE, orientation: horizontal ? 'left' : 'up' })
+  const protectedAnchors = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints]
+  const safeHazard = area => !protectedAnchors.some(p => overlaps(area, rect(p.x - 24, p.y - 24, 48, 48, 'safe')))
+  for (const room of rooms) {
+    const northConnection = paths.some(p => {
+      const other = p.from === room.id ? rooms[p.to] : p.to === room.id ? rooms[p.from] : null
+      return other && other.center.x === room.center.x && other.center.y < room.center.y
+    })
+    // North-facing wall sections flank a real entrance, or enclose a room.
+    // Doors are closed alcoves in these walls, as in Walls2; they are never
+    // floating objects at east/west bridge ends or looping opening animations.
+    const wall = { id: `wall-${room.id}`, roomId: room.id, x: room.x, y: room.y - TILE, width: room.width, height: 48,
+      opening: northConnection ? { x: room.center.x - 48, width: 96 } : null }
+    g.walls.push(wall)
+    for (let x = room.x; x < room.x + room.width; x += TILE) {
+      if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
+      g.solids.push(rect(x, room.y + TILE, TILE, TILE, 'wall'))
+    }
+    if (!northConnection) g.doors.push({ x: room.center.x, y: room.y + 8, wallId: wall.id, orientation: 'down', role: 'alcove', motif: dungeon3Rules.assemblies.door, static: true })
+    const wallTrap = dungeon3Rules.assemblies.wallTrap
+    const trapX = room.x + TILE * 2, trapY = wall.y
+    const damageArea = rect(trapX, trapY + 32, 32, 64, 'hazard')
+    if (['gallery', 'flooded'].includes(room.theme) && safeHazard(damageArea)) g.traps.push({ id: `wall-trap-${room.id}`, roomId: room.id, wallId: wall.id, kind: 'wall-trap', x: trapX + 16, y: trapY + 48, motif: wallTrap, damageArea, orientation: 'down' })
+    const plateX = room.x + room.width - 48, plateY = room.y + room.height - 48
+    const plateArea = rect(plateX, plateY, 32, 32, 'hazard')
+    if (room.theme !== 'crypt' && safeHazard(plateArea)) g.traps.push({ id: `floor-trap-${room.id}`, roomId: room.id, kind: 'plate-trap', x: plateX + 16, y: plateY + 16, motif: dungeon3Rules.assemblies.floorTrap, damageArea: plateArea })
   }
+
+  dressThemedRooms(g, random)
+  populateWater(g, random)
 
   const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints, ...g.doors]
   const motifs = [
@@ -286,7 +313,10 @@ function build(seed, floor, attempt) {
         const collision = rect(candidate.x + (width - collisionWidth) / 2, candidate.y + height - collisionHeight, collisionWidth, collisionHeight, 'prop')
         const valid = inside(point(candidate.x, candidate.y), room, TILE) && inside(point(candidate.x + width, candidate.y + height), room, TILE) &&
           (!blocking || !paths.some(path => overlaps(collision, path))) &&
-          !reserved.some(p => overlaps(candidate, rect(p.x - 28, p.y - 28, 56, 56, 'reserved'), 4)) &&
+          Array.from({ length: width / TILE * (height / TILE) }, (_, i) => cells[(candidate.y / TILE + Math.floor(i / (width / TILE))) * COLS + candidate.x / TILE + i % (width / TILE)]).every(c => c?.kind === 'floor') &&
+          !g.solids.some(s => overlaps(candidate, s)) &&
+          !g.traps.some(t => overlaps(candidate, t.damageArea, 4)) &&
+          !reserved.some(p => overlaps(candidate, rect(p.x - 36, p.y - 36, 72, 72, 'reserved'), 4)) &&
           !g.decorations.some(d => d.footprint && overlaps(candidate, decorationArea(d), 4))
         if (valid) collisionArea = collision
         return valid
@@ -309,23 +339,6 @@ function build(seed, floor, attempt) {
     g.torches.push(point(room.center.x, room.y + TILE * 2))
   }
 
-  const landmarkRooms = [rooms[chestRoom], ...(rooms.length >= 7 ? [rooms[finish]] : [])]
-  for (let index = 0; index < landmarkRooms.length; index++) {
-    const room = landmarkRooms[index]
-    const side = index % 2 === 0 ? 1 : -1
-    g.decorations.push({
-      x: room.center.x + side * Math.max(48, room.width / 2 - 40),
-      y: room.y + 34,
-      kind: 'statue', scale: 'landmark', footprint: { width: 32, height: 48 }, blocking: false,
-    })
-  }
-
-  const wallMotif = perimeterWallMotif(g.bounds)
-  g.decorations.push({
-    x: g.bounds.x + g.bounds.width / 2, y: g.bounds.y + g.bounds.height / 2,
-    kind: 'wall', motif: wallMotif, scale: 'landmark',
-    footprint: { width: g.bounds.width, height: g.bounds.height }, blocking: false,
-  })
   return g
 }
 
@@ -349,8 +362,8 @@ export function generateDungeonGeometry({ runSeed = 1, floor = 1 } = {}) {
     if (validate(geometry)) return geometry
   }
   const fallback = build(seed, floor, 0)
-  fallback.decorations = fallback.decorations.filter(d => d.kind === 'wall' || d.kind === 'statue')
-  fallback.solids = fallback.solids.filter(s => !s.authored)
+  fallback.decorations = fallback.decorations.filter(d => d.planned)
+  fallback.solids = fallback.solids.filter(s => !s.authored || s.planned)
   if (!validate(fallback)) throw new Error(`Dungeon3 map is disconnected: ${seed}/${floor}`)
   return fallback
 }
