@@ -10,6 +10,20 @@ function addPaving(g, room, kind, x, y, width, height) {
   g.pavingAreas.push({roomId:room.id,kind,x,y,width,height})
 }
 
+function floodArea(g, room, area) {
+  const {columns,cells} = g.grid
+  for (let y=area.y/TILE; y<(area.y+area.height)/TILE; y++) {
+    for (let x=area.x/TILE; x<(area.x+area.width)/TILE; x++) {
+      const cell=cells[y*columns+x]
+      if (!cell || cell.kind!=='floor') continue
+      cell.kind='water'
+      cell.level=0
+    }
+  }
+  room.inlets ??= []
+  room.inlets.push(area)
+}
+
 // Themes own their landmark, hazard and route footprint before random clutter is
 // considered. Every composition leaves the room centre and a broad route to it
 // clear because spawn/exit/rest/encounter anchors all live there.
@@ -71,6 +85,10 @@ export function dressThemedRooms(g, random) {
     }
 
     if (room.theme === 'flooded') {
+      // The generator already cuts two southern bites. Add an asymmetric north
+      // pocket here so flooded rooms cannot collapse into the same rectangular pond.
+      const extra = {x:room.x+TILE,y:room.y+TILE*2,width:TILE*2,height:TILE*2,kind:'inlet'}
+      if (!(room.inlets ?? []).some(area=>overlaps(area,extra))) floodArea(g,room,extra)
       addPaving(g,room,'flooded-spine',room.center.x-32,room.y+32,64,128)
       room.layout = {type:'flood-basin',safeLane:{x:room.center.x-32,y:room.y+24,width:64,height:136}}
       continue
