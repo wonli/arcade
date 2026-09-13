@@ -2,21 +2,15 @@ import { weaponDefinition } from './weapon-catalog.js'
 
 export const HUD_INSET = 56
 export const HUD_WEAPON_ICON_URL = new URL('./assets/sword-7soul1_20201212/32x32/dagger_01.png', import.meta.url).href
-export const HUD_ACHIEVEMENT_ICON_URL = new URL('./assets/achievements.png', import.meta.url).href
 
 const HUD_HEIGHT = 48
 const WEAPON_WIDTH = 176
 const POTION_WIDTH = 58
-const PROGRESS_WIDTH = 136
+const PROGRESS_WIDTH = 116
 const HUD_GAP = 8
 const HUD_BG = 0x05070a
 const HUD_BG_ALPHA = 0.48
 const HUD_WEAPON_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
-const HUD_ACHIEVEMENT_TEXTURE_KEY = 'dungeon-hud-achievement-icon'
-const ACHIEVEMENT_CELL_WIDTH = 93
-const ACHIEVEMENT_CELL_HEIGHT = 104
-const ACHIEVEMENT_FRAME_NORMAL = 'progress-normal'
-const ACHIEVEMENT_FRAME_BOSS = 'progress-boss'
 
 function equippedWeaponName(weapon, labels) {
   const type = typeof weapon === 'string' ? weapon : weapon?.type
@@ -42,13 +36,11 @@ export function dungeonHudModel({ stats = {}, progress = {}, labels = {} } = {})
     weaponDetail,
     rarity: stats.weaponRarity ?? 'common',
     canUsePotion: (stats.healthPotions ?? 0) > 0,
-    progressBadge: {
-      floor,
-      chapter,
+    progress: {
       floorLabel: `${labels.floor ?? 'Floor'} ${floor}`,
       chapterLabel: `${labels.chapter ?? 'Chapter'} ${chapter}`,
-      boss,
       bossLabel: boss ? (labels.boss ?? 'Boss') : '',
+      boss,
     },
     bounds: {
       weapon: { x: HUD_INSET, y: HUD_INSET, width: WEAPON_WIDTH, height: HUD_HEIGHT },
@@ -86,24 +78,6 @@ function loadHudTexture(scene, key, url) {
   })
 }
 
-function ensureAchievementFrames(scene) {
-  const texture = scene.textures?.get?.(HUD_ACHIEVEMENT_TEXTURE_KEY)
-  if (!texture?.add) return
-  if (!texture.has?.(ACHIEVEMENT_FRAME_NORMAL)) {
-    texture.add(ACHIEVEMENT_FRAME_NORMAL, 0, 0, 0, ACHIEVEMENT_CELL_WIDTH, ACHIEVEMENT_CELL_HEIGHT)
-  }
-  if (!texture.has?.(ACHIEVEMENT_FRAME_BOSS)) {
-    texture.add(
-      ACHIEVEMENT_FRAME_BOSS,
-      0,
-      ACHIEVEMENT_CELL_WIDTH * 4,
-      0,
-      ACHIEVEMENT_CELL_WIDTH,
-      ACHIEVEMENT_CELL_HEIGHT,
-    )
-  }
-}
-
 export function installDungeonHud(scene, {
   getStats = () => ({}),
   getProgress = () => ({}),
@@ -111,7 +85,6 @@ export function installDungeonHud(scene, {
   onPotion = () => {},
   onDetails = () => {},
   weaponIconUrl = HUD_WEAPON_ICON_URL,
-  achievementIconUrl = HUD_ACHIEVEMENT_ICON_URL,
 } = {}) {
   const textStyle = {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -147,17 +120,13 @@ export function installDungeonHud(scene, {
   potionBg.on('pointerdown', () => onPotion())
 
   const progressHud = pin(scene.add.container(0, HUD_INSET), 221)
-  const progressBg = scene.add.rectangle(0, 0, PROGRESS_WIDTH, HUD_HEIGHT, HUD_BG, 0.62)
+  const progressBg = scene.add.rectangle(0, 0, PROGRESS_WIDTH, HUD_HEIGHT, HUD_BG, 0.54)
     .setOrigin(0, 0)
-    .setStrokeStyle(1, 0x33404a, 0.5)
-  const badgeSlot = scene.add.container(4, 3)
-  const badgeFallback = scene.add.circle(21, 21, 17, 0x26303a, 0.9).setStrokeStyle(2, 0x83919e, 0.72)
-  const badgeCore = scene.add.circle(21, 21, 8, 0x151a20, 1)
-  badgeSlot.add([badgeFallback, badgeCore])
-  const chapterText = scene.add.text(49, 8, '', { ...textStyle, fontSize: '8px', color: '#7d8792', fontStyle: 'bold' })
-  const floorText = scene.add.text(49, 21, '', { ...textStyle, fontSize: '12px', fontStyle: 'bold' })
-  const bossText = scene.add.text(PROGRESS_WIDTH - 7, 7, '', { ...textStyle, fontSize: '7px', color: '#ff746c', fontStyle: 'bold' }).setOrigin(1, 0)
-  progressHud.add([progressBg, badgeSlot, chapterText, floorText, bossText])
+    .setStrokeStyle(1, 0x33404a, 0.42)
+  const chapterText = scene.add.text(10, 8, '', { ...textStyle, fontSize: '8px', color: '#7d8792', fontStyle: 'bold' })
+  const floorText = scene.add.text(10, 22, '', { ...textStyle, fontSize: '12px', fontStyle: 'bold' })
+  const bossText = scene.add.text(PROGRESS_WIDTH - 8, 8, '', { ...textStyle, fontSize: '7px', color: '#ff746c', fontStyle: 'bold' }).setOrigin(1, 0)
+  progressHud.add([progressBg, chapterText, floorText, bossText])
 
   const positionProgressHud = () => {
     const width = scene.scale?.width ?? scene.cameras?.main?.width ?? 960
@@ -167,7 +136,6 @@ export function installDungeonHud(scene, {
   scene.scale?.on?.('resize', positionProgressHud)
 
   let iconImage = null
-  let achievementImage = null
   let destroyed = false
 
   loadHudTexture(scene, HUD_WEAPON_TEXTURE_KEY, weaponIconUrl).then((loaded) => {
@@ -175,17 +143,6 @@ export function installDungeonHud(scene, {
     iconSlot.removeAll(true)
     iconImage = scene.add.image(16, 16, HUD_WEAPON_TEXTURE_KEY).setOrigin(0.5).setDisplaySize(32, 32)
     iconSlot.add(iconImage)
-  })
-
-  loadHudTexture(scene, HUD_ACHIEVEMENT_TEXTURE_KEY, achievementIconUrl).then((loaded) => {
-    if (!loaded || destroyed) return
-    ensureAchievementFrames(scene)
-    badgeSlot.removeAll(true)
-    achievementImage = scene.add.image(21, 21, HUD_ACHIEVEMENT_TEXTURE_KEY, ACHIEVEMENT_FRAME_NORMAL)
-      .setOrigin(0.5)
-      .setDisplaySize(38, 42)
-    badgeSlot.add(achievementImage)
-    update()
   })
 
   const update = () => {
@@ -206,12 +163,10 @@ export function installDungeonHud(scene, {
       legendary: 0xffb347,
     }[model.rarity] ?? 0xffffff)
 
-    chapterText.setText(model.progressBadge.chapterLabel)
-    floorText.setText(model.progressBadge.floorLabel).setColor(model.progressBadge.boss ? '#ffd0c7' : '#f4f0e8')
-    bossText.setText(model.progressBadge.bossLabel.toUpperCase())
-    progressBg.setStrokeStyle(1, model.progressBadge.boss ? 0xff746c : 0x33404a, model.progressBadge.boss ? 0.82 : 0.5)
-    achievementImage?.setFrame?.(model.progressBadge.boss ? ACHIEVEMENT_FRAME_BOSS : ACHIEVEMENT_FRAME_NORMAL)
-    achievementImage?.setAlpha?.(model.progressBadge.boss ? 1 : 0.92)
+    chapterText.setText(model.progress.chapterLabel)
+    floorText.setText(model.progress.floorLabel).setColor(model.progress.boss ? '#ffd0c7' : '#f4f0e8')
+    bossText.setText(model.progress.bossLabel.toUpperCase())
+    progressBg.setStrokeStyle(1, model.progress.boss ? 0xff746c : 0x33404a, model.progress.boss ? 0.72 : 0.42)
     return model
   }
 
