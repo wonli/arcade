@@ -1,6 +1,7 @@
 import { healFromHit, modifiedDamage, rollDamage } from './combat.js'
 import { circleHitsSolid } from './spatial.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
+import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
 function rangedProfile(player) {
   const profile = weaponProfile(player)
@@ -54,14 +55,27 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     scene.__dungeonWeaponVfx?.impact?.(target.x, target.y, { critical: projectile.critical })
   }
 
-  const makeVisual = (spec, start, angle) => {
+  const makeVisual = (spec, start, angle, tint) => {
     if (spec.archetype === 'bow') {
-      const visual = scene.add?.rectangle?.(start.x, start.y, 20, 3, 0xe7d9bd, 0.96)?.setRotation?.(angle)?.setDepth?.(28)
-      return { visual, glow: null }
+      const visual = scene.add?.rectangle?.(start.x, start.y, 20, 3, tint ?? 0xe7d9bd, 0.96)?.setRotation?.(angle)?.setDepth?.(28)
+      const glow = scene.add?.rectangle?.(start.x, start.y, 24, 7, tint ?? 0xe7d9bd, 0.12)?.setRotation?.(angle)?.setDepth?.(27)
+      return { visual, glow }
     }
-    const visual = scene.add?.circle?.(start.x, start.y, 7, 0xc984ff, 0.96)?.setStrokeStyle?.(2, 0xf0d9ff, 0.92)?.setDepth?.(28)
-    const glow = scene.add?.circle?.(start.x, start.y, 14, 0xc984ff, 0.16)?.setDepth?.(27)
+    const visual = scene.add?.circle?.(start.x, start.y, 7, tint ?? 0xc984ff, 0.96)?.setStrokeStyle?.(2, 0xf0d9ff, 0.92)?.setDepth?.(28)
+    const glow = scene.add?.circle?.(start.x, start.y, 14, tint ?? 0xc984ff, 0.16)?.setDepth?.(27)
     return { visual, glow }
+  }
+
+  const launchVfx = (spec, start, profile) => {
+    if (!profile.attack) return
+    const kind = spec.archetype === 'staff' ? 'aura' : 'sparkle'
+    scene.__dungeonVfx?.[kind]?.(start.x, start.y, {
+      tint: profile.tint,
+      alpha: Math.min(0.78, profile.attack.alpha ?? 0.6),
+      scale: spec.archetype === 'staff' ? 0.72 : 0.58,
+      depth: 27,
+      seed: `weapon-projectile-launch:${profile.theme}:${Math.round(start.x)}:${Math.round(start.y)}`,
+    })
   }
 
   const fire = (target) => {
@@ -77,7 +91,8 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     const effectiveDamage = weaponAttackDamage(scene.playerState, scene.playerState.damage ?? 1)
     const rolled = rollDamage({ ...scene.playerState, damage: effectiveDamage }, random)
     const damage = modifiedDamage(scene.playerState, target, rolled.damage)
-    const visuals = makeVisual(spec, start, angle)
+    const vfxProfile = weaponVfxProfile(scene.playerState.equippedWeapon ?? { rarity: scene.playerState.weaponRarity ?? 'common' })
+    const visuals = makeVisual(spec, start, angle, vfxProfile.tint)
 
     scene.playerFacing = directionFromTarget(scene.playerState, target, scene.playerFacing)
     scene.playerAttacking = true
@@ -86,7 +101,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       scene.playerAttacking = false
       scene.syncPlayerAnimation?.()
     })
-    scene.__dungeonWeaponVfx?.attack?.(target)
+    launchVfx(spec, start, vfxProfile)
 
     projectiles.push({
       ...spec,
@@ -123,6 +138,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       projectile.visual?.setPosition?.(projectile.x, projectile.y)
       projectile.glow?.setPosition?.(projectile.x, projectile.y)
       projectile.visual?.setRotation?.(Math.atan2(projectile.vy, projectile.vx))
+      projectile.glow?.setRotation?.(Math.atan2(projectile.vy, projectile.vx))
 
       const target = projectile.target
       const hitRadius = projectile.radius + (target?.hitRadius ?? (target?.boss ? 26 : 15))
