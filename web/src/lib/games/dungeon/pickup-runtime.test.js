@@ -103,6 +103,8 @@ test('auto potion consumes one stored potion at thirty percent health', () => {
 test('ground weapon uses the same rarity and archetype texture as equipped weapon', () => {
   const scene = runtimeScene()
   let oldVisual = null
+  const killed = []
+  scene.tweens = { killTweensOf(target) { killed.push(target) } }
   scene.spawnDrop = function spawnDrop(x, y, item) {
     oldVisual = { scaleX: 1, scaleY: 1, setY() {}, setScale() {}, destroy() { this.destroyed = true } }
     this.drops.push({ x, y, item, visual: oldVisual, glow: { setAlpha() {} } })
@@ -113,6 +115,22 @@ test('ground weapon uses the same rarity and archetype texture as equipped weapo
   scene.spawnDrop(10, 20, { type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'rare', damage: 22, affixes: [] })
   assert.equal(scene.drops[0].visual.textureKey, 'dungeon-held-weapon-dagger-rare')
   assert.equal(oldVisual.destroyed, true)
+  assert.ok(killed.includes(oldVisual), 'replaced placeholder tween must be killed')
+})
+
+test('destroying a drop kills permanent tweens for all of its visuals', () => {
+  const scene = runtimeScene()
+  const killed = []
+  scene.tweens = { killTweensOf(target) { killed.push(target) } }
+  installPickupInteraction(scene)
+  const visual = {}
+  const glow = {}
+  const label = {}
+  const sparkleA = {}
+  const sparkleB = {}
+  const drop = { visual, glow, label, sparkles: [sparkleA, sparkleB] }
+  scene.destroyDrop(drop)
+  assert.deepEqual(killed, [visual, glow, label, sparkleA, sparkleB])
 })
 
 test('equipping with E leaves the previous weapon on the ground', () => {
