@@ -6,11 +6,16 @@ import { circleHitsSolid } from './spatial.js'
 
 function visual() {
   return {
+    text: '',
+    x: 0,
+    y: 0,
     setDepth() { return this },
     setStrokeStyle() { return this },
     setOrigin() { return this },
     setVisible() { return this },
-    destroy() {},
+    setText(value) { this.text = String(value); return this },
+    setPosition(x, y) { this.x = x; this.y = y; return this },
+    destroy() { this.destroyed = true },
   }
 }
 
@@ -30,7 +35,7 @@ function makeScene() {
     playerBar: {},
     enemies: [],
     drops: [{ x: 300, y: 300, item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 31, affixes: [] } }],
-    portal: { live: true },
+    portal: { x: 800, y: 500, unlockAt: 0, glow: visual(), ring: visual(), core: visual() },
     time: { now: 1000 },
     __roomGeometry: geometries[1],
     __dungeonSpatial: {
@@ -42,15 +47,16 @@ function makeScene() {
     add: { circle: () => visual(), text: () => visual() },
     tweens: { add() {} },
     events: { on(_name, fn) { updateHandler = fn }, off() {}, once() {} },
-    destroyPortal() { this.portal = null },
+    destroyPortal() { this.portal?.countdownLabel?.destroy?.(); this.portal = null },
     clearEnemies() { this.enemies = [] },
     clearEnemyProjectiles() {},
     clearDrops() { this.drops = [] },
     spawnDrop(x, y, item) { this.drops.push({ x, y, item }) },
-    openPortal() { this.portal = { live: true } },
+    openPortal() { this.portal = { x: this.__roomGeometry.exit.x, y: this.__roomGeometry.exit.y, unlockAt: 0, glow: visual(), ring: visual(), core: visual() } },
     drawArena() {},
     updateHealthBar() {},
     showBanner() {},
+    updatePortal() {},
     startFloor() {
       this.floorCleared = false
       this.floorKills = 0
@@ -65,6 +71,7 @@ function makeScene() {
       this.enemies = [{ hp: 20, maxHp: 20 }]
       this.drops = []
       this.__roomGeometry = geometries[internalFloor]
+      this.portal = null
     },
   }
   return { scene, getInternalFloor: () => internalFloor, update: () => updateHandler?.() }
@@ -94,74 +101,77 @@ test('forward portal from backtracked floor returns to cached deeper floor witho
   assert.equal(scene.__infiniteDungeon.getProgress().floor, 2)
 })
 
-test('back portal asks for confirmation before returning to the previous floor', () => {
+test('back portal requires three continuous seconds and transitions without confirmation', () => {
   const { scene, update } = makeScene()
-  let prompts = 0
-  const runtime = installDungeonBacktracking(scene, {
-    confirmRetreat() {
-      prompts++
-      return false
-    },
-  })
-
+  installDungeonBacktracking(scene)
   scene.advanceFloor()
+
   scene.time.now = 2000
   scene.playerState.x = 120
   scene.playerState.y = 184
   update()
-
-  assert.equal(prompts, 1)
   assert.equal(scene.floor, 2)
-  assert.equal(runtime.getVisibleProgress().floor, 2)
-})
 
-test('cancelled backtrack confirmation stays dismissed until the player leaves the portal', () => {
-  const { scene, update } = makeScene()
-  let prompts = 0
-  installDungeonBacktracking(scene, {
-    confirmRetreat() {
-      prompts++
-      return false
-    },
-  })
-
-  scene.advanceFloor()
-  scene.time.now = 2000
-  scene.playerState.x = 120
-  scene.playerState.y = 184
+  scene.time.now = 3999
   update()
+  assert.equal(scene.floor, 2)
+
+  scene.time.now = 5000
   update()
-  assert.equal(prompts, 1)
-
-  scene.playerState.x = 220
-  scene.playerState.y = 184
-  update()
-
-  scene.playerState.x = 120
-  scene.playerState.y = 184
-  update()
-  assert.equal(prompts, 2)
-})
-
-test('confirming the backtrack prompt returns to the previous floor', () => {
-  const { scene, update } = makeScene()
-  let prompts = 0
-  installDungeonBacktracking(scene, {
-    confirmRetreat() {
-      prompts++
-      return true
-    },
-  })
-
-  scene.advanceFloor()
-  scene.time.now = 2000
-  scene.playerState.x = 120
-  scene.playerState.y = 184
-  update()
-
-  assert.equal(prompts, 1)
   assert.equal(scene.floor, 1)
   assert.equal(scene.__infiniteDungeon.getProgress().floor, 1)
+})
+
+test('running through the back portal resets the countdown instead of changing floors', () => {
+  const { scene, update } = makeScene()
+  installDungeonBacktracking(scene)
+  scene.advanceFloor()
+
+  scene.time.now = 2000
+  scene.playerState.x = 120
+  scene.playerState.y = 184
+  update()
+
+  scene.time.now = 3200
+  scene.playerState.x = 220
+  update()
+
+  scene.time.now = 6000
+  scene.playerState.x = 120
+  update()
+  assert.equal(scene.floor, 2)
+
+  scene.time.now = 8999
+  update()
+  assert.equal(scene.floor, 2)
+
+  scene.time.now = 9000
+  update()
+  assert.equal(scene.floor, 1)
+})
+
+test('forward portal uses the same three-second dwell behavior', () => {
+  const { scene } = makeScene()
+  installDungeonBacktracking(scene)
+
+  scene.time.now = 1000
+  scene.updatePortal(1000)
+  assert.equal(scene.floor, 1)
+  assert.equal(scene.portal.countdownLabel.text, '3')
+
+  scene.updatePortal(2500)
+  assert.equal(scene.floor, 1)
+  assert.equal(scene.portal.countdownLabel.text, '2')
+
+  scene.playerState.x = 700
+  scene.updatePortal(2800)
+  assert.equal(scene.portal.countdownLabel, null)
+
+  scene.playerState.x = 800
+  scene.updatePortal(5000)
+  assert.equal(scene.floor, 1)
+  scene.updatePortal(8000)
+  assert.equal(scene.floor, 2)
 })
 
 test('restored drops bypass rerolling so old equipment keeps its exact damage', () => {
