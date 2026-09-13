@@ -20,10 +20,11 @@
     en: { title:'Endless Dungeon', subtitle:'WASD move · auto attack · Space skill · E interact/equip', hp:'HP', damage:'Damage', kills:'Kills', floor:'Floor', chapter:'Chapter', room:'Room', weapon:'Weapon', none:'None', loading:'Entering the dungeon…', back:'Back to Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion:'Health potion restored {heal} HP.', storePotion:'Health potion stored.', fullHealth:'HP is already full.', dropWeapon:'{rarity} equipment dropped!', dropPotion:'Health potion dropped!', gameover:'Run ended.', runEnded:'RUN ENDED', runSummary:'DUNGEON RECORD', restart:'Restart', skill:'Active skill hit {hits} enemies.', floorTitle:'FLOOR {floor}', floorClear:'FLOOR CLEAR', floorStart:'Entered floor {floor}.', portal:'Exit portal opened. Step into the green portal.', dungeonBlade:'Dungeon Blade', rarityCommon:'Common', rarityUncommon:'Uncommon', rarityRare:'Rare', rarityEpic:'Epic', current:'Equipped', ground:'Ground Item', equip:'Equip', emptyWeapon:'No weapon equipped', combat:'Combat', elite:'Elite', rest:'Rest', boss:'Boss', restTitle:'REST CAMP', restComplete:'Rest complete · exit opened', restRecover:'Recover 50% max HP', restTemper:'Temper current weapon', restFortune:'Improve next loot quality', restEntered:'Rest floor found. Approach the camp to choose.', restChoice:'Selected: {choice}', openChest:'Open Chest', chestOpened:'Chest opened!', touchSkill:'SKILL', touchInteract:'USE', potion:'Potion', usePotion:'Use potion', details:'Stats', close:'Resume', baseDamage:'Weapon damage', totalDamage:'Total damage', affixes:'Affixes', noAffixes:'No affixes', paused:'GAME PAUSED' }
   }
 
-  let mount, game, gameResources, touchInput = null, pickupRuntime = null
+  let mount, stageShell, gameViewport, game, gameResources, touchInput = null, pickupRuntime = null
   let mounted = false, ready = false, gameOver = false, panelOpen = false
   let error = '', locale = 'en', eventText = ''
   let stats = initialDungeonStats(), progress = initialDungeonProgress()
+  let viewportFrame = 0
 
   const t = (key, values = {}) => { let text = messages[locale]?.[key] ?? messages.en[key] ?? key; for (const [name,value] of Object.entries(values)) text = text.replace(`{${name}}`, value); return text }
   const rarityName = (rarity) => { const key = { common:'rarityCommon', uncommon:'rarityUncommon', rare:'rarityRare', epic:'rarityEpic' }[rarity]; return key ? t(key) : '' }
@@ -49,6 +50,21 @@
     if ((stats.healthPotions ?? 0) <= 0) return
     if (stats.hp >= stats.maxHp) { eventText = t('fullHealth'); return }
     if (pickupRuntime?.useHealthPotion?.()) eventText = t('pickupPotion', { heal: 28 })
+  }
+
+  function syncGameViewport() {
+    cancelAnimationFrame(viewportFrame)
+    viewportFrame = requestAnimationFrame(() => {
+      const canvas = mount?.querySelector?.('canvas')
+      if (!canvas || !stageShell || !gameViewport) return
+      const canvasRect = canvas.getBoundingClientRect()
+      const shellRect = stageShell.getBoundingClientRect()
+      if (!canvasRect.width || !canvasRect.height) return
+      gameViewport.style.left = `${canvasRect.left - shellRect.left}px`
+      gameViewport.style.top = `${canvasRect.top - shellRect.top}px`
+      gameViewport.style.width = `${canvasRect.width}px`
+      gameViewport.style.height = `${canvasRect.height}px`
+    })
   }
 
   function onEvent(event) {
@@ -85,6 +101,7 @@
       if (!mounted) return
       const runGame = createDungeonGame({ Phaser, parent: mount, assets, labels: { floor:(floor)=>t('floorTitle',{floor}), floorClear:()=>t('floorClear'), rarity:(rarity)=>rarityName(rarity), affix:(id,value,tier)=>formatAffixLabel({id,value,tier},locale) }, onStats(next) { stats = { ...stats, ...next } }, onEvent })
       game = runGame
+      requestAnimationFrame(() => { syncGameViewport(); requestAnimationFrame(syncGameViewport) })
       let attempts = 0
       const installRuntime = () => {
         if (!mounted || game !== runGame) return
@@ -97,12 +114,30 @@
         if (!scene.__infiniteDungeon) scene.__infiniteDungeon = installInfiniteDungeon(scene, { onProgress(next){ progress = next }, onEvent, label:(key)=>t(({floor:'floor',chapter:'chapter',floorClear:'floorClear',restTitle:'restTitle',restComplete:'restComplete','rest.recover':'restRecover','rest.temper':'restTemper','rest.fortune':'restFortune'})[key]??key) })
         installDungeonSpatial(scene, { getProgress:()=>scene.__infiniteDungeon?.getProgress?.()??progress, onEvent, label:(key)=>t(key) })
         installDungeonAttackRuntime(scene); installDungeonBacktracking(scene, { onProgress(next){ progress = next } }); touchInput = installDungeonTouchInput(scene)
+        syncGameViewport()
       }
       installRuntime(); ready = true
     } catch (cause) { console.error(cause); error = cause?.message || 'Failed to start dungeon' }
   }
 
-  onMount(() => { mounted = true; const saved = localStorage.getItem('arcade.locale'); locale = saved || (navigator.language?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en'); startDungeon(); return () => { mounted = false; touchInput?.stopMove(); game?.destroy(true); game = null } })
+  onMount(() => {
+    mounted = true
+    const saved = localStorage.getItem('arcade.locale')
+    locale = saved || (navigator.language?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en')
+    const observer = new ResizeObserver(syncGameViewport)
+    if (stageShell) observer.observe(stageShell)
+    window.addEventListener('resize', syncGameViewport)
+    startDungeon()
+    return () => {
+      mounted = false
+      cancelAnimationFrame(viewportFrame)
+      observer.disconnect()
+      window.removeEventListener('resize', syncGameViewport)
+      touchInput?.stopMove()
+      game?.destroy(true)
+      game = null
+    }
+  })
 </script>
 
 <svelte:head><title>{t('title')} · AQI Arcade</title></svelte:head>
@@ -113,43 +148,45 @@
     <div class="actions"><button class:active={locale==='zh-CN'} on:click={()=>setLocale('zh-CN')}>中文</button><button class:active={locale==='en'} on:click={()=>setLocale('en')}>EN</button><a href="/">{t('back')}</a></div>
   </header>
 
-  <section class="stage-shell">
+  <section bind:this={stageShell} class="stage-shell">
     <div bind:this={mount} class="stage"></div>
-    <div class="game-hud">
-      <div class="vitals">
-        <div class="hp-line"><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div>
-        <div class="hp-track"><i style={`width:${hpPercent}%`}></i></div>
-        <div class="micro"><span>F{progress.floor}</span><span>{roomName(progress.roomRole)}</span><span>☠ {stats.kills}</span></div>
-      </div>
-      <div class="hud-actions">
-        <button class="potion-chip" disabled={(stats.healthPotions??0)<=0} on:click={usePotion} aria-label={t('usePotion')}>
-          <span class="potion-bottle" aria-hidden="true"></span><span class="potion-number">{stats.healthPotions??0}</span>
-        </button>
-        <button class="weapon-chip" on:click={togglePanel}>
-          <span class="weapon-kicker">{t('weapon')} · {t('details')}</span>
-          <strong class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} ${t('dungeonBlade')}` : t('none')}</strong>
-          <small>{stats.weapon ? `+${weaponModel.damage} ${t('baseDamage')}` : t('emptyWeapon')}</small>
-        </button>
-      </div>
-    </div>
-
-    {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
-    {#if !ready && !error}<div class="overlay">{t('loading')}</div>{/if}
-    {#if error}<div class="overlay error">{error}</div>{/if}
-
-    {#if panelOpen}
-      <div class="stats-overlay" role="dialog" aria-modal="true" aria-label={t('details')}>
-        <div class="stats-panel">
-          <div class="pause-mark">II · {t('paused')}</div>
-          <div class="weapon-title"><div><span>{t('current')}</span><h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} ${t('dungeonBlade')}` : t('emptyWeapon')}</h2></div><button class="close" on:click={()=>setPanel(false)}>×</button></div>
-          <div class="stat-grid"><div><span>{t('baseDamage')}</span><strong>{weaponModel.damage}</strong></div><div><span>{t('totalDamage')}</span><strong>{stats.damage}</strong></div><div><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div><div><span>{t('potion')}</span><strong class="potion-count"><span class="potion-bottle small" aria-hidden="true"></span> × {stats.healthPotions??0}</strong></div></div>
-          <div class="affix-box"><span>{t('affixes')}</span>{#if weaponModel.affixes.length}<div class="affix-list">{#each weaponModel.affixes as affix}<div>◆ {affix}</div>{/each}</div>{:else}<p>{t('noAffixes')}</p>{/if}</div>
-          <div class="panel-actions"><button class="use-potion" disabled={(stats.healthPotions??0)<=0} on:click={usePotion}><span class="potion-bottle small" aria-hidden="true"></span>{t('usePotion')} · {stats.healthPotions??0}</button><button class="resume" on:click={()=>setPanel(false)}>{t('close')}</button></div>
+    <div bind:this={gameViewport} class="game-viewport">
+      <div class="game-hud">
+        <div class="vitals">
+          <div class="hp-line"><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div>
+          <div class="hp-track"><i style={`width:${hpPercent}%`}></i></div>
+          <div class="micro"><span>F{progress.floor}</span><span>{roomName(progress.roomRole)}</span><span>☠ {stats.kills}</span></div>
+        </div>
+        <div class="hud-actions">
+          <button class="potion-chip" disabled={(stats.healthPotions??0)<=0} on:click={usePotion} aria-label={t('usePotion')}>
+            <span class="potion-bottle" aria-hidden="true"></span><span class="potion-number">{stats.healthPotions??0}</span>
+          </button>
+          <button class="weapon-chip" on:click={togglePanel}>
+            <span class="weapon-kicker">{t('weapon')} · {t('details')}</span>
+            <strong class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} ${t('dungeonBlade')}` : t('none')}</strong>
+            <small>{stats.weapon ? `+${weaponModel.damage} ${t('baseDamage')}` : t('emptyWeapon')}</small>
+          </button>
         </div>
       </div>
-    {/if}
 
-    {#if gameOver}<div class="gameover-overlay"><div class="gameover-panel" role="dialog" aria-modal="true"><div class="gameover-kicker">RUN ENDED</div><h2>{t('runEnded')}</h2><div class="run-stats"><div><span>{t('floor')}</span><strong>{runSummary.floor}</strong></div><div><span>{t('kills')}</span><strong>{runSummary.kills}</strong></div></div><div class="run-weapon"><span>{t('weapon')}</span><strong>{runSummary.weapon ? `${rarityName(runSummary.rarity)} ${t('dungeonBlade')} +${runSummary.damage}` : t('none')}</strong></div><div class="gameover-actions"><a href="/">{t('back')}</a><button on:click={startDungeon}>{t('restart')}</button></div></div></div>{/if}
+      {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
+      {#if !ready && !error}<div class="overlay">{t('loading')}</div>{/if}
+      {#if error}<div class="overlay error">{error}</div>{/if}
+
+      {#if panelOpen}
+        <div class="stats-overlay" role="dialog" aria-modal="true" aria-label={t('details')}>
+          <div class="stats-panel">
+            <div class="pause-mark">II · {t('paused')}</div>
+            <div class="weapon-title"><div><span>{t('current')}</span><h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} ${t('dungeonBlade')}` : t('emptyWeapon')}</h2></div><button class="close" on:click={()=>setPanel(false)}>×</button></div>
+            <div class="stat-grid"><div><span>{t('baseDamage')}</span><strong>{weaponModel.damage}</strong></div><div><span>{t('totalDamage')}</span><strong>{stats.damage}</strong></div><div><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div><div><span>{t('potion')}</span><strong class="potion-count"><span class="potion-bottle small" aria-hidden="true"></span> × {stats.healthPotions??0}</strong></div></div>
+            <div class="affix-box"><span>{t('affixes')}</span>{#if weaponModel.affixes.length}<div class="affix-list">{#each weaponModel.affixes as affix}<div>◆ {affix}</div>{/each}</div>{:else}<p>{t('noAffixes')}</p>{/if}</div>
+            <div class="panel-actions"><button class="use-potion" disabled={(stats.healthPotions??0)<=0} on:click={usePotion}><span class="potion-bottle small" aria-hidden="true"></span>{t('usePotion')} · {stats.healthPotions??0}</button><button class="resume" on:click={()=>setPanel(false)}>{t('close')}</button></div>
+          </div>
+        </div>
+      {/if}
+
+      {#if gameOver}<div class="gameover-overlay"><div class="gameover-panel" role="dialog" aria-modal="true"><div class="gameover-kicker">RUN ENDED</div><h2>{t('runEnded')}</h2><div class="run-stats"><div><span>{t('floor')}</span><strong>{runSummary.floor}</strong></div><div><span>{t('kills')}</span><strong>{runSummary.kills}</strong></div></div><div class="run-weapon"><span>{t('weapon')}</span><strong>{runSummary.weapon ? `${rarityName(runSummary.rarity)} ${t('dungeonBlade')} +${runSummary.damage}` : t('none')}</strong></div><div class="gameover-actions"><a href="/">{t('back')}</a><button on:click={startDungeon}>{t('restart')}</button></div></div></div>{/if}
+    </div>
   </section>
 
   <footer><span>{eventText || t('subtitle')}</span><span>{t('asset')}</span></footer>
@@ -162,8 +199,9 @@
   .topbar{width:min(1180px,100%);margin:0 auto;display:flex;justify-content:space-between;gap:20px;align-items:center;min-height:46px}
   .title-copy{min-width:0}.brand{color:#c1ff56;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.18em}.topbar h1{display:inline;margin:0 0 0 12px;font-size:22px;letter-spacing:-.04em}.topbar p{display:inline;margin:0 0 0 12px;color:#6f7882;font-size:11px;white-space:nowrap}
   .actions{display:flex;gap:6px;align-items:center;flex:0 0 auto}.actions button,.actions a{height:30px;padding:0 9px;border:0;background:#111419;color:#89939e;font:inherit;font-size:10px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}.actions button.active{background:#182017;color:#c1ff56}
-  .stage-shell{position:relative;align-self:center;justify-self:center;width:min(1180px,100%,calc((100dvh - 108px) * 1.6));max-height:calc(100dvh - 108px);aspect-ratio:16/10;background:#0b0d10;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;box-shadow:0 14px 38px rgba(0,0,0,.3)}
-  .stage{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}.stage :global(canvas){display:block!important;width:100%!important;height:100%!important;margin:0!important;touch-action:none}
+  .stage-shell{position:relative;align-self:stretch;justify-self:center;width:min(1180px,100%);height:100%;min-height:0;background:#050608;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;box-shadow:0 14px 38px rgba(0,0,0,.3)}
+  .stage{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;max-width:100%!important;max-height:100%!important;margin:auto!important;touch-action:none}
+  .game-viewport{position:absolute;z-index:30;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
   .game-hud{position:absolute;z-index:40;left:12px;right:12px;top:10px;display:flex;justify-content:space-between;gap:12px;pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .vitals{width:min(286px,40%);padding:9px 12px 10px;background:rgba(5,7,10,.66);clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%);box-shadow:0 8px 20px rgba(0,0,0,.25);backdrop-filter:blur(2px)}
   .hp-line{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#9099a3;text-shadow:0 1px 2px #000}.hp-line strong{font-size:12px;color:#f4f0e8}.hp-track{height:7px;margin-top:6px;background:rgba(78,25,33,.6);box-shadow:inset 0 0 0 1px rgba(0,0,0,.45)}.hp-track i{display:block;height:100%;background:#df5364;box-shadow:0 0 8px rgba(223,83,100,.28)}
@@ -172,18 +210,18 @@
   .potion-bottle{position:relative;display:inline-block;width:15px;height:18px;flex:0 0 auto;border-radius:3px 3px 6px 6px;background:#b92f43;box-shadow:inset 0 -5px 0 rgba(82,12,25,.42),0 2px 7px rgba(0,0,0,.36)}.potion-bottle::before{content:"";position:absolute;left:4px;top:-5px;width:7px;height:6px;border-radius:2px 2px 1px 1px;background:#c9bea5;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}.potion-bottle::after{content:"";position:absolute;left:3px;top:4px;width:3px;height:6px;border-radius:2px;background:rgba(255,210,214,.52)}.potion-bottle.small{width:12px;height:15px;border-radius:3px 3px 5px 5px}.potion-bottle.small::before{left:3px;top:-4px;width:6px;height:5px}.potion-bottle.small::after{left:2px;top:3px;width:2px;height:5px}
   .weapon-chip{min-width:206px;padding:7px 13px 8px;text-align:left;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}.weapon-kicker,.weapon-chip small{display:block;color:#727d88;font:800 8px ui-monospace,monospace;letter-spacing:.09em;text-transform:uppercase}.weapon-chip strong{display:block;margin:2px 0;font:900 11px ui-monospace,monospace;text-shadow:0 1px 3px #000}
   .common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}
-  .touch-controls{display:none;position:absolute;inset:0;z-index:45;pointer-events:none}.joystick-slot{position:absolute;left:max(16px,env(safe-area-inset-left));bottom:max(42px,calc(env(safe-area-inset-bottom) + 28px));pointer-events:auto}.touch-actions{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(42px,calc(env(safe-area-inset-bottom) + 28px));display:flex;align-items:flex-end;gap:12px;pointer-events:auto}.touch-button{width:72px;height:72px;border-radius:50%;border:1px solid rgba(244,240,232,.38);background:rgba(15,18,23,.68);color:#f4f0e8;font:800 10px ui-monospace,monospace;touch-action:manipulation;box-shadow:0 5px 15px rgba(0,0,0,.28)}.touch-button.skill{width:84px;height:84px;color:#d7c4ff;border-color:rgba(201,132,255,.64);background:rgba(74,38,96,.62)}.touch-button.interact{color:#c1ff56;border-color:rgba(193,255,86,.55)}
-  .overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,monospace;font-weight:800;z-index:60}.overlay.error{color:#ff6875;padding:32px;text-align:center}
-  .stats-overlay,.gameover-overlay{position:absolute;inset:0;z-index:80;display:grid;place-items:center;padding:18px;background:rgba(3,4,6,.74);backdrop-filter:blur(4px)}.stats-panel,.gameover-panel{width:min(520px,calc(100% - 20px));box-sizing:border-box;padding:22px;background:rgba(14,18,23,.96);box-shadow:0 20px 55px rgba(0,0,0,.55);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.pause-mark{color:#c1ff56;font-size:9px;font-weight:900;letter-spacing:.18em}.weapon-title{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-top:10px}.weapon-title span,.affix-box>span,.stat-grid span,.run-stats span,.run-weapon span{display:block;color:#68737f;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.weapon-title h2{margin:5px 0 0;font-size:24px}.close{width:42px;height:42px;border:0;background:#1a2028;color:#d8dde2;font-size:24px;cursor:pointer}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;background:#090c10}.stat-grid>div{padding:12px;border-right:1px solid rgba(71,80,91,.45)}.stat-grid>div:last-child{border:0}.stat-grid strong{display:block;margin-top:4px;font-size:16px}.potion-count{display:flex!important;align-items:center;gap:6px}.affix-box{margin-top:12px;padding:14px;background:#090c10}.affix-list{display:grid;gap:7px;margin-top:9px;color:#cbd3dc;font-size:12px}.affix-box p{margin:8px 0 0;color:#65707c;font-size:11px}.panel-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:16px}.panel-actions button,.gameover-actions button,.gameover-actions a{min-height:50px;border:0;font:900 11px ui-monospace,monospace;letter-spacing:.05em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}.use-potion{background:#2a1319;color:#ff8993}.use-potion:disabled{opacity:.35}.resume{background:#c1ff56;color:#080a0d}.gameover-kicker{color:#ff6875;font-size:10px;font-weight:900;letter-spacing:.18em}.gameover-panel h2{margin:8px 0 16px}.run-stats{display:grid;grid-template-columns:1fr 1fr;background:#090c10}.run-stats>div,.run-weapon{padding:13px}.run-stats strong,.run-weapon strong{display:block;margin-top:4px}.run-weapon{margin-top:10px;background:#090c10}.gameover-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}.gameover-actions a{background:#171b21;color:#aab2bb}.gameover-actions button{background:#c1ff56;color:#080a0d}
+  .touch-controls{display:none;position:absolute;inset:0;z-index:45;pointer-events:none}.joystick-slot{position:absolute;left:16px;bottom:42px;pointer-events:auto}.touch-actions{position:absolute;right:16px;bottom:42px;display:flex;align-items:flex-end;gap:12px;pointer-events:auto}.touch-button{width:72px;height:72px;border-radius:50%;border:1px solid rgba(244,240,232,.38);background:rgba(15,18,23,.68);color:#f4f0e8;font:800 10px ui-monospace,monospace;touch-action:manipulation;box-shadow:0 5px 15px rgba(0,0,0,.28)}.touch-button.skill{width:84px;height:84px;color:#d7c4ff;border-color:rgba(201,132,255,.64);background:rgba(74,38,96,.62)}.touch-button.interact{color:#c1ff56;border-color:rgba(193,255,86,.55)}
+  .overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,monospace;font-weight:800;z-index:60;pointer-events:auto}.overlay.error{color:#ff6875;padding:32px;text-align:center}
+  .stats-overlay,.gameover-overlay{position:absolute;inset:0;z-index:80;display:grid;place-items:center;padding:18px;background:rgba(3,4,6,.74);backdrop-filter:blur(4px);pointer-events:auto}.stats-panel,.gameover-panel{width:min(520px,calc(100% - 20px));box-sizing:border-box;padding:22px;background:rgba(14,18,23,.96);box-shadow:0 20px 55px rgba(0,0,0,.55);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.pause-mark{color:#c1ff56;font-size:9px;font-weight:900;letter-spacing:.18em}.weapon-title{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-top:10px}.weapon-title span,.affix-box>span,.stat-grid span,.run-stats span,.run-weapon span{display:block;color:#68737f;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.weapon-title h2{margin:5px 0 0;font-size:24px}.close{width:42px;height:42px;border:0;background:#1a2028;color:#d8dde2;font-size:24px;cursor:pointer}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;background:#090c10}.stat-grid>div{padding:12px;border-right:1px solid rgba(71,80,91,.45)}.stat-grid>div:last-child{border:0}.stat-grid strong{display:block;margin-top:4px;font-size:16px}.potion-count{display:flex!important;align-items:center;gap:6px}.affix-box{margin-top:12px;padding:14px;background:#090c10}.affix-list{display:grid;gap:7px;margin-top:9px;color:#cbd3dc;font-size:12px}.affix-box p{margin:8px 0 0;color:#65707c;font-size:11px}.panel-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:16px}.panel-actions button,.gameover-actions button,.gameover-actions a{min-height:50px;border:0;font:900 11px ui-monospace,monospace;letter-spacing:.05em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}.use-potion{background:#2a1319;color:#ff8993}.use-potion:disabled{opacity:.35}.resume{background:#c1ff56;color:#080a0d}.gameover-kicker{color:#ff6875;font-size:10px;font-weight:900;letter-spacing:.18em}.gameover-panel h2{margin:8px 0 16px}.run-stats{display:grid;grid-template-columns:1fr 1fr;background:#090c10}.run-stats>div,.run-weapon{padding:13px}.run-stats strong,.run-weapon strong{display:block;margin-top:4px}.run-weapon{margin-top:10px;background:#090c10}.gameover-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}.gameover-actions a{background:#171b21;color:#aab2bb}.gameover-actions button{background:#c1ff56;color:#080a0d}
   footer{width:min(1180px,100%);margin:0 auto;display:flex;justify-content:space-between;gap:20px;color:#5f6872;font-size:10px;line-height:16px;min-height:16px}
   @media(any-pointer:coarse){.touch-controls{display:block}}
-  @media(max-width:900px){.topbar p{display:none}.stage-shell{width:min(100%,calc((100dvh - 92px) * 1.6));max-height:calc(100dvh - 92px)}}
+  @media(max-width:900px){.topbar p{display:none}}
   @media(max-width:720px){
     .page{padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));grid-template-rows:auto minmax(0,1fr);gap:5px}
     .topbar{min-height:32px;gap:8px}.topbar h1,.topbar p{display:none}.brand{font-size:9px}.actions{gap:3px}.actions button,.actions a{height:28px;padding:0 7px;background:rgba(17,20,25,.76);font-size:9px}
-    .stage-shell{width:min(100%,calc((100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 1.6));max-height:calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));box-shadow:none}
+    .stage-shell{width:100%;height:100%;box-shadow:none}
     .game-hud{left:7px;right:7px;top:7px;gap:5px}.vitals{width:43%;padding:7px 8px 8px}.hp-line{font-size:8px}.hp-line strong{font-size:10px}.hp-track{height:6px;margin-top:4px}.micro{gap:6px;margin-top:4px;font-size:7px}.hud-actions{gap:4px}.weapon-chip{min-width:0;width:124px;padding:6px 8px}.weapon-chip strong{font-size:9px}.weapon-chip small,.weapon-kicker{font-size:6px}.potion-chip{width:42px;height:42px}.potion-bottle{transform:scale(.9)}.potion-number{font-size:9px}
-    .stats-overlay,.gameover-overlay{padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-button{width:64px;height:64px}.touch-button.skill{width:76px;height:76px}.joystick-slot{left:max(10px,env(safe-area-inset-left));bottom:max(34px,calc(env(safe-area-inset-bottom) + 24px))}.touch-actions{right:max(10px,env(safe-area-inset-right));bottom:max(34px,calc(env(safe-area-inset-bottom) + 24px));gap:9px}footer{display:none}
+    .stats-overlay,.gameover-overlay{padding:8px;align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-button{width:64px;height:64px}.touch-button.skill{width:76px;height:76px}.joystick-slot{left:10px;bottom:34px}.touch-actions{right:10px;bottom:34px;gap:9px}footer{display:none}
   }
-  @media(max-height:520px){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.page{padding:5px;gap:4px;grid-template-rows:auto minmax(0,1fr)}.stage-shell{width:min(100%,calc((100dvh - 42px) * 1.6));max-height:calc(100dvh - 42px)}}
+  @media(max-height:520px){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.page{padding:5px;gap:4px;grid-template-rows:auto minmax(0,1fr)}}
 </style>
