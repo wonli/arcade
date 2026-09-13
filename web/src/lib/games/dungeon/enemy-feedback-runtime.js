@@ -23,8 +23,50 @@ export function bossTelegraphProfile(kind, { phase = 1 } = {}) {
   return { windupMs: 560, shapeCount: 3, radius: 130, alpha: phaseTwo ? 0.26 : 0.2 }
 }
 
+function addChargeWarning(scene, enemy) {
+  if (!scene?.add?.rectangle || !enemy) return
+  const profile = bossTelegraphProfile('charge', enemy)
+  const dx = (scene.playerState?.x ?? enemy.x) - enemy.x
+  const dy = (scene.playerState?.y ?? enemy.y) - enemy.y
+  const distance = Math.hypot(dx, dy) || 1
+  const rotation = Math.atan2(dy, dx)
+  const x = enemy.x + dx / 2
+  const y = enemy.y + dy / 2
+  const band = scene.add.rectangle(x, y, distance, profile.width, 0xff493f, profile.alpha).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(22)
+  const core = scene.add.rectangle(x, y, distance, 2, 0xffd0a8, 0.82).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(23)
+  scene.tweens?.add?.({ targets: band, alpha: profile.alpha * 1.7, duration: 210, yoyo: true, onComplete: () => band?.destroy?.() })
+  scene.tweens?.add?.({ targets: core, alpha: 0.28, duration: 210, yoyo: true, onComplete: () => core?.destroy?.() })
+}
+
+function addShockwaveWarning(scene, enemy) {
+  if (!scene?.add?.circle || !enemy) return
+  const profile = bossTelegraphProfile('shockwave', enemy)
+  const fill = scene.add.circle(enemy.x, enemy.y, profile.radius, 0xff5a47, profile.alpha * 0.45).setDepth?.(21)
+  const outer = scene.add.circle(enemy.x, enemy.y, profile.radius, 0xff5a47, 0.02).setStrokeStyle?.(4, 0xff8a63, 0.88).setDepth?.(23)
+  const inner = scene.add.circle(enemy.x, enemy.y, 28, 0xffc18f, 0.04).setStrokeStyle?.(3, 0xffd0a8, 0.82).setDepth?.(24)
+  scene.tweens?.add?.({ targets: fill, alpha: profile.alpha, duration: 280, yoyo: true, onComplete: () => fill?.destroy?.() })
+  scene.tweens?.add?.({ targets: outer, alpha: 0.38, duration: 280, yoyo: true, onComplete: () => outer?.destroy?.() })
+  scene.tweens?.add?.({ targets: inner, radius: profile.radius, alpha: 0.12, duration: profile.windupMs, onComplete: () => inner?.destroy?.() })
+}
+
 export function installDungeonEnemyFeedback(scene) {
   if (!scene || scene.__dungeonEnemyFeedback) return scene?.__dungeonEnemyFeedback ?? null
+
+  const originalBossCharge = typeof scene.bossCharge === 'function' ? scene.bossCharge.bind(scene) : null
+  const originalBossShockwave = typeof scene.bossShockwave === 'function' ? scene.bossShockwave.bind(scene) : null
+
+  if (originalBossCharge) {
+    scene.bossCharge = function feedbackBossCharge(enemy) {
+      addChargeWarning(scene, enemy)
+      return originalBossCharge(enemy)
+    }
+  }
+  if (originalBossShockwave) {
+    scene.bossShockwave = function feedbackBossShockwave(enemy) {
+      addShockwaveWarning(scene, enemy)
+      return originalBossShockwave(enemy)
+    }
+  }
 
   const hit = (enemy, origin, options = {}) => {
     if (!enemy?.visual) return
@@ -70,7 +112,11 @@ export function installDungeonEnemyFeedback(scene) {
     })
   }
 
-  const restore = () => { scene.__dungeonEnemyFeedback = null }
+  const restore = () => {
+    if (originalBossCharge) scene.bossCharge = originalBossCharge
+    if (originalBossShockwave) scene.bossShockwave = originalBossShockwave
+    scene.__dungeonEnemyFeedback = null
+  }
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
   const api = { hit, death, restore }
