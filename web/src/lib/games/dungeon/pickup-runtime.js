@@ -3,7 +3,7 @@ import { lootMotion } from './combat-feel.js'
 import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
-import { weaponVisualProfile } from './weapon-visual-runtime.js'
+import { createWeaponVisual } from './weapon-visual-runtime.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -118,11 +118,9 @@ function currentWeapon(scene) {
 }
 
 function syncGroundWeaponVisual(scene, drop, position) {
-  const profile = weaponVisualProfile(drop?.item)
-  if (!profile || !scene?.textures?.exists?.(profile.textureKey) || !scene.add?.image) return
-  const visual = scene.add.image(position.x, position.y, profile.textureKey)
+  const visual = createWeaponVisual(scene, drop?.item, position.x, position.y)
+  if (!visual) return
   visual?.setDepth?.(15)
-  visual?.setScale?.(profile.scale)
   drop.visual?.destroy?.()
   drop.visual = visual
 }
