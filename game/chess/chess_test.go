@@ -64,3 +64,19 @@ func TestIllegalMoveCannotLeaveOwnKingInCheck(t *testing.T) {
 	s.Board[7][4], s.Board[6][4], s.Board[0][4], s.Board[0][0] = WhiteKing, WhiteRook, BlackRook, BlackKing
 	if _, err := applyLegalMove(s, MoveData{From: Position{4,6}, To: Position{5,6}}); err == nil { t.Fatal("expected pinned rook move to be rejected") }
 }
+
+func TestKnightOnlyMovesInLShape(t *testing.T) {
+	s := emptyState(White)
+	s.Board[7][4], s.Board[0][4], s.Board[4][4], s.Board[2][5] = WhiteKing, BlackKing, WhiteKnight, BlackRook
+	legal := LegalMoves(s, White)
+	want := MoveData{From: Position{4,4}, To: Position{5,2}, Promotion: "q"}
+	if !containsMove(legal, want) { t.Fatal("expected knight L-shaped capture to be legal") }
+	for _, bad := range []MoveData{
+		{From: Position{4,4}, To: Position{4,2}},
+		{From: Position{4,4}, To: Position{4,3}},
+		{From: Position{4,4}, To: Position{6,4}},
+	} {
+		if containsMove(legal, bad) { t.Fatalf("illegal knight move accepted: %+v", bad) }
+		if _, err := applyLegalMove(s, bad); err == nil { t.Fatalf("illegal knight move applied: %+v", bad) }
+	}
+}
