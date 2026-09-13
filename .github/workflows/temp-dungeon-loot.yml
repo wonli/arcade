@@ -1,0 +1,27 @@
+name: temp dungeon loot verification
+
+on:
+  push:
+    branches:
+      - fix/dungeon-foundation
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Focused dungeon tests
+        run: node --test src/lib/games/dungeon/pickup-runtime.test.js src/lib/games/dungeon/loot-progression.test.js src/lib/games/dungeon/combat.test.js src/lib/games/dungeon/progression.test.js
+      - name: All dungeon tests
+        run: node --test src/lib/games/dungeon/*.test.js
+      - name: Production build
+        run: npm run build
