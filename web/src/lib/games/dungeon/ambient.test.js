@@ -11,9 +11,11 @@ class FakeAudio {
     this.preload = ''
     this.currentTime = 0
     this.paused = true
+    this.playCount = 0
   }
 
   async play() {
+    this.playCount++
     this.paused = false
   }
 
@@ -48,6 +50,25 @@ test('dungeon ambience uses the committed music track', async () => {
   ambient.stop()
   assert.equal(audio.paused, true)
   assert.equal(audio.currentTime, 0)
+  assert.equal(ambient.getState(), 'closed')
+})
+
+test('closed ambience cannot be restarted by a late input callback', async () => {
+  let audio = null
+  const windowImpl = {
+    Audio: class extends FakeAudio {
+      constructor(src) {
+        super(src)
+        audio = this
+      }
+    },
+  }
+  const ambient = createDungeonAmbient({ windowImpl })
+  await ambient.start()
+  ambient.stop()
+  await ambient.start()
+  assert.equal(audio.playCount, 1)
+  assert.equal(audio.paused, true)
   assert.equal(ambient.getState(), 'closed')
 })
 
