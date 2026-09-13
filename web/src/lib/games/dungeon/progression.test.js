@@ -57,14 +57,24 @@ test('difficulty scaling stays bounded on deep floors', () => {
   assert.ok(elite.damageMultiplier > combat.damageMultiplier)
 })
 
-test('player baseline grows with floor but remains below runaway enemy scaling', () => {
+test('player has meaningful power before the first chapter boss', () => {
+  const floorFour = playerProgressionProfile({ floor: 4, chapter: 1 })
+  const floorFive = playerProgressionProfile({ floor: 5, chapter: 1 })
+  const floorEight = playerProgressionProfile({ floor: 8, chapter: 1 })
+  assert.ok(floorFour.damageMultiplier >= 1.3)
+  assert.ok(floorFive.damageMultiplier >= 1.4)
+  assert.ok(floorFive.maxHpMultiplier >= 1.28)
+  assert.ok(floorEight.damageMultiplier >= 1.7)
+})
+
+test('player baseline grows with floor but equipment still has room to matter', () => {
   const first = playerProgressionProfile({ floor: 1, chapter: 1 })
   const mid = playerProgressionProfile({ floor: 20, chapter: 4 })
   const deep = playerProgressionProfile({ floor: 80, chapter: 14 })
   assert.deepEqual(first, { maxHpMultiplier: 1, damageMultiplier: 1 })
-  assert.ok(mid.maxHpMultiplier > 1.6)
-  assert.ok(mid.damageMultiplier > 1.2)
+  assert.ok(mid.maxHpMultiplier > 2.5)
+  assert.ok(mid.damageMultiplier > 2)
   assert.ok(deep.maxHpMultiplier <= 4)
-  assert.ok(deep.damageMultiplier <= 2.5)
-  assert.ok(deep.maxHpMultiplier > mid.maxHpMultiplier)
+  assert.ok(deep.damageMultiplier <= 3.25)
+  assert.ok(deep.maxHpMultiplier >= mid.maxHpMultiplier)
 })
