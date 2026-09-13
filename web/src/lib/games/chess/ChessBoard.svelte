@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte'
-  import { chessPieceGlyph } from './pieces.js'
+  import { chessPieceAsset } from './pieces.js'
   import { chessAudioSources, chessMoveEffect } from './audio.js'
 
   export let room
@@ -9,6 +9,7 @@
   export let onMove
 
   const baseCells = Array.from({ length: 64 }, (_, index) => ({ x: index % 8, y: Math.floor(index / 8) }))
+  const promotionValues = { q: 5, r: 4, b: 3, n: 2 }
 
   let selected = null
   let pendingPromotion = null
@@ -51,7 +52,7 @@
       bgm = new Audio(chessAudioSources.bgm)
       bgm.loop = true
       bgm.preload = 'auto'
-      bgm.volume = 0.12
+      bgm.volume = 0.08
     }
     if (!moveAudio) {
       moveAudio = new Audio(chessAudioSources.move)
@@ -146,6 +147,11 @@
     if (move) submit(move)
   }
 
+  function promotionAsset(piece) {
+    const value = promotionValues[piece] ?? 5
+    return chessPieceAsset(myColor === 'black' ? -value : value)
+  }
+
   function fileLabel(x) {
     return String.fromCharCode(97 + x)
   }
@@ -180,7 +186,14 @@
         {#if cell.x === (flipped ? 7 : 0)}<span class="rank">{rankLabel(cell.y)}</span>{/if}
         {#if cell.y === (flipped ? 0 : 7)}<span class="file">{fileLabel(cell.x)}</span>{/if}
         {#if pieceAt(cell.x, cell.y) !== 0}
-          <span class:white-piece={pieceAt(cell.x, cell.y) > 0} class:black-piece={pieceAt(cell.x, cell.y) < 0} class="piece">{chessPieceGlyph(pieceAt(cell.x, cell.y))}</span>
+          <img
+            class="piece"
+            class:white-piece={pieceAt(cell.x, cell.y) > 0}
+            class:black-piece={pieceAt(cell.x, cell.y) < 0}
+            src={chessPieceAsset(pieceAt(cell.x, cell.y))}
+            alt=""
+            draggable="false"
+          />
         {:else if isLegalTarget(cell.x, cell.y)}
           <span class="move-dot"></span>
         {/if}
@@ -192,10 +205,17 @@
     <div class="promotion" role="dialog" aria-label="Choose promotion piece">
       <span>PROMOTE TO</span>
       <div>
-        <button onclick={() => promoteTo('q')}>♛</button>
-        <button onclick={() => promoteTo('r')}>♜</button>
-        <button onclick={() => promoteTo('b')}>♝</button>
-        <button onclick={() => promoteTo('n')}>♞</button>
+        {#each ['q', 'r', 'b', 'n'] as piece}
+          <button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}>
+            <img
+              class:white-piece={myColor !== 'black'}
+              class:black-piece={myColor === 'black'}
+              src={promotionAsset(piece)}
+              alt=""
+              draggable="false"
+            />
+          </button>
+        {/each}
       </div>
       <button class="cancel" onclick={() => (pendingPromotion = null)}>Cancel</button>
     </div>
@@ -203,5 +223,5 @@
 </div>
 
 <style>
-  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:grid;place-items:center;width:82%;height:82%;font-size:clamp(32px,7.8vw,68px);line-height:1;transform:translateY(-1%);font-family:'Times New Roman','Noto Sans Symbols 2',serif;font-weight:400;user-select:none;-webkit-font-smoothing:antialiased}.white-piece{color:#fff7dc;text-shadow:-1px 0 #111,0 1px #111,1px 0 #111,0 -1px #111,0 3px 3px #0008}.black-piece{color:#111318;text-shadow:-1px 0 #f8efd8aa,0 1px #f8efd8aa,1px 0 #f8efd8aa,0 -1px #f8efd8aa,0 3px 3px #0006}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;color:#f4f0e8;font-size:38px;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}@media(max-width:640px){.chess-board{border-width:6px}.piece{font-size:clamp(30px,10vw,54px)}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}}
+  .chess-wrap{position:relative;width:min(100%,720px);margin:auto}.chess-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:10px solid #171b20;box-shadow:0 18px 50px #0008,0 0 0 1px #343a42}.chess-cell{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;cursor:default;font:inherit}.chess-cell.light{background:#d9d1bd}.chess-cell.dark{background:#68745d}.chess-cell.last{box-shadow:inset 0 0 0 999px #c1ff5630}.chess-cell.selected{box-shadow:inset 0 0 0 4px #c1ff56}.chess-cell.target{cursor:pointer}.chess-cell.target:after{content:'';position:absolute;width:28%;aspect-ratio:1;border:2px solid #c1ff56;border-radius:50%;opacity:.85}.chess-cell.capture:after{width:72%;border-width:4px;background:transparent}.piece{position:relative;z-index:2;display:block;width:78%;height:78%;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}.white-piece{filter:invert(1) drop-shadow(0 2px 1px #0008)}.black-piece{filter:drop-shadow(0 2px 1px #fff5)}.move-dot{width:18%;aspect-ratio:1;border-radius:50%;background:#c1ff56;box-shadow:0 0 0 4px #0b0d1025}.rank,.file{position:absolute;z-index:3;font-size:9px;font-weight:900;opacity:.7;pointer-events:none}.rank{top:4px;left:5px}.file{right:5px;bottom:3px}.dark .rank,.dark .file{color:#e9e1d0}.light .rank,.light .file{color:#4d5746}.promotion{position:absolute;inset:50% auto auto 50%;z-index:10;transform:translate(-50%,-50%);width:min(88%,360px);padding:18px;border:1px solid #3b424c;background:#111419;box-shadow:10px 10px 0 #050607;text-align:center}.promotion>span{display:block;margin-bottom:12px;color:#89929d;font-size:10px;font-weight:900;letter-spacing:.14em}.promotion>div{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion>div button{display:grid;place-items:center;aspect-ratio:1;border:1px solid #3b424c;background:#0b0d10;cursor:pointer}.promotion>div button:hover{border-color:#c1ff56}.promotion>div img{width:74%;height:74%;object-fit:contain}.promotion .cancel{margin-top:12px;border:0;background:transparent;color:#8e98a2;cursor:pointer}@media(max-width:640px){.chess-board{border-width:6px}.piece{width:80%;height:80%}.chess-cell.selected{box-shadow:inset 0 0 0 3px #c1ff56}}
 </style>
