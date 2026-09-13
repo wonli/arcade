@@ -50,11 +50,15 @@ export function dressThemedRooms(g, random) {
   for (const room of g.rooms) {
     if (room.theme === 'shrine') {
       const motif = rules.assemblies.statue
-      const left = room.x + TILE
+      // Pixel-tight collision is not enough when the landmark sits against the
+      // shoreline: radius-18 movement inflated the 13px foot until only a 14px
+      // centre-line slit remained on the west side. Move the whole authored
+      // assembly two tiles inward so the transparent flank has two practical
+      // 16px movement columns without changing the sprite or collision evidence.
+      const left = room.x + TILE * 3
       const top = room.y + TILE
       // Statue_fire's complete 5x5 assembly includes transparent floor beside
-      // its tapered body. The stone foot occupies local x=34..46, y=70..75;
-      // blocking three whole tiles here creates an invisible wall on both sides.
+      // its tapered body. The stone foot occupies local x=34..46, y=70..75.
       addProp(room,'statue',motif,left,top,{
         x:left+34,y:top+70,width:13,height:6,
       })
