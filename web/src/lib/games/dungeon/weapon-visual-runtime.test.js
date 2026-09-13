@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
+import { installDungeonWeaponVisuals, weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
 
 test('weapon visual profile maps rarity to distinct Soul weapon art without changing gameplay data', () => {
   assert.match(weaponVisualProfile({ type: 'weapon.dungeon_blade', rarity: 'common' }).path, /sword_01\.png$/)
@@ -31,4 +31,48 @@ test('attacking pose swings around the hand while preserving the facing side', (
   assert.notEqual(attack.angle, idle.angle)
   assert.ok(attack.x > player.x)
   assert.ok(attack.tip.x > player.x)
+})
+
+test('runtime attaches one weapon sprite, follows the player and returns the blade tip on swing', () => {
+  let update = null
+  const created = []
+  const scene = {
+    playerState: { x: 100, y: 120, weapon: 'weapon.dungeon_blade', weaponRarity: 'rare' },
+    playerFacing: 'right',
+    time: { now: 100, delayedCall() {} },
+    textures: { exists: () => true },
+    add: {
+      image(x, y, key) {
+        const object = {
+          x, y, key, visible: true, angle: 0,
+          setOrigin() { return this }, setScale() { return this }, setVisible(value) { this.visible = value; return this },
+          setPosition(nx, ny) { this.x = nx; this.y = ny; return this }, setAngle(value) { this.angle = value; return this },
+          setFlipX() { return this }, setDepth() { return this }, destroy() { this.destroyed = true },
+        }
+        created.push(object)
+        return object
+      },
+    },
+    load: { image() {}, once() {}, start() {} },
+    events: {
+      on(event, handler) { if (event === 'update') update = handler },
+      off() {}, once() {},
+    },
+  }
+
+  const runtime = installDungeonWeaponVisuals(scene)
+  update()
+  assert.equal(created.length, 1)
+  assert.equal(created[0].key, 'dungeon-held-weapon-rare')
+  assert.ok(created[0].x > scene.playerState.x)
+
+  const idleAngle = created[0].angle
+  const tip = runtime.swing()
+  assert.notEqual(created[0].angle, idleAngle)
+  assert.ok(tip.x > scene.playerState.x)
+
+  scene.playerState.x = 160
+  scene.time.now = 300
+  update()
+  assert.ok(created[0].x > 160)
 })
