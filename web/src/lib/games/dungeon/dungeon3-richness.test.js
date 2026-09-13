@@ -95,10 +95,14 @@ test('crypt coffin groups never seal an east-west room connection for the larges
         return other.center.y===crypt.center.y
       })
       if(!horizontal) continue
-      const left={x:crypt.x+16,y:crypt.center.y}
-      const right={x:crypt.x+crypt.width-16,y:crypt.center.y}
-      assert.ok(findPath(nav,left,crypt.center).length,`seed ${seed}: crypt west side sealed`)
-      assert.ok(findPath(nav,crypt.center,right).length,`seed ${seed}: crypt east side sealed`)
+      // Test actual connected shores. A closed outer bank 16px from water
+      // cannot hold a radius-26 actor and is not a room entrance.
+      for(const path of g.paths) {
+        const other=path.from===crypt.id?g.rooms[path.to]:path.to===crypt.id?g.rooms[path.from]:null
+        if(!other || other.center.y!==crypt.center.y) continue
+        const entrance={x:other.center.x<crypt.center.x?crypt.x+16:crypt.x+crypt.width-16,y:crypt.center.y}
+        assert.ok(findPath(nav,entrance,crypt.center).length,`seed ${seed}: crypt connection ${path.id} sealed`)
+      }
     }
   }
 })
