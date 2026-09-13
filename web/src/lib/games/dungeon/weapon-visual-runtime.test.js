@@ -44,6 +44,18 @@ test('idle weapon is rotated ninety degrees into a vertical back carry', () => {
   assert.equal(weaponPose(player, 'down').angle, 52)
 })
 
+test('long weapons ride higher on the back instead of dragging into the ground', () => {
+  const player = { x: 100, y: 120 }
+  const sword = weaponPose(player, 'right', { reachScale: 1 })
+  const staff = weaponPose(player, 'right', { reachScale: 1.25 })
+  const spear = weaponPose(player, 'right', { reachScale: 1.5 })
+  assert.ok(staff.y < sword.y)
+  assert.ok(spear.y < staff.y)
+  assert.ok(sword.y - spear.y >= 12)
+  assert.equal(spear.angle, sword.angle)
+  assert.equal(spear.depth, sword.depth)
+})
+
 test('attack reach scales with weapon archetype', () => {
   const player = { x: 200, y: 200 }
   const dagger = weaponPose(player, 'right', { attacking: true, reachScale: 0.78 })
