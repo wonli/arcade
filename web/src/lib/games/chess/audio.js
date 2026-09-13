@@ -1,7 +1,7 @@
 export const chessAudioSources = {
-  bgm: 'https://raw.githubusercontent.com/tegnike/aozora-islands/main/src/assets/audio/menu_music_loop.ogg',
-  move: 'https://raw.githubusercontent.com/tegnike/aozora-islands/main/src/assets/audio/sfx-card-play.ogg',
-  capture: 'https://raw.githubusercontent.com/tegnike/aozora-islands/main/src/assets/audio/sfx-damage.ogg'
+  bgm: '/assets/chess/audio/music_loop.mp3',
+  move: '/assets/chess/audio/move.ogg',
+  capture: '/assets/chess/audio/capture.ogg'
 }
 
 function pieceCount(board) {
