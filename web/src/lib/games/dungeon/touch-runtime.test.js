@@ -29,6 +29,22 @@ test('touch movement merges with keyboard for one update then restores key state
   assert.equal(scene.keys.W.isDown, false)
 })
 
+test('install clears stale keyboard state left behind by a destroyed run', () => {
+  let resetCalls = 0
+  const scene = {
+    keys: { A: { isDown: true }, D: { isDown: false }, W: { isDown: true }, S: { isDown: false }, SPACE: { _justDown: true } },
+    updatePlayer() {},
+    trySkill() {},
+    input: { keyboard: { resetKeys() { resetCalls++ }, addKey() { return null } } },
+    events: { once() {} },
+  }
+  installDungeonTouchInput(scene)
+  assert.equal(resetCalls, 1)
+  assert.equal(scene.keys.A.isDown, false)
+  assert.equal(scene.keys.W.isDown, false)
+  assert.equal(scene.keys.SPACE._justDown, false)
+})
+
 test('skill and interact reuse existing scene input paths', () => {
   let skillObserved = false
   let interacts = 0
@@ -46,6 +62,22 @@ test('skill and interact reuse existing scene input paths', () => {
   touch.triggerInteract()
   assert.equal(skillObserved, true)
   assert.equal(interacts, 1)
+})
+
+test('touch audio cannot restart after the scene is dead', () => {
+  let starts = 0
+  const scene = {
+    dead: true,
+    ambient: { start() { starts++; return Promise.resolve() } },
+    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { _justDown: false } },
+    updatePlayer() {},
+    trySkill() {},
+    input: { keyboard: { addKey() { return null } } },
+    events: { once() {} },
+  }
+  const touch = installDungeonTouchInput(scene)
+  touch.setMove(1, 0)
+  assert.equal(starts, 0)
 })
 
 test('shutdown restores wrapped scene methods', () => {
