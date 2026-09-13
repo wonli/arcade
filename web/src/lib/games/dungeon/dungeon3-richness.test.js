@@ -4,6 +4,7 @@ import { generateDungeonGeometry } from './map-generator.js'
 import { buildDungeon3TilePlan } from './dungeon3-renderer.js'
 import { activeTrapAt } from './dungeon3-hazards.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
+import { circleHitsSolid } from './spatial.js'
 
 test('themed room density varies across seeds while complete motifs and safe routes remain intact', () => {
   const coffinCounts = new Set()
@@ -98,6 +99,26 @@ test('crypt coffin groups never seal an east-west room connection for the larges
       const right={x:crypt.x+crypt.width-16,y:crypt.center.y}
       assert.ok(findPath(nav,left,crypt.center).length,`seed ${seed}: crypt west side sealed`)
       assert.ok(findPath(nav,crypt.center,right).length,`seed ${seed}: crypt east side sealed`)
+    }
+  }
+})
+
+test('visible east-west crypt paving stays walkable near coffin groups', () => {
+  for (let seed=1;seed<=400;seed++) {
+    const g=generateDungeonGeometry({runSeed:seed,floor:1})
+    for (const crypt of g.rooms.filter(room=>room.theme==='crypt')) {
+      const horizontal=g.paths.some(path=>{
+        if(path.from!==crypt.id&&path.to!==crypt.id) return false
+        const other=g.rooms[path.from===crypt.id?path.to:path.from]
+        return other.center.y===crypt.center.y
+      })
+      if(!horizontal) continue
+      for(const offsetY of [-16,0,16]) {
+        for(let x=crypt.x+32;x<=crypt.x+crypt.width-32;x+=16) {
+          assert.equal(circleHitsSolid({x,y:crypt.center.y+offsetY},20,g),false,
+            `seed ${seed}: visible crypt lane blocked at ${x},${crypt.center.y+offsetY}`)
+        }
+      }
     }
   }
 })
