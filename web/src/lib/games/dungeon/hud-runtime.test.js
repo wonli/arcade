@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { dungeonHudModel, HUD_INSET, HUD_WEAPON_ICON_URL } from './hud-runtime.js'
+import {
+  dungeonHudModel,
+  HUD_ACHIEVEMENT_ICON_URL,
+  HUD_INSET,
+  HUD_WEAPON_ICON_URL,
+} from './hud-runtime.js'
 
 describe('dungeon HUD model', () => {
   it('keeps the compact HUD inside the playable area', () => {
@@ -48,7 +53,36 @@ describe('dungeon HUD model', () => {
     expect(model.potionText).toBe('2')
   })
 
-  it('bundles the committed dagger icon as the weapon HUD asset', () => {
+  it('builds a progression badge from floor, chapter and boss state', () => {
+    const normal = dungeonHudModel({
+      progress: { floor: 7, chapter: 2, roomRole: 'combat' },
+      labels: { floor: 'Floor', chapter: 'Chapter', boss: 'Boss' },
+    })
+    const boss = dungeonHudModel({
+      progress: { floor: 8, chapter: 2, roomRole: 'boss' },
+      labels: { floor: 'Floor', chapter: 'Chapter', boss: 'Boss' },
+    })
+
+    expect(normal.progressBadge).toEqual({
+      floor: 7,
+      chapter: 2,
+      floorLabel: 'Floor 7',
+      chapterLabel: 'Chapter 2',
+      boss: false,
+      bossLabel: '',
+    })
+    expect(boss.progressBadge).toEqual({
+      floor: 8,
+      chapter: 2,
+      floorLabel: 'Floor 8',
+      chapterLabel: 'Chapter 2',
+      boss: true,
+      bossLabel: 'Boss',
+    })
+  })
+
+  it('bundles the committed dungeon HUD art', () => {
     expect(HUD_WEAPON_ICON_URL).toContain('dagger_01.png')
+    expect(HUD_ACHIEVEMENT_ICON_URL).toContain('achievements.png')
   })
 })
