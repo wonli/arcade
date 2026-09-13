@@ -36,6 +36,14 @@ test('idle weapon trails behind player facing and stays behind character layer',
   for (const pose of poses) assert.ok(pose.depth < 20)
 })
 
+test('idle weapon is rotated ninety degrees into a vertical back carry', () => {
+  const player = { x: 100, y: 120 }
+  assert.equal(weaponPose(player, 'right').angle, 52)
+  assert.equal(weaponPose(player, 'left').angle, 128)
+  assert.equal(weaponPose(player, 'up').angle, 128)
+  assert.equal(weaponPose(player, 'down').angle, 52)
+})
+
 test('attack reach scales with weapon archetype', () => {
   const player = { x: 200, y: 200 }
   const dagger = weaponPose(player, 'right', { attacking: true, reachScale: 0.78 })
