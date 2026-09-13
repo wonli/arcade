@@ -18,10 +18,11 @@ const (
 )
 
 type Player struct {
-	ID       game.PlayerID `json:"id"`
-	Name     string        `json:"name"`
-	Bot      bool          `json:"bot,omitempty"`
-	JoinedAt time.Time     `json:"joinedAt"`
+	ID            game.PlayerID `json:"id"`
+	Name          string        `json:"name"`
+	Bot           bool          `json:"bot,omitempty"`
+	BotDifficulty string        `json:"botDifficulty,omitempty"`
+	JoinedAt      time.Time     `json:"joinedAt"`
 }
 
 type Room struct {
