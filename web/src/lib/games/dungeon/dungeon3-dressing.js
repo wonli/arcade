@@ -55,14 +55,17 @@ export function dressThemedRooms(g, random) {
     }
 
     if (room.theme === 'crypt') {
-      // Two paired burial rows frame a deliberately empty centre aisle.
+      // Four complete coffins still frame the room, but the two burial rows are
+      // deliberately separated around the east-west centre line. Their visual
+      // footprint remains 3x2; only the lower stone base is collision-active so
+      // a radius-26 actor can enter from either side without a solid coffin wall.
       const placements = [
-        [room.x+32,room.y+32],[room.x+32,room.y+96],
-        [room.x+room.width-80,room.y+32],[room.x+room.width-80,room.y+96],
+        [room.x+32,room.y+16],[room.x+32,room.y+112],
+        [room.x+room.width-80,room.y+16],[room.x+room.width-80,room.y+112],
       ]
       for (const [left,top] of placements) {
         const motif = pick(random,coffinPool)
-        addProp(room,'coffin',motif,left,top,{x:left,y:top,width:48,height:32})
+        addProp(room,'coffin',motif,left,top,{x:left,y:top+TILE,width:48,height:TILE})
       }
       addPaving(g,room,'burial-aisle',room.center.x-48,room.y+32,96,128)
       room.layout = {type:'burial',safeLane:{x:room.center.x-48,y:room.y+24,width:96,height:136},groups:2}
