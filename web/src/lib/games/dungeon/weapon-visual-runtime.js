@@ -1,5 +1,6 @@
 import { installDungeonWeaponCatalog } from './weapon-catalog-runtime.js'
 import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
+import { installDungeonWeaponMelee } from './weapon-melee-runtime.js'
 import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
 import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
@@ -173,6 +174,7 @@ export function installDungeonWeaponVisuals(scene) {
   }
   const anchor = () => poseNow().tip
   const weaponVfx = installDungeonWeaponVfx(scene, { anchor })
+  const weaponMelee = installDungeonWeaponMelee(scene)
   const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor })
   const swing = () => {
     const profile = weaponProfile(equippedItem(scene))
@@ -206,6 +208,7 @@ export function installDungeonWeaponVisuals(scene) {
     visual?.destroy?.()
     visual = null
     weaponProjectiles?.restore?.()
+    weaponMelee?.restore?.()
     weaponVfx?.restore?.()
     scene.__dungeonWeaponCombat?.restore?.()
     weaponCatalog?.restore?.()
