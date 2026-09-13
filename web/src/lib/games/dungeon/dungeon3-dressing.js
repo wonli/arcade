@@ -26,7 +26,6 @@ function floodArea(g, room, area) {
   }
   room.inlets ??= []
   room.inlets.push(area)
-  g.water.push({...area,kind:'water'})
 }
 
 // Keep the collision half of a coffin on the side furthest from the room's
@@ -53,8 +52,11 @@ export function dressThemedRooms(g, random) {
       const motif = rules.assemblies.statue
       const left = room.x + TILE
       const top = room.y + TILE
+      // Statue_fire's complete 5x5 assembly includes transparent floor beside
+      // its tapered body. The stone foot occupies local x=34..46, y=70..75;
+      // blocking three whole tiles here creates an invisible wall on both sides.
       addProp(room,'statue',motif,left,top,{
-        x:left+TILE,y:top+(motif.height-1)*TILE,width:(motif.width-2)*TILE,height:TILE,
+        x:left+34,y:top+70,width:13,height:6,
       })
       // The landmark remains recognizable, while the approach can be short,
       // medium or long so shrine rooms do not all read as the same composition.
@@ -87,7 +89,9 @@ export function dressThemedRooms(g, random) {
       // full 4x3 bank. The hazard stays on one side and the opposite bypass is
       // unchanged, so density never turns into compulsory damage.
       const motif = rules.assemblies.spikes
-      const left = room.x + TILE
+      // Keep a two-tile landing so a west entrance can reach the bypass
+      // without entering the bank while any of its rows are raised.
+      const left = room.x + TILE * 2
       const bankCount = 1 + Math.floor(random()*3)
       for (let row=0; row<bankCount; row++) {
         const y = room.y + 48 + row*TILE
@@ -128,6 +132,57 @@ export function dressThemedRooms(g, random) {
         addProp(room,'coffin',motif,left,top,coffinCollision(room,left,top))
       }
       room.layout = {type:'gallery',safeLane:{x:room.center.x-32,y:room.y+24,width:64,height:136}}
+    }
+  }
+  for (const room of g.rooms.filter(r=>r.theme==='crypt')) {
+    const horizontal=g.paths.some(path=>{
+      const other=path.from===room.id?g.rooms[path.to]:path.to===room.id?g.rooms[path.from]:null
+      return other && other.center.y===room.center.y
+    })
+    if(horizontal) room.layout.approachLanes=[{x:room.x+16,y:room.center.y-40,width:room.width-32,height:80,axis:'horizontal',actorRadius:20}]
+  }
+
+}
+
+// Place these after all theme-specific water cuts and landmark reservations.
+// A failed candidate is moved to another authored wall/floor slot, never clipped.
+export function populateRoomHazards(g) {
+  const landArea = area => {
+    for (let y=area.y/TILE;y<(area.y+area.height)/TILE;y++) for(let x=area.x/TILE;x<(area.x+area.width)/TILE;x++) {
+      const cell=g.grid.cells[y*g.grid.columns+x]
+      if (!cell || !['floor','bridge'].includes(cell.kind)) return false
+    }
+    return true
+  }
+  const available = (room, area) => landArea(area) &&
+    !roomAnchors(g).some(p=>overlaps(area,{x:p.x-24,y:p.y-24,width:48,height:48})) &&
+    !(room.layout?.safeLane && overlaps(area,room.layout.safeLane)) &&
+    !g.decorations.some(d=>d.footprint && overlaps(area,{x:d.x-d.footprint.width/2,y:d.y-d.footprint.height/2,...d.footprint})) &&
+    !g.traps.some(t=>overlaps(area,t.damageArea))
+  const addWallTrap = room => {
+    const wall=g.walls.find(w=>w.roomId===room.id)
+    for(const x of [room.x+32,room.x+room.width-48,room.x+16,room.x+room.width-64]) {
+      const area={x,y:wall.y+32,width:32,height:64}
+      if (wall.opening && x<wall.opening.x+wall.opening.width && x+32>wall.opening.x) continue
+      if (!available(room,area)) continue
+      g.traps.push({id:`wall-trap-${room.id}`,roomId:room.id,wallId:wall.id,kind:'wall-trap',x:x+16,y:wall.y+48,
+        motif:rules.assemblies.wallTrap,damageArea:area,orientation:'down'})
+      return true
+    }
+    return false
+  }
+  for(const room of g.rooms.filter(r=>['gallery','flooded'].includes(r.theme))) addWallTrap(room)
+  // Both flooded side walls can face water; the shrine's opposite wall is then
+  // the valid host. Preserve the feature without placing a flame over a pool.
+  if(!g.traps.some(t=>t.kind==='wall-trap')) addWallTrap(g.rooms.find(r=>r.theme==='shrine'))
+  for(const room of g.rooms.filter(r=>r.theme!=='crypt')) {
+    const x=room.x+room.width-48
+    for(const y of [room.y+room.height-48,room.y+48]) {
+      const area={x,y,width:32,height:32}
+      if(!available(room,area)) continue
+      g.traps.push({id:`floor-trap-${room.id}`,roomId:room.id,kind:'plate-trap',x:x+16,y:y+16,
+        motif:rules.assemblies.floorTrap,damageArea:area})
+      break
     }
   }
 }
