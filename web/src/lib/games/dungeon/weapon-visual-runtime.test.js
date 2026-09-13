@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { installDungeonWeaponVisuals, weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
+import { createWeaponVisual, installDungeonWeaponVisuals, weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
 
 test('weapon visual profile maps archetype and rarity to existing Soul art', () => {
   assert.match(weaponVisualProfile({ type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'common' }).path, /dagger_01\.png$/)
@@ -9,6 +9,24 @@ test('weapon visual profile maps archetype and rarity to existing Soul art', () 
   assert.match(weaponVisualProfile({ type: 'weapon.dungeon_blade', archetype: 'katana', rarity: 'rare' }).path, /katana\.png$/)
   assert.match(weaponVisualProfile({ type: 'weapon.dungeon_blade', rarity: 'common' }).path, /sword_01\.png$/)
   assert.equal(weaponVisualProfile(null), null)
+})
+
+test('procedural axe visual is available without a PNG texture', () => {
+  const children = []
+  const makePart = (kind) => ({ kind, setAngle() { return this }, setStrokeStyle() { return this } })
+  const scene = {
+    add: {
+      rectangle() { const part = makePart('rectangle'); children.push(part); return part },
+      container(x, y, parts) { return { x, y, parts, scaleX: 1, scaleY: 1, setSize() { return this }, setScale(value) { this.scaleX = value; this.scaleY = value; return this } } },
+    },
+    textures: { exists: () => false },
+  }
+  const visual = createWeaponVisual(scene, { type: 'weapon.grave_cleaver', archetype: 'axe', rarity: 'rare' }, 40, 50)
+  assert.ok(visual)
+  assert.equal(visual.x, 40)
+  assert.equal(visual.y, 50)
+  assert.equal(visual.parts.length, 3)
+  assert.ok(visual.scaleX > 1)
 })
 
 test('idle weapon trails behind player facing and stays behind character layer', () => {
