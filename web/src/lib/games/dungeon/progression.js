@@ -102,13 +102,14 @@ export function difficultyProfile({ floor = 1, chapter = 1, roomRole = 'combat' 
   }
 }
 
-// Enemy scaling stays steeper. This curve keeps the player viable while gear,
-// affixes and rest choices remain the main way to get ahead of the curve.
+// The first chapter boss can arrive as early as floor four, so player power must
+// ramp before the first boss instead of relying on lucky loot. Gear and affixes
+// still stack on top of this baseline and remain the main source of build variety.
 export function playerProgressionProfile({ floor = 1, chapter = 1 } = {}) {
   const depth = Math.max(0, Math.floor(floor || 1) - 1)
   const chapterDepth = Math.max(0, Math.floor(chapter || 1) - 1)
   return {
-    maxHpMultiplier: clamp(1 + depth * 0.034 + chapterDepth * 0.035, 1, 4),
-    damageMultiplier: clamp(1 + depth * 0.014 + chapterDepth * 0.018, 1, 2.5),
+    maxHpMultiplier: clamp(1 + depth * 0.08 + chapterDepth * 0.06, 1, 4),
+    damageMultiplier: clamp(1 + depth * 0.10 + chapterDepth * 0.05, 1, 3.25),
   }
 }
