@@ -133,6 +133,52 @@ test('destroying a drop kills permanent tweens for all of its visuals', () => {
   assert.deepEqual(killed, [visual, glow, label, sparkleA, sparkleB])
 })
 
+test('equipping a selected named weapon never changes texture after its visual is destroyed', () => {
+  let onDown = null
+  const candidate = { type: 'weapon.iron_fang', archetype: 'dagger', rarity: 'rare', damage: 40, affixes: [] }
+  const scene = {
+    floor: 6,
+    playerState: { x: 0, y: 0, hp: 100, maxHp: 100, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 } },
+    drops: [],
+    time: { now: 0 },
+    input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
+    events: { once() {}, on() {}, off() {} },
+    emitStats() {}, updateHealthBar() {}, pickupBurst() {},
+    textures: { exists: () => true },
+    add: {
+      image(x, y, textureKey) {
+        return {
+          x, y, textureKey, scaleX: 1, scaleY: 1, destroyed: false,
+          setOrigin() { return this }, setDepth() { return this }, setScale(v) { this.scaleX = v; this.scaleY = v; return this }, setY(v) { this.y = v; return this },
+          setTexture(key) { if (this.destroyed) throw new TypeError("Cannot read properties of undefined (reading 'sys')"); this.textureKey = key; return this },
+          destroy() { this.destroyed = true },
+        }
+      },
+    },
+    spawnDrop(x, y, item) {
+      this.drops.push({ x, y, item, visual: this.add.image(x, y, 'placeholder'), glow: { setAlpha() {} }, sparkles: [] })
+    },
+    destroyDrop(drop) { drop.visual?.destroy?.() },
+    updateDrops() {
+      const drop = this.drops[0]
+      if (!drop) return
+      this.playerState.weapon = drop.item.type
+      this.playerState.weaponRarity = drop.item.rarity
+      this.playerState.weaponDamage = drop.item.damage
+      this.playerState.weaponAffixes = drop.item.affixes ?? []
+      this.playerState.equippedWeapon = drop.item
+      this.destroyDrop(drop)
+      this.drops.splice(0, 1)
+    },
+    clearDrops() { this.drops = [] },
+  }
+  installPickupInteraction(scene)
+  scene.spawnDrop(0, 0, candidate)
+  scene.updateDrops()
+  assert.doesNotThrow(() => onDown())
+  assert.equal(scene.playerState.weapon, candidate.type)
+})
+
 test('equipping with E leaves the previous weapon on the ground', () => {
   let onDown = null
   const oldWeapon = { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 22, affixes: [{ id: 'power', tier: 1, value: 0.1 }] }
