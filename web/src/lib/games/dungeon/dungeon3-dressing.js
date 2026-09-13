@@ -22,6 +22,7 @@ function floodArea(g, room, area) {
   }
   room.inlets ??= []
   room.inlets.push(area)
+  g.water.push({...area,kind:'water'})
 }
 
 // Themes own their landmark, hazard and route footprint before random clutter is
@@ -38,20 +39,18 @@ export function dressThemedRooms(g, random) {
   for (const room of g.rooms) {
     if (room.theme === 'shrine') {
       const motif = rules.assemblies.statue
-      // Odd-width motifs must start on a tile boundary; the room centre itself
-      // sits on a grid line, so centring by half the pixel width would shift all
-      // five columns by eight pixels.
-      const left = room.center.x - TILE*2
+      const left = room.x + TILE
       const top = room.y + TILE
       // Statue_fire is one authored 5x5 composition. Keep all 25 cells inside
-      // the room instead of letting a wall crop the upper-left fragment.
+      // the room instead of letting a wall crop the upper-left fragment. The
+      // whole landmark stays to one side so its base cannot seal the main lane.
       addProp(room,'statue',motif,left,top,{
         x:left+TILE,y:top+(motif.height-1)*TILE,width:(motif.width-2)*TILE,height:TILE,
       })
-      // A processional slab path uses the connected paving mask. It deliberately
-      // overlaps the visual base of the statue and then runs to the south exit.
+      // A processional slab path uses the connected paving mask rather than a
+      // repeated source corner, producing a readable continuous route.
       addPaving(g,room,'processional',room.center.x-32,room.y+64,64,96)
-      room.layout = {type:'altar',landmark:{x:left,y:top,width:motif.width*TILE,height:motif.height*TILE},safeLane:{x:room.center.x-32,y:room.y+80,width:64,height:80}}
+      room.layout = {type:'altar',landmark:{x:left,y:top,width:motif.width*TILE,height:motif.height*TILE},safeLane:{x:room.center.x-32,y:room.y+32,width:64,height:128}}
       continue
     }
 
