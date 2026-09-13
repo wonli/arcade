@@ -63,7 +63,7 @@ test('perimeter walls frame the dungeon and props are denser with oversized auth
 test('room connections keep a generous walkable throat and expose doors and landmarks', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })
-    assert.ok(g.bridges.every(bridge => Math.min(bridge.width, bridge.height) >= 96), `seed ${seed}: narrow bridge throat`)
+    assert.ok(g.bridges.every(bridge => (bridge.orientation === 'horizontal' ? bridge.height : bridge.width) >= 96), `seed ${seed}: narrow bridge throat`)
     assert.ok(g.doors.length >= g.paths.length * 2, `seed ${seed}: each connection should have two door frames`)
     assert.ok(g.decorations.some(entry => entry.kind === 'statue'), `seed ${seed}: missing statue landmark`)
     for (const door of g.doors) assert.equal(circleHitsSolid(door, 18, g), false, `seed ${seed}: door blocks its own passage`)
