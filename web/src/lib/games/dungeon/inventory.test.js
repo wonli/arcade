@@ -9,9 +9,10 @@ import {
   useStoredHealthPotion,
 } from './inventory.js'
 
-test('healthy potion pickups are stored instead of wasted', () => {
+test('potion pickups are stored before any automatic use decision', () => {
   assert.equal(healthPotionPickupMode({ hp: 100, maxHp: 100, healthPotions: 0 }), 'store')
   assert.equal(healthPotionPickupMode({ hp: 72, maxHp: 100, healthPotions: 0 }), 'store')
+  assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 0 }), 'store')
 })
 
 test('auto potion triggers at thirty percent health when inventory is available', () => {
@@ -19,7 +20,6 @@ test('auto potion triggers at thirty percent health when inventory is available'
   assert.equal(shouldAutoUseHealthPotion({ hp: 30, maxHp: 100, healthPotions: 1 }), true)
   assert.equal(shouldAutoUseHealthPotion({ hp: 31, maxHp: 100, healthPotions: 1 }), false)
   assert.equal(shouldAutoUseHealthPotion({ hp: 20, maxHp: 100, healthPotions: 0 }), false)
-  assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 1 }), 'consume')
 })
 
 test('stored potion heals thirty percent of max hp and decrements inventory', () => {
@@ -48,4 +48,8 @@ test('percentage healing clamps at max hp and never wastes a potion at full heal
     healed: 0,
     used: false,
   })
+})
+
+test('legacy fixed-heal callers still resolve to percentage healing', () => {
+  assert.equal(useStoredHealthPotion({ hp: 20, maxHp: 200, healthPotions: 1 }, 28).healed, 60)
 })
