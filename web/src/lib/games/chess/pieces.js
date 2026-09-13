@@ -1,12 +1,21 @@
-import pawn from '../../../../../assets/chess/pieces/pawn.svg'
-import knight from '../../../../../assets/chess/pieces/knight.svg'
-import bishop from '../../../../../assets/chess/pieces/bishop.svg'
-import rook from '../../../../../assets/chess/pieces/rook.svg'
-import queen from '../../../../../assets/chess/pieces/queen.svg'
-import king from '../../../../../assets/chess/pieces/king.svg'
+import whitePawn from './assets/white/pawn.svg'
+import whiteKnight from './assets/white/knight.svg'
+import whiteBishop from './assets/white/bishop.svg'
+import whiteRook from './assets/white/rook.svg'
+import whiteQueen from './assets/white/queen.svg'
+import whiteKing from './assets/white/king.svg'
 
-const pieceAssets = ['', pawn, knight, bishop, rook, queen, king]
+import blackPawn from './assets/black/pawn.svg'
+import blackKnight from './assets/black/knight.svg'
+import blackBishop from './assets/black/bishop.svg'
+import blackRook from './assets/black/rook.svg'
+import blackQueen from './assets/black/queen.svg'
+import blackKing from './assets/black/king.svg'
+
+const whitePieces = ['', whitePawn, whiteKnight, whiteBishop, whiteRook, whiteQueen, whiteKing]
+const blackPieces = ['', blackPawn, blackKnight, blackBishop, blackRook, blackQueen, blackKing]
 
 export function chessPieceAsset(piece) {
-  return pieceAssets[Math.abs(piece)] ?? ''
+  const assets = piece > 0 ? whitePieces : blackPieces
+  return assets[Math.abs(piece)] ?? ''
 }
