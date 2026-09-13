@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installPickupInteraction, prepareDropItem, resolveDropPosition, weaponDamageForFloor } from './pickup-runtime.js'
+import { hasRoute } from './pathfinding.js'
 
 const sequence = (values) => { let i = 0; return () => values[i++ % values.length] }
 
@@ -42,6 +43,29 @@ test('drops are moved off blocked terrain to a reachable nearby point', () => {
   assert.notDeepEqual(safe, { x: 120, y: 90 })
   assert.ok(safe.x < 92 || safe.x > 148 || safe.y < 62 || safe.y > 118)
   assert.ok(Math.hypot(safe.x - 120, safe.y - 90) <= 80)
+})
+
+test('collision-safe loot on a disconnected island is relocated to the player reachable component', () => {
+  const geometry = {
+    width: 320,
+    height: 192,
+    bounds: { x: 0, y: 0, width: 320, height: 192 },
+    solids: [{ x: 144, y: 0, width: 32, height: 192, kind: 'wall' }],
+    water: [],
+    bridges: [],
+  }
+  const player = { x: 64, y: 96 }
+  const scene = {
+    playerState: player,
+    __dungeonSpatial: { getGeometry: () => geometry },
+  }
+  const requested = { x: 240, y: 96 }
+  assert.equal(hasRoute(geometry, player, requested, { cellSize: 16, actorRadius: 18 }), false)
+
+  const safe = resolveDropPosition(scene, requested.x, requested.y)
+  assert.notDeepEqual(safe, requested)
+  assert.equal(hasRoute(geometry, player, safe, { cellSize: 16, actorRadius: 18 }), true)
+  assert.ok(safe.x < 144)
 })
 
 test('equipping with E leaves the previous weapon on the ground', () => {
