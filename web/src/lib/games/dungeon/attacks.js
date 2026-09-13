@@ -29,6 +29,43 @@ export function piercingAttack(player, direction = 'down', range = 300, width = 
   }
 }
 
+export function thrustAttack(player, target, range = 228, width = 26, geometry = null) {
+  const start = { x: player?.x ?? 0, y: player?.y ?? 0 }
+  const dx = (target?.x ?? start.x) - start.x
+  const dy = (target?.y ?? start.y) - start.y
+  const distance = Math.hypot(dx, dy) || 1
+  const direction = { x: dx / distance, y: dy / distance }
+  const desiredEnd = {
+    x: start.x + direction.x * Math.max(0, range),
+    y: start.y + direction.y * Math.max(0, range),
+  }
+  const clipped = geometry
+    ? clipSegmentToSolids(start, desiredEnd, geometry)
+    : { ...desiredEnd, blocked: false }
+  return {
+    kind: 'thrust',
+    start,
+    end: { x: clipped.x, y: clipped.y },
+    width,
+    blocked: Boolean(clipped.blocked),
+    direction,
+  }
+}
+
+export function cleaveAttack(player, target, range = 188, arcDegrees = 112) {
+  const center = { x: player?.x ?? 0, y: player?.y ?? 0 }
+  const dx = (target?.x ?? center.x) - center.x
+  const dy = (target?.y ?? center.y) - center.y
+  const distance = Math.hypot(dx, dy) || 1
+  return {
+    kind: 'cleave',
+    center,
+    direction: { x: dx / distance, y: dy / distance },
+    range: Math.max(0, range),
+    halfAngle: Math.max(0, Math.min(Math.PI, arcDegrees * Math.PI / 360)),
+  }
+}
+
 export function whirlwindAttack(player, radius = 105) {
   return {
     kind: 'whirlwind',
@@ -54,6 +91,24 @@ export function targetsInBeam(attack, enemies = []) {
     if (!enemy || enemy.hp <= 0) return false
     const radius = Math.max(0, enemy.hitRadius ?? enemy.radius ?? 8)
     return pointSegmentDistance(enemy, attack.start, attack.end) <= halfWidth + radius
+  })
+}
+
+export function targetsInArc(attack, enemies = []) {
+  const center = attack?.center ?? { x: 0, y: 0 }
+  const direction = attack?.direction ?? { x: 0, y: 1 }
+  const range = Math.max(0, attack?.range ?? 0)
+  const halfAngle = Math.max(0, attack?.halfAngle ?? 0)
+  return enemies.filter((enemy) => {
+    if (!enemy || enemy.hp <= 0) return false
+    const dx = enemy.x - center.x
+    const dy = enemy.y - center.y
+    const distance = Math.hypot(dx, dy)
+    const radius = Math.max(0, enemy.hitRadius ?? enemy.radius ?? 0)
+    if (distance > range + radius) return false
+    if (distance <= 1e-9) return true
+    const dot = Math.max(-1, Math.min(1, (dx / distance) * direction.x + (dy / distance) * direction.y))
+    return Math.acos(dot) <= halfAngle
   })
 }
 
