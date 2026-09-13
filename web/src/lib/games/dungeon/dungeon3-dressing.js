@@ -38,7 +38,10 @@ export function dressThemedRooms(g, random) {
   for (const room of g.rooms) {
     if (room.theme === 'shrine') {
       const motif = rules.assemblies.statue
-      const left = room.center.x - motif.width*TILE/2
+      // Odd-width motifs must start on a tile boundary; the room centre itself
+      // sits on a grid line, so centring by half the pixel width would shift all
+      // five columns by eight pixels.
+      const left = room.center.x - TILE*2
       const top = room.y + TILE
       // Statue_fire is one authored 5x5 composition. Keep all 25 cells inside
       // the room instead of letting a wall crop the upper-left fragment.
@@ -47,7 +50,7 @@ export function dressThemedRooms(g, random) {
       })
       // A processional slab path uses the connected paving mask. It deliberately
       // overlaps the visual base of the statue and then runs to the south exit.
-      addPaving(g,room,'processional',room.center.x-24,room.y+64,48,96)
+      addPaving(g,room,'processional',room.center.x-32,room.y+64,64,96)
       room.layout = {type:'altar',landmark:{x:left,y:top,width:motif.width*TILE,height:motif.height*TILE},safeLane:{x:room.center.x-32,y:room.y+80,width:64,height:80}}
       continue
     }
@@ -62,8 +65,8 @@ export function dressThemedRooms(g, random) {
         const motif = pick(random,coffinPool)
         addProp(room,'coffin',motif,left,top,{x:left,y:top,width:48,height:32})
       }
-      addPaving(g,room,'burial-aisle',room.center.x-40,room.y+32,80,128)
-      room.layout = {type:'burial',safeLane:{x:room.center.x-40,y:room.y+24,width:80,height:136},groups:2}
+      addPaving(g,room,'burial-aisle',room.center.x-48,room.y+32,96,128)
+      room.layout = {type:'burial',safeLane:{x:room.center.x-48,y:room.y+24,width:96,height:136},groups:2}
       continue
     }
 
