@@ -8,18 +8,17 @@ test('worldVfxProfile makes higher-rarity loot more prominent', () => {
   assert.equal(worldVfxProfile({ type: 'consumable.health_potion' }, 'pickup').tint, 0xff7c86)
 })
 
-test('world vfx reacts to explicit loot, pickup, portal and rest-room state', () => {
-  const sparkles = []
-  const flames = []
+test('world vfx translates loot, heal, portal, rest, equip, floor clear and elite state', () => {
+  const calls = []
   let update = null
   let role = 'combat'
   const scene = {
     portal: null,
+    floorCleared: false,
+    enemies: [],
+    playerState: { x: 100, y: 110, weapon: 'weapon.sword', weaponDamage: 5 },
     __roomGeometry: { rest: { x: 300, y: 220 } },
-    __dungeonVfx: {
-      sparkle(x, y, options) { sparkles.push({ x, y, options }) },
-      flame(x, y, options) { flames.push({ x, y, options }) },
-    },
+    __dungeonVfx: Object.fromEntries(['sparkle', 'flame', 'heal', 'portal', 'aura'].map((kind) => [kind, (...args) => calls.push([kind, ...args])])),
     spawnDrop() {},
     pickupBurst() {},
     __infiniteDungeon: { getProgress: () => ({ roomRole: role }) },
@@ -35,14 +34,30 @@ test('world vfx reacts to explicit loot, pickup, portal and rest-room state', ()
   scene.spawnDrop(120, 140, { type: 'weapon.dungeon_blade', rarity: 'rare' })
   scene.pickupBurst(120, 140, { type: 'consumable.health_potion' }, 20)
   scene.portal = { x: 480, y: 500 }
+  scene.enemies = [{ x: 600, y: 300, hp: 40, elite: true }]
+  scene.floorCleared = true
+  scene.playerState.weaponDamage = 9
   update()
 
-  assert.equal(sparkles.length, 5)
-  assert.equal(sparkles[1].options.tint, 0xff7c86)
-  assert.equal(sparkles[2].options.tint, 0x70ff9f)
+  assert.ok(calls.some(([kind]) => kind === 'sparkle'))
+  assert.ok(calls.some(([kind]) => kind === 'heal'))
+  assert.ok(calls.some(([kind]) => kind === 'portal'))
+  assert.ok(calls.filter(([kind]) => kind === 'aura').length >= 3)
 
   role = 'rest'
   update()
-  assert.equal(flames.length, 1)
-  assert.deepEqual([flames[0].x, flames[0].y], [300, 225])
+  assert.ok(calls.some(([kind, x, y]) => kind === 'flame' && x === 300 && y === 225))
+})
+
+test('no-op pickup does not emit heal vfx', () => {
+  const heals = []
+  const scene = {
+    playerState: {}, enemies: [],
+    spawnDrop() {}, pickupBurst() {},
+    __dungeonVfx: { sparkle() {}, heal(...args) { heals.push(args) } },
+    events: { on() {}, off() {}, once() {} },
+  }
+  installDungeonWorldVfx(scene)
+  scene.pickupBurst(1, 2, { type: 'consumable.health_potion' }, 0)
+  assert.equal(heals.length, 0)
 })

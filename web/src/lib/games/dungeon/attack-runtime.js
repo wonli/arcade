@@ -73,7 +73,10 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     const killed = enemy.hp <= 0
     const elite = Boolean(enemy.elite || enemy.boss)
     const feedback = hitFeedback({ critical, boss: enemy.boss, damage })
-    scene.__dungeonVfx?.impact?.(impactX, impactY, { critical: critical || (elite && killed), explosion: killed || context?.source === 'corpse_burst' })
+    const heavy = killed || context?.source === 'corpse_burst'
+    scene.__dungeonVfx?.impact?.(impactX, impactY, { explosion: heavy, seed: `${enemy.id ?? ''}:${beforeHp}:${damage}` })
+    if (critical || (elite && killed)) scene.__dungeonVfx?.critical?.(impactX, impactY, { seed: `${enemy.id ?? ''}:${beforeHp}` })
+    if (context?.source === 'corpse_burst') scene.__dungeonVfx?.smoke?.(impactX, impactY, { seed: `${enemy.id ?? ''}:corpse` })
     if (context?.direct || critical || killed) audio.play({ damage, critical, killed, elite })
 
     if (enemy.visual?.setTintFill && enemy.visual?.clearTint) {

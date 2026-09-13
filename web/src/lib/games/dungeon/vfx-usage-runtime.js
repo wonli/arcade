@@ -29,14 +29,12 @@ function sparkle(scene, x, y, item, phase) {
     alpha: profile.alpha,
     tint: profile.tint,
     depth: phase === 'pickup' ? 46 : 24,
+    seed: `${phase}:${item?.type ?? ''}:${item?.rarity ?? ''}:${Math.round(x)}:${Math.round(y)}`,
   })
 }
 
-function portalSparkle(scene, portal) {
-  if (!portal) return
-  scene.__dungeonVfx?.sparkle?.(portal.x, portal.y - 24, { scale: 1.25, tint: 0x70ff9f, depth: 18 })
-  scene.__dungeonVfx?.sparkle?.(portal.x - 22, portal.y + 8, { scale: 0.85, tint: 0x70ff9f, depth: 18 })
-  scene.__dungeonVfx?.sparkle?.(portal.x + 24, portal.y + 12, { scale: 0.9, tint: 0x70ff9f, depth: 18 })
+function equipmentSignature(playerState = {}) {
+  return [playerState.weapon, playerState.weaponRarity, playerState.weaponDamage, ...(playerState.weaponAffixes ?? [])].join('|')
 }
 
 export function installDungeonWorldVfx(scene) {
@@ -48,6 +46,9 @@ export function installDungeonWorldVfx(scene) {
   let restFlameEvent = null
   let lastPortal = null
   let restActive = false
+  let lastFloorCleared = Boolean(scene.floorCleared)
+  let lastEquipment = equipmentSignature(scene.playerState)
+  const presentedEnemies = new WeakSet()
 
   const stopRestFlame = () => {
     restFlameEvent?.remove?.()
@@ -64,6 +65,7 @@ export function installDungeonWorldVfx(scene) {
       height: 64,
       alpha: 0.9,
       depth: 10,
+      seed: `rest:${Math.round(point.x)}:${Math.round(point.y)}`,
     })
     play()
     restFlameEvent = scene.time?.addEvent?.({ delay: 430, loop: true, callback: play }) ?? null
@@ -81,18 +83,53 @@ export function installDungeonWorldVfx(scene) {
     scene.pickupBurst = function pickupBurstWithVfx(x, y, item, healed = 0) {
       const result = originalPickupBurst(x, y, item, healed)
       sparkle(scene, x, y, item, 'pickup')
+      if (healed > 0) scene.__dungeonVfx?.heal?.(x, y, { seed: `heal:${Math.round(x)}:${Math.round(y)}:${Math.round(healed)}` })
       return result
     }
   }
 
   const syncWorldVfx = () => {
     const portal = scene.portal ?? null
-    if (portal && portal !== lastPortal) portalSparkle(scene, portal)
+    if (portal && portal !== lastPortal) {
+      scene.__dungeonVfx?.portal?.(portal.x, portal.y, { seed: `portal:${Math.round(portal.x)}:${Math.round(portal.y)}` })
+    }
     lastPortal = portal
 
     const isRest = scene.__infiniteDungeon?.getProgress?.()?.roomRole === 'rest'
     if (isRest && !restActive) startRestFlame()
     else if (!isRest && restActive) stopRestFlame()
+
+    const nextEquipment = equipmentSignature(scene.playerState)
+    if (lastEquipment && nextEquipment && nextEquipment !== lastEquipment) {
+      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
+        tint: RARITY_TINT[scene.playerState?.weaponRarity] ?? null,
+        seed: `equip:${nextEquipment}`,
+      })
+    }
+    lastEquipment = nextEquipment
+
+    const cleared = Boolean(scene.floorCleared)
+    if (cleared && !lastFloorCleared) {
+      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
+        width: 96,
+        height: 96,
+        alpha: 0.9,
+        seed: `clear:${scene.floor ?? ''}`,
+      })
+    }
+    lastFloorCleared = cleared
+
+    for (const enemy of scene.enemies ?? []) {
+      if (!enemy || presentedEnemies.has(enemy) || (!enemy.elite && !enemy.boss)) continue
+      presentedEnemies.add(enemy)
+      scene.__dungeonVfx?.aura?.(enemy.x, enemy.y, {
+        width: enemy.boss ? 112 : 82,
+        height: enemy.boss ? 112 : 82,
+        alpha: enemy.boss ? 0.92 : 0.78,
+        tint: enemy.boss ? 0xffd56a : 0xc984ff,
+        seed: `enemy:${enemy.id ?? ''}:${enemy.boss ? 'boss' : 'elite'}`,
+      })
+    }
   }
   scene.events?.on?.('update', syncWorldVfx)
 

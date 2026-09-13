@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describeDungeonAsset, describeDungeonTilesetAsset, describeRpgMainCharacterAsset } from '../web/src/lib/games/dungeon/assets.js'
@@ -21,6 +21,7 @@ const vfxPacks = [
   ['spell-effects', 'Spell Effects.zip'],
   ['free-pixel-magic', 'free-pixel-magic-sprite-effects-pack.zip'],
   ['kenney-particles', 'kenney_particle-pack.zip'],
+  ['retro-impact', 'Retro Impact Effect Pack ALL.rar'],
 ].map(([source, archiveName]) => ({ source, archive: join(root, 'assets', archiveName), output: join(root, 'web', 'static', 'assets', 'vfx', source), publicBase: `/assets/vfx/${source}/` }))
 
 function makeWritable(target) {
@@ -136,13 +137,38 @@ function walkVfx(pack, dir) {
   return files
 }
 
-function extractZip(pack) {
+function prepareOutput(pack) {
   if (!existsSync(pack.archive)) { console.warn(`Skipping missing archive ${pack.archive}`); return false }
   makeWritable(pack.output)
   rmSync(pack.output, { recursive: true, force: true })
   mkdirSync(pack.output, { recursive: true })
+  return true
+}
+
+function extractZip(pack) {
+  if (!prepareOutput(pack)) return false
   execFileSync('unzip', ['-q', '-o', pack.archive, '-d', pack.output], { stdio: 'inherit' })
   return true
+}
+
+function tryExtract(command, args) {
+  try {
+    execFileSync(command, args, { stdio: 'inherit' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function extractVfx(pack) {
+  if (extname(pack.archive).toLowerCase() !== '.rar') return extractZip(pack)
+  if (!prepareOutput(pack)) return false
+  if (tryExtract('unrar', ['x', '-o+', '-inul', pack.archive, `${pack.output}/`])) return true
+  if (tryExtract('7z', ['x', '-y', `-o${pack.output}`, pack.archive])) return true
+  if (tryExtract('bsdtar', ['-xf', pack.archive, '-C', pack.output])) return true
+  console.warn(`Skipping ${pack.source}: no RAR extractor available (tried unrar, 7z, bsdtar)`)
+  rmSync(pack.output, { recursive: true, force: true })
+  return false
 }
 
 const assets = []
@@ -183,7 +209,7 @@ writeFileSync(join(manifestDir, 'manifest.json'), JSON.stringify(manifest, null,
 
 const vfxAssets = []
 for (const pack of vfxPacks) {
-  if (!extractZip(pack)) continue
+  if (!extractVfx(pack)) continue
   const packAssets = walkVfx(pack, pack.output).sort((a, b) => a.path.localeCompare(b.path))
   vfxAssets.push(...packAssets)
   console.log(`Prepared ${packAssets.length} classified ${pack.source} VFX assets`)

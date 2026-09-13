@@ -3,14 +3,30 @@ import assert from 'node:assert/strict'
 
 import { classifyVfxAsset } from './vfx-assets.js'
 
-test('classifies player-facing combat vfx by path name', () => {
-  assert.equal(classifyVfxAsset('/assets/vfx/free/laser_blue.png', 256, 32).kind, 'beam')
-  assert.equal(classifyVfxAsset('/assets/vfx/lightning/thunder-bolt.png', 128, 64).kind, 'lightning')
-  assert.equal(classifyVfxAsset('/assets/vfx/retro/sword_slash_04.png', 96, 96).kind, 'slash')
-  assert.equal(classifyVfxAsset('/assets/vfx/foozle/tornado_02.png', 128, 128).kind, 'whirlwind')
-  assert.equal(classifyVfxAsset('/assets/vfx/spells/explosion_7.png', 192, 192).kind, 'explosion')
-  assert.equal(classifyVfxAsset('/assets/vfx/spells/fire_flame.png', 64, 128).kind, 'flame')
-  assert.equal(classifyVfxAsset('/assets/vfx/kenney/sparkle_star.png', 32, 32).kind, 'sparkle')
+test('classifies the full dungeon vfx taxonomy by semantic path name', () => {
+  const cases = [
+    ['/assets/vfx/free/laser_blue.png', 'beam'],
+    ['/assets/vfx/lightning/thunder-bolt.png', 'lightning'],
+    ['/assets/vfx/retro/sword_slash_04.png', 'slash'],
+    ['/assets/vfx/retro/hit_impact_04.png', 'impact'],
+    ['/assets/vfx/retro/critical_hit_02.png', 'critical'],
+    ['/assets/vfx/foozle/tornado_02.png', 'whirlwind'],
+    ['/assets/vfx/spells/explosion_7.png', 'explosion'],
+    ['/assets/vfx/spells/fire_flame.png', 'flame'],
+    ['/assets/vfx/kenney/sparkle_star.png', 'sparkle'],
+    ['/assets/vfx/spells/heal_green.png', 'heal'],
+    ['/assets/vfx/spells/portal_ring.png', 'portal'],
+    ['/assets/vfx/spells/magic_aura_glow.png', 'aura'],
+    ['/assets/vfx/retro/smoke_dust.png', 'smoke'],
+  ]
+  for (const [path, kind] of cases) assert.equal(classifyVfxAsset(path, 96, 96)?.kind, kind, path)
+})
+
+test('specific semantic rules beat broad aliases', () => {
+  assert.equal(classifyVfxAsset('/assets/vfx/retro/critical_hit_burst.png', 96, 96)?.kind, 'critical')
+  assert.equal(classifyVfxAsset('/assets/vfx/spells/heal_sparkle.png', 96, 96)?.kind, 'heal')
+  assert.equal(classifyVfxAsset('/assets/vfx/spells/portal_glow.png', 96, 96)?.kind, 'portal')
+  assert.equal(classifyVfxAsset('/assets/vfx/retro/smoke_burst.png', 96, 96)?.kind, 'smoke')
 })
 
 test('keeps useful dimensions and rejects unrelated pngs', () => {
@@ -18,9 +34,17 @@ test('keeps useful dimensions and rejects unrelated pngs', () => {
     kind: 'beam', width: 512, height: 64, path: '/assets/vfx/free/beam_strip.png',
   })
   assert.equal(classifyVfxAsset('/assets/vfx/readme_preview.png', 800, 600), null)
+  assert.equal(classifyVfxAsset('/assets/vfx/background_cloud.png', 800, 600), null)
 })
 
-test('rejects combat vfx whose source image has no alpha channel', () => {
+test('rejects vfx whose source image has no alpha channel', () => {
   assert.equal(classifyVfxAsset('/assets/vfx/free/laser_black_background.png', 256, 32, { hasAlpha: false }), null)
   assert.equal(classifyVfxAsset('/assets/vfx/free/laser_transparent.png', 256, 32, { hasAlpha: true }).kind, 'beam')
+})
+
+test('retro impact source is limited to impact-oriented categories', () => {
+  assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/critical_hit.png', 96, 96)?.kind, 'critical')
+  assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/smoke.png', 96, 96)?.kind, 'smoke')
+  assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/fire_flame.png', 96, 96), null)
+  assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/lightning_bolt.png', 96, 96), null)
 })
