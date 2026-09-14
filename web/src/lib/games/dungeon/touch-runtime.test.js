@@ -54,8 +54,8 @@ test('skill and interact are one-shot normalized intents while interact still re
   touch.triggerSkill()
   touch.triggerInteract()
   assert.equal(interacts, 1)
-  assert.deepEqual(touch.consumeInput(), { moveX: 0, moveY: 0, skill: true, interact: true })
-  assert.deepEqual(touch.getState(), { moveX: 0, moveY: 0, skill: false, interact: false })
+  assert.deepEqual(touch.consumeInput(), { seq: 0, moveX: 0, moveY: 0, skill: true, interact: true })
+  assert.deepEqual(touch.getState(), { seq: 0, moveX: 0, moveY: 0, skill: false, interact: false })
 })
 
 test('touch audio cannot restart after the scene is dead', () => {
