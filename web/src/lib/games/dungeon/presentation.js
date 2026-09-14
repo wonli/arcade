@@ -70,11 +70,15 @@ export function weaponComparisonModel(current, candidate, locale = 'en') {
   const candidateDamage = candidate?.damage ?? 0
   return {
     current: current ? {
+      name: current.name ?? null,
+      legendaryLevel: current.legendaryLevel ?? null,
       rarity: current.rarity ?? null,
       damage: currentDamage,
       affixes: compareAffixes(currentAffixes, candidateAffixes, locale, 'current'),
     } : null,
     candidate: {
+      name: candidate?.name ?? null,
+      legendaryLevel: candidate?.legendaryLevel ?? null,
       rarity: candidate?.rarity ?? null,
       damage: candidateDamage,
       damageDelta: candidateDamage - currentDamage,
@@ -84,11 +88,14 @@ export function weaponComparisonModel(current, candidate, locale = 'en') {
 }
 
 export function weaponHudModel(stats = {}, locale = 'en') {
+  const item = stats.equippedWeapon ?? null
   return {
     equipped: Boolean(stats.weapon),
-    rarity: stats.weaponRarity ?? null,
-    damage: stats.weaponDamage ?? 0,
-    affixes: (stats.weaponAffixes ?? []).map((entry) => formatAffixLabel(entry, locale)),
+    name: item?.name ?? null,
+    legendaryLevel: item?.legendaryLevel ?? null,
+    rarity: stats.weaponRarity ?? item?.rarity ?? null,
+    damage: stats.weaponDamage ?? item?.damage ?? 0,
+    affixes: (stats.weaponAffixes ?? item?.affixes ?? []).map((entry) => formatAffixLabel(entry, locale)),
   }
 }
 

@@ -69,21 +69,15 @@ test('floor five boss is materially stronger and has a second phase', () => {
   const boss = bossProfile(5); assert.ok(boss.hpMultiplier >= 6); assert.equal(boss.phaseThreshold, 0.5); assert.ok(boss.scale >= 1.6); assert.ok(boss.contactDamage >= 20); assert.ok(boss.chargeCooldown > 0); assert.ok(boss.shockwaveCooldown > 0)
 })
 
-test('boss reward is always a boss-only legendary sword with four exaggerated affixes', () => {
-  const first = bossReward(() => 0, 5)
-  const last = bossReward(() => 0.999999, 8)
-  assert.equal(first.rarity, 'legendary')
-  assert.equal(last.rarity, 'legendary')
-  assert.equal(first.bossOnly, true)
-  assert.equal(last.bossOnly, true)
-  assert.equal(first.type, 'weapon.kings_ruin')
-  assert.equal(last.type, 'weapon.crimson_verdict')
-  assert.ok(['sword', 'katana'].includes(first.archetype))
-  assert.ok(['sword', 'katana'].includes(last.archetype))
-  assert.equal(first.affixes.length, 4)
-  assert.equal(last.affixes.length, 4)
-  assert.ok(first.damage >= 24)
-  assert.ok(last.damage > first.damage)
+test('boss reward uses a five percent legendary branch and otherwise returns rare or epic gear', () => {
+  const legendary = bossReward(() => 0.049, 12)
+  const fallback = bossReward(() => 0.5, 12)
+  assert.equal(legendary.rarity, 'legendary')
+  assert.equal(legendary.bossOnly, true)
+  assert.equal(legendary.legendaryLevel, 1)
+  assert.equal(legendary.affixes.length, 4)
+  assert.ok(['rare', 'epic'].includes(fallback.rarity))
+  assert.notEqual(fallback.rarity, 'legendary')
 })
 
 test('weapon pickups replace equipment-derived power and preserve archetype', () => {

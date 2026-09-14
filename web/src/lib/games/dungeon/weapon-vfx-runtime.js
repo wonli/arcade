@@ -16,6 +16,7 @@ function signature(item) {
     item?.vfxTheme ?? item?.theme ?? '',
     item?.archetype ?? '',
     item?.vfxVariant ?? '',
+    item?.rarity === 'legendary' ? (item?.legendaryLevel ?? 1) : '',
   ].join('|')
 }
 

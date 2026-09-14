@@ -2,6 +2,7 @@ import { placePlayerAtRoomSpawn, roomAnchor } from './room-anchors.js'
 import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
+import { growPlayerLegendaryForRoom } from './legendary-growth.js'
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
 import { renderRestStatue, restStatuePlan } from './rest-statue.js'
 
@@ -348,6 +349,26 @@ export function installInfiniteDungeon(scene, {
     const living = scene.enemies.filter((enemy) => enemy.hp > 0).length
     if (living > 0) return
     scene.floorCleared = true
+
+    const growth = growPlayerLegendaryForRoom(scene.playerState, role)
+    if (growth.grew) {
+      scene.playerState = growth.playerState
+      scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+      scene.emitStats?.()
+      onEvent({
+        type: 'legendarylevel',
+        floor: progress.floor,
+        chapter: progress.chapter,
+        level: growth.level,
+        awakening: growth.awakening,
+        weapon: growth.weapon,
+      })
+      const awakeningMilestone = [5, 10, 15, 20].includes(growth.level)
+      scene.time.delayedCall(180, () => {
+        scene.showBanner(`${growth.weapon?.name ?? 'LEGENDARY'} · LV ${growth.level}`, awakeningMilestone ? '#ffd56a' : '#ffb347', awakeningMilestone ? 30 : 22)
+      })
+    }
+
     playClearFeedback(role)
     scene.showBanner(label('floorClear'), role === 'boss' ? '#ffb55c' : role === 'elite' ? '#c984ff' : '#c1ff56', 34)
     onEvent({ type: 'floorclear', floor: progress.floor, chapter: progress.chapter, roomRole: role })

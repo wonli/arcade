@@ -1,3 +1,4 @@
+import { legendaryVfxTarget } from './legendary-growth.js'
 import { weaponDefinition } from './weapon-catalog.js'
 
 const RARITY = {
@@ -39,7 +40,9 @@ function weaponIdentity(item = {}) {
   return { theme, archetype, variant }
 }
 
-export function weaponVfxTheme(item = {}) { return weaponIdentity(item).theme }
+export function weaponVfxTheme(item = {}) {
+  return weaponIdentity(item).theme
+}
 
 export function weaponVfxProfile(item = {}) {
   const rarity = RARITY[item?.rarity] ? item.rarity : 'common'
@@ -47,13 +50,17 @@ export function weaponVfxProfile(item = {}) {
   const rarityProfile = RARITY[rarity]
   const themeProfile = THEMES[theme]
   const motion = ARCHETYPE_MOTION[archetype] ?? ARCHETYPE_MOTION.sword
+  const particleIntensity = rarity === 'legendary' && rarityProfile.particles
+    ? { ...rarityProfile.particles, ...legendaryVfxTarget(item) }
+    : rarityProfile.particles
+
   return {
     rarity,
     theme,
     archetype,
     variant,
     tint: themeProfile.tint,
-    particles: rarityProfile.particles
+    particles: particleIntensity
       ? {
           kind: themeProfile.particle,
           source: themeProfile.sources[0],
@@ -62,8 +69,8 @@ export function weaponVfxProfile(item = {}) {
           variant,
           tint: themeProfile.tint,
           speed: [...motion.speed],
-          ...rarityProfile.particles,
-          lifespan: Math.round(rarityProfile.particles.lifespan * motion.lifespanMultiplier),
+          ...particleIntensity,
+          lifespan: Math.round(particleIntensity.lifespan * motion.lifespanMultiplier),
         }
       : null,
     attack: rarityProfile.attack ? { kind: themeProfile.attack } : null,

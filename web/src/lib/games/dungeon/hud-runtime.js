@@ -13,14 +13,21 @@ const HUD_BG_ALPHA = 0.48
 const HUD_WEAPON_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
 
 function equippedWeaponName(weapon, labels) {
+  if (typeof weapon === 'object' && weapon?.name) return weapon.name
   const type = typeof weapon === 'string' ? weapon : weapon?.type
   return weaponDefinition(type)?.name ?? labels.dungeonBlade ?? 'Dungeon Blade'
 }
 
 export function dungeonHudModel({ stats = {}, progress = {}, labels = {} } = {}) {
-  const rarityName = stats.weaponRarity ? (labels[`rarity:${stats.weaponRarity}`] ?? stats.weaponRarity) : ''
+  const rawRarity = stats.weaponRarity ? (labels[`rarity:${stats.weaponRarity}`] ?? stats.weaponRarity) : ''
+  const chinese = /[\u3400-\u9fff]/.test(labels.dungeonBlade ?? '')
+  const rarityName = rawRarity === 'legendary' ? (chinese ? '传奇' : 'Legendary') : rawRarity
+  const equipped = stats.equippedWeapon ?? stats.weapon
+  const levelSuffix = stats.weaponRarity === 'legendary' && Number(equipped?.legendaryLevel) > 0
+    ? ` Lv${equipped.legendaryLevel}`
+    : ''
   const weaponTitle = stats.weapon
-    ? `${rarityName ? `${rarityName} ` : ''}${equippedWeaponName(stats.weapon, labels)}`
+    ? `${rarityName ? `${rarityName} ` : ''}${equippedWeaponName(equipped, labels)}${levelSuffix}`
     : (labels.none ?? 'None')
   const weaponDetail = stats.weapon
     ? `+${stats.weaponDamage ?? 0} ${labels.baseDamage ?? 'DMG'}`
@@ -146,7 +153,12 @@ export function installDungeonHud(scene, {
   })
 
   const update = () => {
-    const model = dungeonHudModel({ stats: getStats(), progress: getProgress(), labels: getLabels() })
+    const stats = getStats()
+    const model = dungeonHudModel({
+      stats: { ...stats, equippedWeapon: scene.playerState?.equippedWeapon ?? stats.equippedWeapon },
+      progress: getProgress(),
+      labels: getLabels(),
+    })
     potionText.setText(model.potionText)
     potionBg.setAlpha(model.canUsePotion ? 1 : 0.55)
     bottleBody.setAlpha(model.canUsePotion ? 1 : 0.35)
