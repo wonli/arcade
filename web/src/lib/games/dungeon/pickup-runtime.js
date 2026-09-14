@@ -1,3 +1,4 @@
+import { applyPickup } from './combat.js'
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
 import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
@@ -110,16 +111,20 @@ export function resolveDropPosition(scene, x, y) {
   return requested
 }
 
-function currentWeapon(scene) {
-  if (!scene?.playerState?.weapon) return null
-  const equipped = scene.playerState.equippedWeapon
+function weaponFromState(state) {
+  if (!state?.weapon) return null
+  const equipped = state.equippedWeapon
   if (equipped) return { ...equipped, affixes: [...(equipped.affixes ?? [])] }
   return {
-    type: scene.playerState.weapon,
-    rarity: scene.playerState.weaponRarity ?? null,
-    damage: scene.playerState.weaponDamage ?? 0,
-    affixes: [...(scene.playerState.weaponAffixes ?? [])],
+    type: state.weapon,
+    rarity: state.weaponRarity ?? null,
+    damage: state.weaponDamage ?? 0,
+    affixes: [...(state.weaponAffixes ?? [])],
   }
+}
+
+function currentWeapon(scene) {
+  return weaponFromState(scene?.playerState)
 }
 
 function killTween(scene, target) {
@@ -196,31 +201,80 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
 
-  const useHealthPotion = () => {
-    const next = useStoredHealthPotion(scene.playerState)
+  const syncPlayerVisual = (player) => {
+    scene.__dungeonPlayerRuntime?.updatePlayerVisual?.(player)
+    if (player?.local !== false) originalEmitStats()
+  }
+
+  const useHealthPotionFor = (player) => {
+    const state = player?.state ?? scene.playerState
+    const next = useStoredHealthPotion(state)
     if (!next.used) return false
-    scene.playerState.hp = next.hp
-    scene.playerState.healthPotions = next.healthPotions
-    scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
-    scene.pickupBurst?.(scene.playerState.x, scene.playerState.y, { type: 'consumable.health_potion' }, next.healed)
-    scene.__dungeonInventoryStats?.(scene.playerState.healthPotions)
-    originalEmitStats()
+    state.hp = next.hp
+    state.healthPotions = next.healthPotions
+    scene.pickupBurst?.(state.x, state.y, { type: 'consumable.health_potion' }, next.healed)
+    if (player?.local !== false) scene.__dungeonInventoryStats?.(state.healthPotions)
+    syncPlayerVisual(player ?? scene.localPlayer)
     return true
   }
 
-  const autoUseHealthPotion = () => {
-    if (scene.dead || scene.runComplete || !shouldAutoUseHealthPotion(scene.playerState)) return false
-    return useHealthPotion()
+  const useHealthPotion = () => useHealthPotionFor(scene.localPlayer ?? { local: true, state: scene.playerState })
+
+  const autoUseHealthPotionFor = (player) => {
+    const state = player?.state ?? scene.playerState
+    if (scene.dead || scene.runComplete || player?.dead || !shouldAutoUseHealthPotion(state)) return false
+    return useHealthPotionFor(player)
   }
+
+  const autoUseHealthPotion = () => autoUseHealthPotionFor(scene.localPlayer ?? { local: true, state: scene.playerState })
 
   const api = {
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     useHealthPotion,
+    useHealthPotionFor,
     autoUseHealthPotion,
+    autoUseHealthPotionFor,
     refreshLabels() {
       for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
     },
-    getHealthPotions() { return scene.playerState.healthPotions ?? 0 },
+    getHealthPotions(player = null) { return (player?.state ?? scene.playerState).healthPotions ?? 0 },
+    updatePlayer(player, input = {}) {
+      if (!player?.state || player.dead || scene.dead || scene.runComplete) return
+      const state = player.state
+      state.healthPotions ??= 0
+      const drops = [...(scene.drops ?? [])].filter(Boolean)
+      const nearby = drops.filter((drop) => Math.hypot((drop.x ?? 0) - state.x, (drop.y ?? 0) - state.y) <= 34)
+
+      for (const drop of nearby.filter((entry) => pickupIntent(entry.item) !== 'confirm')) {
+        if (!scene.drops.includes(drop)) continue
+        if (drop.item?.type === 'consumable.health_potion' && healthPotionPickupMode(state) === 'store') {
+          state.healthPotions = (state.healthPotions ?? 0) + 1
+          scene.destroyDrop?.(drop)
+          scene.drops = scene.drops.filter((entry) => entry !== drop)
+          scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
+          autoUseHealthPotionFor(player)
+          continue
+        }
+        const beforeHp = state.hp
+        player.state = applyPickup(state, drop.item, state.baseStats)
+        scene.destroyDrop?.(drop)
+        scene.drops = scene.drops.filter((entry) => entry !== drop)
+        scene.pickupBurst?.(drop.x, drop.y, drop.item, Math.max(0, player.state.hp - beforeHp))
+        syncPlayerVisual(player)
+      }
+
+      if (!input.interact) return
+      const candidate = nearestConfirmableDrop(player.state, scene.drops.filter((drop) => pickupIntent(drop?.item) === 'confirm'), 34)
+      if (!candidate) return
+      const previous = weaponFromState(player.state)
+      const x = candidate.x
+      const y = candidate.y
+      player.state = applyPickup(player.state, candidate.item, player.state.baseStats)
+      scene.destroyDrop?.(candidate)
+      scene.drops = scene.drops.filter((drop) => drop !== candidate)
+      if (previous) spawnDropWithMotion(x, y, previous, { prepare: false })
+      syncPlayerVisual(player)
+    },
   }
   scene.__dungeonPickupRuntime = api
 
@@ -247,8 +301,6 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     const y = candidate.y
     const rest = scene.drops.filter((drop) => drop && drop !== candidate)
 
-    // Clear the selected texture while the visual is still alive. Keep a stable local
-    // reference because publish(null) intentionally clears the selected closure state.
     publish(null)
     scene.drops = [candidate]
     originalUpdateDrops()
