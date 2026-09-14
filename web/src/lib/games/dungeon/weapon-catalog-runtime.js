@@ -1,10 +1,11 @@
+import { specializeWeaponAffixes } from './affixes.js'
 import { materializeWeapon, rollWeaponDefinition, weaponDefinition } from './weapon-catalog.js'
 
 export function weaponizeDrop(item, floor = 1, random = Math.random) {
   if (!item?.type?.startsWith?.('weapon.')) return item
-  if (weaponDefinition(item.type)) return { ...item, affixes: [...(item.affixes ?? [])] }
+  if (weaponDefinition(item.type)) return specializeWeaponAffixes({ ...item, affixes: [...(item.affixes ?? [])] })
   const definition = rollWeaponDefinition(floor, random)
-  return materializeWeapon(definition, item)
+  return specializeWeaponAffixes(materializeWeapon(definition, item))
 }
 
 export function installDungeonWeaponCatalog(scene, { random = Math.random } = {}) {

@@ -195,6 +195,63 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
     })
   }
 
+  const volley = (targets = []) => {
+    const item = equippedItem(scene)
+    if (!item || item.archetype !== 'bow') return null
+    const profile = currentProfile(item)
+    ensureParticles(profile)
+    const from = point(scene, anchor)
+    const count = Math.max(1, targets.length)
+    if (particleManager && particleProfile) {
+      particleManager.emitParticleAt?.(from.x, from.y, Math.max(particleProfile.burst, count * 5))
+    }
+    const seed = `weapon-volley:${signature(item)}:${Math.round(from.x)}:${Math.round(from.y)}`
+    scene.__dungeonVfx?.aura?.(from.x, from.y, {
+      tint: profile.tint,
+      alpha: 0.5,
+      scale: 0.62 + Math.min(0.28, count * 0.07),
+      depth: 27,
+      seed,
+    })
+    return scene.__dungeonVfx?.sparkle?.(from.x, from.y, {
+      tint: profile.tint,
+      alpha: 0.86,
+      scale: 0.72,
+      depth: 28,
+      seed: `${seed}:release`,
+    })
+  }
+
+  const nova = (x, y, { radius = 112 } = {}) => {
+    const item = equippedItem(scene)
+    if (!item || item.archetype !== 'staff') return null
+    const profile = currentProfile(item)
+    const scale = Math.max(0.82, Math.min(1.75, radius / 96))
+    const seed = `weapon-nova:${signature(item)}:${Math.round(x)}:${Math.round(y)}`
+    scene.__dungeonVfx?.aura?.(x, y, {
+      tint: profile.tint,
+      alpha: 0.74,
+      scale,
+      depth: 44,
+      seed,
+    })
+    scene.__dungeonVfx?.impact?.(x, y, {
+      explosion: true,
+      tint: profile.tint,
+      alpha: 0.82,
+      scale: Math.max(0.9, scale * 0.82),
+      depth: 45,
+      seed: `${seed}:burst`,
+    })
+    return scene.__dungeonVfx?.sparkle?.(x, y, {
+      tint: profile.tint,
+      alpha: 0.94,
+      scale: Math.max(0.8, scale * 0.68),
+      depth: 46,
+      seed: `${seed}:sparkle`,
+    })
+  }
+
   sync()
   scene.events?.on?.('update', sync)
 
@@ -207,7 +264,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { sync, attack, impact, restore }
+  const api = { sync, attack, impact, volley, nova, restore }
   scene.__dungeonWeaponVfx = api
   return api
 }

@@ -2,22 +2,24 @@ const NAMES = {
   'zh-CN': {
     power: '伤害', attack_speed: '攻速', critical: '暴击', movement_speed: '移速', vitality: '最大生命', life_steal: '吸血',
     piercing: '贯穿', chain: '连锁', corpse_burst: '尸爆', critical_heal: '暴击回血', hurt_haste: '受伤加速', low_health_damage: '背水增伤', skill_radius: '技能范围', skill_haste: '技能急速',
-    whirlwind: '旋风', thunder: '雷鸣', executioner: '处刑', berserker: '狂战',
+    whirlwind: '旋风', volley: '箭雨', arcane_nova: '奥术新星', thunder: '雷鸣', executioner: '处刑', berserker: '狂战',
   },
   en: {
     power: 'Damage', attack_speed: 'Attack Speed', critical: 'Crit', movement_speed: 'Move Speed', vitality: 'Max HP', life_steal: 'Life Steal',
     piercing: 'Pierce', chain: 'Chain', corpse_burst: 'Corpse Burst', critical_heal: 'HP on Crit', hurt_haste: 'Hurt Haste', low_health_damage: 'Low HP Damage', skill_radius: 'Skill Radius', skill_haste: 'Skill Haste',
-    whirlwind: 'Whirlwind', thunder: 'Thunder', executioner: 'Executioner', berserker: 'Berserker',
+    whirlwind: 'Whirlwind', volley: 'Volley', arcane_nova: 'Arcane Nova', thunder: 'Thunder', executioner: 'Executioner', berserker: 'Berserker',
   },
 }
 
 const PERCENT_PREFIX = new Set(['power', 'attack_speed', 'critical', 'movement_speed', 'skill_radius', 'skill_haste'])
 const PERCENT_SUFFIX = new Set(['life_steal', 'piercing', 'chain', 'corpse_burst', 'hurt_haste', 'low_health_damage'])
-const BUILD = new Set(['whirlwind', 'thunder', 'executioner', 'berserker'])
+const BUILD = new Set(['whirlwind', 'volley', 'arcane_nova', 'thunder', 'executioner', 'berserker'])
 
 const COMBAT_VISUALS = {
   thunder: { kind: 'chain-lightning', color: 0x8fdcff, width: 4, duration: 150 },
   whirlwind: { kind: 'radial-slash', color: 0xc984ff, radius: 112, duration: 220 },
+  volley: { kind: 'volley', color: 0x8fdcff, radius: 190, duration: 180 },
+  arcane_nova: { kind: 'arcane-nova', color: 0xc984ff, radius: 118, duration: 260 },
   corpse_burst: { kind: 'corpse-burst', color: 0xff875f, radius: 82, duration: 260 },
   piercing: { kind: 'pierce-trail', color: 0xeafbc9, length: 92, duration: 160 },
   heal: { kind: 'heal-number', color: '#70ff9f', duration: 620 },

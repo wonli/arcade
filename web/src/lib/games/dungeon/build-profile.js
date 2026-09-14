@@ -24,6 +24,18 @@ const BUILDS = [
     affinity: { dagger: 0.96, sword: 1.1, katana: 1.02 },
   },
   {
+    id: 'barrage',
+    label: 'Barrage',
+    wants: ['volley', 'piercing', 'skill_haste'],
+    affinity: { bow: 1.2 },
+  },
+  {
+    id: 'arcane-burst',
+    label: 'Arcane Burst',
+    wants: ['arcane_nova', 'skill_radius', 'skill_haste'],
+    affinity: { staff: 1.2 },
+  },
+  {
     id: 'berserker',
     label: 'Berserker',
     wants: ['berserker', 'low_health_damage'],

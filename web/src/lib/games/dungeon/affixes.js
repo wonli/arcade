@@ -8,8 +8,8 @@ const rangedValue = (ranges, tier, random) => {
   return decimals === 0 ? Math.round(value) : Number(value.toFixed(decimals))
 }
 
-function affix(id, category, weight, ranges, { minFloor = 1, conflict = null } = {}) {
-  return { id, category, weight, ranges, minFloor, conflict }
+function affix(id, category, weight, ranges, { minFloor = 1, conflict = null, rollable = true } = {}) {
+  return { id, category, weight, ranges, minFloor, conflict, rollable }
 }
 
 export const AFFIXES = {
@@ -30,9 +30,28 @@ export const AFFIXES = {
   skill_haste: affix('skill_haste', 'mechanic', 0.66, [[0.10, 0.15], [0.15, 0.22], [0.22, 0.32]], { minFloor: 2 }),
 
   whirlwind: affix('whirlwind', 'build', 0.40, [[0.14, 0.18], [0.18, 0.26], [0.26, 0.36]], { minFloor: 3, conflict: 'build' }),
+  volley: affix('volley', 'build', 0.40, [[0.14, 0.18], [0.18, 0.26], [0.26, 0.36]], { minFloor: 3, conflict: 'build', rollable: false }),
+  arcane_nova: affix('arcane_nova', 'build', 0.40, [[0.14, 0.18], [0.18, 0.26], [0.26, 0.36]], { minFloor: 3, conflict: 'build', rollable: false }),
   thunder: affix('thunder', 'build', 0.40, [[0.22, 0.28], [0.28, 0.38], [0.38, 0.52]], { minFloor: 3, conflict: 'build' }),
   executioner: affix('executioner', 'build', 0.38, [[0.25, 0.34], [0.34, 0.50], [0.50, 0.72]], { minFloor: 3, conflict: 'build' }),
   berserker: affix('berserker', 'build', 0.38, [[0.16, 0.22], [0.22, 0.32], [0.32, 0.46]], { minFloor: 3, conflict: 'build' }),
+}
+
+const BUILD_SKILL_IDS = new Set(['whirlwind', 'volley', 'arcane_nova'])
+
+function buildSkillForArchetype(archetype) {
+  if (archetype === 'bow') return 'volley'
+  if (archetype === 'staff') return 'arcane_nova'
+  return 'whirlwind'
+}
+
+export function specializeWeaponAffixes(item) {
+  if (!item?.type?.startsWith?.('weapon.')) return item
+  const skillId = buildSkillForArchetype(item.archetype)
+  return {
+    ...item,
+    affixes: (item.affixes ?? []).map((rolled) => BUILD_SKILL_IDS.has(rolled.id) ? { ...rolled, id: skillId } : { ...rolled }),
+  }
 }
 
 export function affixSlots(rarity = 'common') {
@@ -64,7 +83,7 @@ export function rollAffixes(floor, rarity, random = Math.random, { forceBuild = 
   if (slots <= 0) return []
 
   const level = Math.max(1, Math.min(5, Math.floor(floor || 1)))
-  const eligible = Object.values(AFFIXES).filter((entry) => level >= entry.minFloor)
+  const eligible = Object.values(AFFIXES).filter((entry) => entry.rollable !== false && level >= entry.minFloor)
   const selected = []
   const usedIds = new Set()
   const usedConflicts = new Set()
@@ -105,6 +124,8 @@ function emptyEffects() {
     skillRadius: 0,
     skillHaste: 0,
     whirlwind: 0,
+    volley: 0,
+    arcaneNova: 0,
     thunder: 0,
     executioner: 0,
     berserker: 0,
@@ -112,14 +133,15 @@ function emptyEffects() {
 }
 
 export function deriveEquipment(base, item = null, current = {}) {
-  const weaponDamage = item?.damage ?? 0
+  const equippedItem = specializeWeaponAffixes(item)
+  const weaponDamage = equippedItem?.damage ?? 0
   let damage = (base.damage ?? 10) + weaponDamage
   let critChance = base.critChance ?? 0.18
   let speed = base.speed ?? 190
   let maxHp = base.maxHp ?? 100
   const effects = emptyEffects()
 
-  for (const rolled of item?.affixes ?? []) {
+  for (const rolled of equippedItem?.affixes ?? []) {
     switch (rolled.id) {
       case 'power': damage *= 1 + rolled.value; break
       case 'attack_speed': effects.attackSpeed += rolled.value; break
@@ -136,6 +158,8 @@ export function deriveEquipment(base, item = null, current = {}) {
       case 'skill_radius': effects.skillRadius += rolled.value; break
       case 'skill_haste': effects.skillHaste += rolled.value; break
       case 'whirlwind': effects.whirlwind = Math.max(effects.whirlwind, rolled.value); break
+      case 'volley': effects.volley = Math.max(effects.volley, rolled.value); break
+      case 'arcane_nova': effects.arcaneNova = Math.max(effects.arcaneNova, rolled.value); break
       case 'thunder': effects.thunder = Math.max(effects.thunder, rolled.value); break
       case 'executioner': effects.executioner = Math.max(effects.executioner, rolled.value); break
       case 'berserker': effects.berserker = Math.max(effects.berserker, rolled.value); break
@@ -159,17 +183,18 @@ export function deriveEquipment(base, item = null, current = {}) {
     speed,
     maxHp,
     hp,
-    weapon: item?.type ?? null,
-    weaponRarity: item?.rarity ?? null,
+    weapon: equippedItem?.type ?? null,
+    weaponRarity: equippedItem?.rarity ?? null,
     weaponDamage,
-    weaponAffixes: item?.affixes ? [...item.affixes] : [],
-    equippedWeapon: item ? { ...item, affixes: [...(item.affixes ?? [])] } : null,
+    weaponAffixes: equippedItem?.affixes ? [...equippedItem.affixes] : [],
+    equippedWeapon: equippedItem ? { ...equippedItem, affixes: [...(equippedItem.affixes ?? [])] } : null,
     effects,
   }
 }
 
 export function affixSummary(item) {
-  return (item?.affixes ?? []).map((rolled) => ({
+  const equippedItem = specializeWeaponAffixes(item)
+  return (equippedItem?.affixes ?? []).map((rolled) => ({
     ...rolled,
     category: AFFIXES[rolled.id]?.category ?? 'basic',
     build: AFFIXES[rolled.id]?.category === 'build',

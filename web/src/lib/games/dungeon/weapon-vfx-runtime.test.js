@@ -136,3 +136,22 @@ test('common weapon creates no particle emitter', () => {
   runtime.attack({ x: 40, y: 50 })
   assert.equal(particles.length, 0)
 })
+
+test('bow volley uses a dedicated release aura and sparkle from existing vfx assets', () => {
+  const { scene, calls } = sceneFor({ type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'rare', vfxTheme: 'storm' })
+  const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 10, y: 11 }) })
+  runtime.volley([{ x: 40, y: 50 }, { x: 60, y: 45 }])
+
+  assert.ok(calls.some(([kind, x, y]) => kind === 'aura' && x === 10 && y === 11))
+  assert.ok(calls.some(([kind, x, y]) => kind === 'sparkle' && x === 10 && y === 11))
+})
+
+test('staff arcane nova layers aura, explosion and sparkle at the impact point', () => {
+  const { scene, calls } = sceneFor({ type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'rare', vfxTheme: 'arcane' })
+  const runtime = installDungeonWeaponVfx(scene)
+  runtime.nova(70, 80, { radius: 130 })
+
+  assert.ok(calls.some(([kind, x, y]) => kind === 'aura' && x === 70 && y === 80))
+  assert.ok(calls.some(([kind, x, y, options]) => kind === 'impact' && x === 70 && y === 80 && options.explosion === true))
+  assert.ok(calls.some(([kind, x, y]) => kind === 'sparkle' && x === 70 && y === 80))
+})

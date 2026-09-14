@@ -10,9 +10,25 @@ test('generic dungeon weapon becomes a named weapon while preserving quality and
   assert.equal(item.damage, 18)
 })
 
+test('ranged catalog drops specialize whirlwind into their own group skill', () => {
+  const rolled = { id: 'whirlwind', tier: 2, value: 0.26 }
+  const staff = weaponizeDrop({ type: 'weapon.dungeon_blade', rarity: 'epic', damage: 18, affixes: [rolled] }, 5, () => 0.84)
+  const bow = weaponizeDrop({ type: 'weapon.dungeon_blade', rarity: 'epic', damage: 18, affixes: [rolled] }, 5, () => 0.95)
+
+  assert.equal(staff.archetype, 'staff')
+  assert.equal(staff.affixes[0].id, 'arcane_nova')
+  assert.equal(bow.archetype, 'bow')
+  assert.equal(bow.affixes[0].id, 'volley')
+})
+
 test('known catalog weapons are stable when dropped again', () => {
   const original = { id: 'storm_lance', name: 'Storm Lance', type: 'weapon.storm_lance', archetype: 'spear', vfxTheme: 'storm', rarity: 'rare', damage: 20, affixes: [] }
   assert.deepEqual(weaponizeDrop(original, 8, () => 0.9), original)
+})
+
+test('known ranged weapons also normalize legacy whirlwind affixes', () => {
+  const bow = weaponizeDrop({ id: 'tempest_bow', name: 'Tempest Bow', type: 'weapon.tempest_bow', archetype: 'bow', vfxTheme: 'storm', rarity: 'epic', damage: 20, affixes: [{ id: 'whirlwind', tier: 2, value: 0.2 }] }, 8, () => 0.9)
+  assert.equal(bow.affixes[0].id, 'volley')
 })
 
 test('runtime wraps scene drops and restores original spawn function', () => {

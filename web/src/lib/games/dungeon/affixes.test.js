@@ -7,6 +7,7 @@ import {
   rollAffixes,
   deriveEquipment,
   affixSummary,
+  specializeWeaponAffixes,
 } from './affixes.js'
 
 const sequence = (values) => {
@@ -14,13 +15,15 @@ const sequence = (values) => {
   return () => values[index++ % values.length]
 }
 
-test('affix catalog contains the approved 18 affixes', () => {
-  assert.equal(Object.keys(AFFIXES).length, 18)
+test('affix catalog contains the approved affixes including ranged build specializations', () => {
+  assert.equal(Object.keys(AFFIXES).length, 20)
   for (const id of [
     'power', 'attack_speed', 'critical', 'movement_speed', 'vitality', 'life_steal',
     'piercing', 'chain', 'corpse_burst', 'critical_heal', 'hurt_haste', 'low_health_damage', 'skill_radius', 'skill_haste',
-    'whirlwind', 'thunder', 'executioner', 'berserker',
+    'whirlwind', 'volley', 'arcane_nova', 'thunder', 'executioner', 'berserker',
   ]) assert.ok(AFFIXES[id], `missing ${id}`)
+  assert.equal(AFFIXES.volley.rollable, false)
+  assert.equal(AFFIXES.arcane_nova.rollable, false)
 })
 
 test('rarity maps to fixed affix slot counts', () => {
@@ -39,6 +42,7 @@ test('build affixes are gated before floor three and forced boss rolls contain e
   assert.equal(boss.length, 3)
   assert.equal(boss.filter((affix) => AFFIXES[affix.id].category === 'build').length, 1)
   assert.equal(new Set(boss.map((affix) => affix.id)).size, boss.length)
+  assert.equal(boss.some((affix) => affix.id === 'volley' || affix.id === 'arcane_nova'), false)
 })
 
 test('higher floor rolls use stronger affix tiers', () => {
@@ -47,6 +51,36 @@ test('higher floor rolls use stronger affix tiers', () => {
   assert.equal(low[0].tier, 1)
   assert.equal(high[0].tier, 3)
   assert.ok(high[0].value >= low[0].value)
+})
+
+test('weapon build slot specializes by archetype without changing its rolled power', () => {
+  const whirlwind = { id: 'whirlwind', tier: 2, value: 0.26 }
+  const bow = specializeWeaponAffixes({ type: 'weapon.tempest_bow', archetype: 'bow', affixes: [whirlwind] })
+  const staff = specializeWeaponAffixes({ type: 'weapon.arcane_spire', archetype: 'staff', affixes: [whirlwind] })
+  const sword = specializeWeaponAffixes({ type: 'weapon.iron_fang', archetype: 'sword', affixes: [whirlwind] })
+
+  assert.deepEqual(bow.affixes[0], { id: 'volley', tier: 2, value: 0.26 })
+  assert.deepEqual(staff.affixes[0], { id: 'arcane_nova', tier: 2, value: 0.26 })
+  assert.deepEqual(sword.affixes[0], whirlwind)
+})
+
+test('deriving old ranged equipment never exposes whirlwind at runtime', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const bow = deriveEquipment(base, {
+    type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'epic', damage: 9,
+    affixes: [{ id: 'whirlwind', tier: 2, value: 0.26 }],
+  }, { hp: 100, maxHp: 100 })
+  const staff = deriveEquipment(base, {
+    type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'epic', damage: 9,
+    affixes: [{ id: 'whirlwind', tier: 2, value: 0.26 }],
+  }, { hp: 100, maxHp: 100 })
+
+  assert.equal(bow.effects.whirlwind, 0)
+  assert.equal(bow.effects.volley, 0.26)
+  assert.equal(bow.equippedWeapon.affixes[0].id, 'volley')
+  assert.equal(staff.effects.whirlwind, 0)
+  assert.equal(staff.effects.arcaneNova, 0.26)
+  assert.equal(staff.equippedWeapon.affixes[0].id, 'arcane_nova')
 })
 
 test('deriving equipment rebuilds stats instead of accumulating old weapon bonuses', () => {

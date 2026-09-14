@@ -13,6 +13,8 @@ test('affix labels format percentages and flat values bilingually', () => {
 test('build affixes receive a star and readable build names', () => {
   assert.equal(formatAffixLabel({ id: 'thunder', value: 0.42 }, 'zh-CN'), '★ 雷鸣 42%')
   assert.equal(formatAffixLabel({ id: 'executioner', value: 0.5 }, 'en'), '★ Executioner +50%')
+  assert.equal(formatAffixLabel({ id: 'volley', value: 0.26 }, 'zh-CN'), '★ 箭雨 26%')
+  assert.equal(formatAffixLabel({ id: 'arcane_nova', value: 0.26 }, 'en'), '★ Arcane Nova 26%')
 })
 
 test('weapon HUD model preserves base damage rarity and all equipped affixes', () => {
@@ -57,6 +59,15 @@ test('weapon comparison keeps ground weapon pending and marks comparable gains a
   assert.equal(model.candidate.affixes.find((entry) => entry.id === 'thunder').build, true)
 })
 
+test('ranged group skills stay highlighted as build affixes in comparison cards', () => {
+  const model = weaponComparisonModel(null, {
+    rarity: 'epic',
+    damage: 14,
+    affixes: [{ id: 'volley', tier: 2, value: 0.26 }, { id: 'arcane_nova', tier: 2, value: 0.26 }],
+  }, 'en')
+  assert.ok(model.candidate.affixes.every((entry) => entry.build))
+})
+
 test('weapon comparison supports the first weapon in a run', () => {
   const model = weaponComparisonModel(null, { rarity: 'uncommon', damage: 4, affixes: [{ id: 'power', tier: 1, value: 0.08 }] }, 'zh-CN')
   assert.equal(model.current, null)
@@ -67,6 +78,8 @@ test('weapon comparison supports the first weapon in a run', () => {
 test('combat visual cues map combat outcomes to distinct presentation effects', () => {
   assert.deepEqual(combatVisualCue('thunder'), { kind: 'chain-lightning', color: 0x8fdcff, width: 4, duration: 150 })
   assert.deepEqual(combatVisualCue('whirlwind'), { kind: 'radial-slash', color: 0xc984ff, radius: 112, duration: 220 })
+  assert.deepEqual(combatVisualCue('volley'), { kind: 'volley', color: 0x8fdcff, radius: 190, duration: 180 })
+  assert.deepEqual(combatVisualCue('arcane_nova'), { kind: 'arcane-nova', color: 0xc984ff, radius: 118, duration: 260 })
   assert.deepEqual(combatVisualCue('corpse_burst'), { kind: 'corpse-burst', color: 0xff875f, radius: 82, duration: 260 })
   assert.deepEqual(combatVisualCue('piercing'), { kind: 'pierce-trail', color: 0xeafbc9, length: 92, duration: 160 })
   assert.deepEqual(combatVisualCue('heal'), { kind: 'heal-number', color: '#70ff9f', duration: 620 })
