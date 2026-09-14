@@ -223,11 +223,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     if (effects.chain > 0 && random() < effects.chain) {
       const target = secondaryTarget(primary, scene.enemies, 165)
       if (target) {
-        if (scene.__dungeonVfx?.lightning) {
-          scene.__dungeonVfx.lightning(primary, target, { primary: false })
-        } else {
-          scene.effectLine(primary, target, 0x7bc5ff, 3)
-        }
+        scene.__dungeonVfx?.lightning?.(primary, target, { primary: false })
 
         scene.damageEnemy(
           target,

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { selectVfx, selectVfxVariant, vfxBlendMode, vfxCatalog } from './vfx-runtime.js'
+import { installDungeonVfx, selectVfx, selectVfxVariant, vfxBlendMode, vfxCatalog } from './vfx-runtime.js'
 
 const manifest = {
   assets: [
@@ -46,4 +46,60 @@ test('blend mode accounts for source packs that rely on additive black removal',
   assert.equal(vfxBlendMode('impact', { source: 'retro-impact' }), 'NORMAL')
   assert.equal(vfxBlendMode('critical', { source: 'retro-impact' }), 'NORMAL')
   assert.equal(vfxBlendMode('beam', { source: 'free-pixel-magic' }), 'ADD')
+})
+
+function gameObject(key) {
+  return {
+    key,
+    setDepth(){ return this },
+    setAlpha(){ return this },
+    setAngle(){ return this },
+    setBlendMode(){ return this },
+    setTint(){ return this },
+    setScale(){ return this },
+    play(){ return this },
+    once(){ return this },
+    destroy(){},
+  }
+}
+
+test('combat VFX never draw Phaser geometry and only instantiate loaded VFX textures', () => {
+  const used = []
+  const forbidden = () => { throw new Error('procedural combat VFX are forbidden') }
+  const combatManifest = {
+    assets: [
+      { kind: 'beam', source: 'free-pixel-magic', path: '/beam.png', width: 64, height: 16, frames: 1 },
+      { kind: 'lightning', source: 'lightning', path: '/lightning.png', width: 64, height: 16, frames: 1 },
+      { kind: 'whirlwind', source: 'foozle', path: '/whirlwind.png', width: 64, height: 64, frames: 1 },
+      { kind: 'slash', source: 'spell-effects', path: '/slash.png', width: 64, height: 64, frames: 1 },
+      { kind: 'impact', source: 'retro-impact', path: '/impact.png', width: 64, height: 64, frames: 1 },
+      { kind: 'critical', source: 'retro-impact', path: '/critical.png', width: 64, height: 64, frames: 1 },
+      { kind: 'sparkle', source: 'kenney-particles', path: '/sparkle.png', width: 32, height: 32, frames: 1 },
+    ],
+  }
+  const scene = {
+    textures: { exists: () => true },
+    load: { once(){}, start(){}, image(){}, spritesheet(){} },
+    anims: { exists: () => false, create(){}, generateFrameNumbers(){ return [] } },
+    tweens: { add(){} },
+    add: {
+      image(x, y, key) { used.push(key); return gameObject(key) },
+      sprite(x, y, key) { used.push(key); return gameObject(key) },
+      rectangle: forbidden,
+      circle: forbidden,
+      arc: forbidden,
+      graphics: forbidden,
+    },
+  }
+
+  const vfx = installDungeonVfx(scene, combatManifest)
+  vfx.beam({ start: { x: 0, y: 0 }, end: { x: 100, y: 0 }, width: 28 })
+  vfx.lightning({ x: 0, y: 0 }, { x: 80, y: 20 }, { primary: true })
+  vfx.whirlwind({ center: { x: 20, y: 30 }, radius: 90 })
+  vfx.slash({ x: 0, y: 0 }, { x: 50, y: 20 }, true)
+  vfx.impact(40, 50)
+  vfx.critical(40, 50)
+
+  assert.ok(used.length >= 6)
+  assert.ok(used.every((key) => key.startsWith('dungeon-vfx-')))
 })

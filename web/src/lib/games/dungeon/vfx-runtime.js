@@ -126,62 +126,93 @@ function spawnEffectSprite(scene, catalog, kind, x, y, { angle = 0, width = null
   return object
 }
 
-function fallbackLine(scene, from, to, color, width = 4, duration = 160, depth = 40) {
-  const dx = to.x - from.x, dy = to.y - from.y, distance = Math.hypot(dx, dy) || 1
-  const line = scene.add.rectangle(from.x + dx / 2, from.y + dy / 2, distance, width, color, 0.9).setRotation(Math.atan2(dy, dx)).setDepth(depth)
-  scene.tweens.add({ targets: line, alpha: 0, duration, onComplete: () => line.destroy() })
-  return line
-}
-
-function playBeam(scene, catalog, attack) {
+function playBeam(scene, catalog, attack, options = {}) {
   const from = attack.start, to = attack.end, dx = to.x - from.x, dy = to.y - from.y
-  const distance = Math.hypot(dx, dy) || 1, angle = Math.atan2(dy, dx) * 180 / Math.PI
-  const seed = `${Math.round(from.x)}:${Math.round(from.y)}:${Math.round(to.x)}:${Math.round(to.y)}`
-  const glow = fallbackLine(scene, from, to, 0xaeeeff, Math.max(8, (attack.width ?? 28) * 0.65), 150, 40); glow.setAlpha?.(0.35)
-  fallbackLine(scene, from, to, 0xf4fbff, Math.max(3, (attack.width ?? 28) * 0.16), 130, 42)
-  spawnEffectSprite(scene, catalog, 'beam', from.x + dx / 2, from.y + dy / 2, { angle, width: distance, height: Math.max(22, attack.width ?? 28), alpha: 0.78, duration: 150, depth: 41, seed })
-  const flash = scene.add.circle(from.x, from.y, 10, 0xeafcff, 0.85).setDepth(43)
-  scene.tweens.add({ targets: flash, radius: 24, alpha: 0, duration: 140, onComplete: () => flash.destroy() })
-  if (!spawnEffectSprite(scene, catalog, 'sparkle', to.x, to.y, { scale: 1.2, duration: 180, depth: 43, seed })) {
-    const spark = scene.add.circle(to.x, to.y, 6, 0xffffff, 0.9).setDepth(43)
-    scene.tweens.add({ targets: spark, radius: 18, alpha: 0, duration: 160, onComplete: () => spark.destroy() })
-  }
+  const distance = Math.hypot(dx, dy) || 1
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI
+  const seed = options.seed ?? `${Math.round(from.x)}:${Math.round(from.y)}:${Math.round(to.x)}:${Math.round(to.y)}`
+  const beam = spawnEffectSprite(scene, catalog, 'beam', from.x + dx / 2, from.y + dy / 2, {
+    angle,
+    width: distance,
+    height: Math.max(22, attack.width ?? 28),
+    alpha: options.alpha ?? 0.78,
+    duration: 150,
+    depth: options.depth ?? 41,
+    tint: options.tint ?? null,
+    seed,
+  })
+  spawnEffectSprite(scene, catalog, 'sparkle', from.x, from.y, {
+    scale: 0.72,
+    alpha: 0.82,
+    duration: 140,
+    depth: (options.depth ?? 41) + 1,
+    tint: options.tint ?? null,
+    seed: `${seed}:start`,
+  })
+  spawnEffectSprite(scene, catalog, 'sparkle', to.x, to.y, {
+    scale: 1.05,
+    alpha: 0.9,
+    duration: 180,
+    depth: (options.depth ?? 41) + 2,
+    tint: options.tint ?? null,
+    seed: `${seed}:impact`,
+  })
+  return beam
 }
 
-function playLightning(scene, catalog, from, to, { primary = false } = {}) {
-  const dx = to.x - from.x, dy = to.y - from.y, distance = Math.hypot(dx, dy) || 1, angle = Math.atan2(dy, dx) * 180 / Math.PI
-  fallbackLine(scene, from, to, primary ? 0xffffff : 0x9ae9ff, primary ? 5 : 4, 135, 42)
-  spawnEffectSprite(scene, catalog, 'lightning', from.x + dx / 2, from.y + dy / 2, { angle, width: distance, height: primary ? 34 : 26, alpha: 0.86, duration: 150, depth: 43, seed: `${from.x}:${from.y}:${to.x}:${to.y}:${primary}` })
+function playLightning(scene, catalog, from, to, options = {}) {
+  const dx = to.x - from.x, dy = to.y - from.y
+  const distance = Math.hypot(dx, dy) || 1
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI
+  return spawnEffectSprite(scene, catalog, 'lightning', from.x + dx / 2, from.y + dy / 2, {
+    angle,
+    width: distance,
+    height: options.primary ? 34 : 26,
+    alpha: options.alpha ?? 0.86,
+    duration: 150,
+    depth: options.depth ?? 43,
+    tint: options.tint ?? null,
+    seed: options.seed ?? `${from.x}:${from.y}:${to.x}:${to.y}:${Boolean(options.primary)}`,
+  })
 }
 
-function playWhirlwind(scene, catalog, attack) {
-  const { x, y } = attack.center, radius = attack.radius ?? 105
-  const sprite = spawnEffectSprite(scene, catalog, 'whirlwind', x, y, { width: radius * 2.15, height: radius * 2.15, alpha: 0.88, duration: 260, depth: 40, seed: `${x}:${y}` })
-  for (let index = 0; index < 3; index++) {
-    const arc = scene.add.arc(x, y, radius * (0.48 + index * 0.16), 15 + index * 95, 132 + index * 95, false, 0xc984ff, 0).setStrokeStyle(5 - index, index === 0 ? 0xf1d8ff : 0xc984ff, 0.88 - index * 0.15).setDepth(41)
-    scene.tweens.add({ targets: arc, angle: 220 + index * 60, scale: 1.25, alpha: 0, duration: 260, onComplete: () => arc.destroy() })
-  }
+function playWhirlwind(scene, catalog, attack, options = {}) {
+  const { x, y } = attack.center
+  const radius = attack.radius ?? 105
+  const sprite = spawnEffectSprite(scene, catalog, 'whirlwind', x, y, {
+    width: radius * 2.15,
+    height: radius * 2.15,
+    alpha: options.alpha ?? 0.88,
+    duration: 260,
+    depth: options.depth ?? 40,
+    tint: options.tint ?? null,
+    seed: options.seed ?? `${x}:${y}`,
+  })
   if (sprite) scene.tweens.add({ targets: sprite, angle: 150, duration: 260 })
+  return sprite
 }
 
-function playSlash(scene, catalog, from, to, critical = false) {
-  const dx = to.x - from.x, dy = to.y - from.y, angle = Math.atan2(dy, dx) * 180 / Math.PI
+function playSlash(scene, catalog, from, to, critical = false, options = {}) {
+  const dx = to.x - from.x, dy = to.y - from.y
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI
   const x = from.x + dx * 0.48, y = from.y + dy * 0.48
-  const sprite = spawnEffectSprite(scene, catalog, 'slash', x, y, { angle, width: critical ? 96 : 76, height: critical ? 96 : 76, alpha: 0.92, duration: critical ? 180 : 145, depth: 42, tint: critical ? 0xffe07a : null, seed: `${x}:${y}:${critical}` })
-  if (!sprite) {
-    const arc = scene.add.arc(x, y, critical ? 44 : 36, -55, 55, false, critical ? 0xffdd6e : 0xeafbc9, 0).setStrokeStyle(critical ? 6 : 4, critical ? 0xffdd6e : 0xeafbc9, 0.92).setAngle(angle).setDepth(42)
-    scene.tweens.add({ targets: arc, alpha: 0, scale: 1.3, duration: critical ? 180 : 145, onComplete: () => arc.destroy() })
-  }
+  return spawnEffectSprite(scene, catalog, 'slash', x, y, {
+    angle,
+    width: critical ? 96 : 76,
+    height: critical ? 96 : 76,
+    alpha: options.alpha ?? 0.92,
+    duration: critical ? 180 : 145,
+    depth: options.depth ?? 42,
+    tint: options.tint ?? (critical ? 0xffe07a : null),
+    seed: options.seed ?? `${x}:${y}:${critical}`,
+  })
 }
 
 function playPoint(scene, catalog, kind, x, y, options = {}) {
-  const sprite = spawnEffectSprite(scene, catalog, kind, x, y, { seed: `${Math.round(x)}:${Math.round(y)}:${options.seed ?? ''}`, ...options })
-  if (sprite) return sprite
-  const radius = kind === 'explosion' ? 70 : kind === 'critical' ? 30 : 22
-  const color = kind === 'critical' ? 0xffdc68 : kind === 'heal' ? 0x70ff9f : kind === 'smoke' ? 0x8d9298 : 0xf4f0e8
-  const ring = scene.add.circle(x, y, 8, color, 0.18).setStrokeStyle(3, color, 0.9).setDepth(options.depth ?? 45)
-  scene.tweens.add({ targets: ring, radius, alpha: 0, duration: options.duration ?? 180, onComplete: () => ring.destroy() })
-  return ring
+  return spawnEffectSprite(scene, catalog, kind, x, y, {
+    seed: `${Math.round(x)}:${Math.round(y)}:${options.seed ?? ''}`,
+    ...options,
+  })
 }
 
 export function installDungeonVfx(scene, manifest = {}) {
@@ -192,11 +223,18 @@ export function installDungeonVfx(scene, manifest = {}) {
   const api = {
     catalog,
     isReady: () => ready,
-    beam: (attack) => playBeam(scene, catalog, attack),
-    whirlwind: (attack) => playWhirlwind(scene, catalog, attack),
-    lightning: (from, to, options) => playLightning(scene, catalog, from, to, options),
-    slash: (from, to, critical = false) => playSlash(scene, catalog, from, to, critical),
-    impact: (x, y, options = {}) => playPoint(scene, catalog, options.explosion ? 'explosion' : 'impact', x, y, { width: options.explosion ? 110 : 48, height: options.explosion ? 110 : 48, alpha: 0.86, duration: options.explosion ? 260 : 160, depth: 45, seed: options.seed }),
+    beam: (attack, options = {}) => playBeam(scene, catalog, attack, options),
+    whirlwind: (attack, options = {}) => playWhirlwind(scene, catalog, attack, options),
+    lightning: (from, to, options = {}) => playLightning(scene, catalog, from, to, options),
+    slash: (from, to, critical = false, options = {}) => playSlash(scene, catalog, from, to, critical, options),
+    impact: (x, y, options = {}) => playPoint(scene, catalog, options.explosion ? 'explosion' : 'impact', x, y, {
+      ...options,
+      width: options.width ?? (options.explosion ? 110 : 48),
+      height: options.height ?? (options.explosion ? 110 : 48),
+      alpha: options.alpha ?? 0.86,
+      duration: options.duration ?? (options.explosion ? 260 : 160),
+      depth: options.depth ?? 45,
+    }),
     critical: (x, y, options = {}) => playPoint(scene, catalog, 'critical', x, y, { width: 66, height: 66, alpha: 0.92, duration: 190, depth: 46, tint: 0xffdf72, ...options }),
     flame: (x, y, options = {}) => spawnEffectSprite(scene, catalog, 'flame', x, y, { width: 34, height: 54, duration: 400, depth: 18, ...options }),
     sparkle: (x, y, options = {}) => spawnEffectSprite(scene, catalog, 'sparkle', x, y, { width: 28, height: 28, duration: 260, depth: 24, ...options }),

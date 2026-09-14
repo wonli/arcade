@@ -64,10 +64,10 @@ export function weaponParticleCandidates(catalog, profile = {}) {
   return rotate(uniqueRefs([...preferred, ...allStatic]), profile.variant ?? 0)
 }
 
-function particleTexture(scene, profile) {
-  for (const candidate of weaponParticleCandidates(scene.__dungeonVfx?.catalog, profile)) {
+export function weaponVfxTexture(scene, profile = {}) {
+  for (const candidate of weaponParticleCandidates(scene?.__dungeonVfx?.catalog, profile)) {
     const key = `dungeon-vfx-${candidate.kind}-${candidate.index}`
-    if (scene.textures?.exists?.(key)) return { key, asset: candidate.asset }
+    if (scene?.textures?.exists?.(key)) return { key, asset: candidate.asset, kind: candidate.kind, index: candidate.index }
   }
   return null
 }
@@ -96,15 +96,16 @@ function particleConfig(profile, asset) {
 }
 
 function playPoint(scene, kind, x, y, options) {
-  if (kind === 'explosion') return scene.__dungeonVfx?.impact?.(x, y, { ...options, explosion: true })
-  return scene.__dungeonVfx?.[kind]?.(x, y, options)
+  const resourceOptions = { ...options, resourceOnly: true }
+  if (kind === 'explosion') return scene.__dungeonVfx?.impact?.(x, y, { ...resourceOptions, explosion: true })
+  return scene.__dungeonVfx?.[kind]?.(x, y, resourceOptions)
 }
 
 function playAttack(scene, effect, from, to, options) {
   if (!effect || !to) return null
-  if (effect.kind === 'lightning') return scene.__dungeonVfx?.lightning?.(from, to, options)
-  if (effect.kind === 'beam') return scene.__dungeonVfx?.beam?.({ start: from, end: to, width: 24 })
-  if (effect.kind === 'slash') return scene.__dungeonVfx?.slash?.(from, to, false)
+  if (effect.kind === 'lightning') return scene.__dungeonVfx?.lightning?.(from, to, { ...options, resourceOnly: true })
+  if (effect.kind === 'beam') return scene.__dungeonVfx?.beam?.({ start: from, end: to, width: 24 }, { ...options, resourceOnly: true })
+  if (effect.kind === 'slash') return scene.__dungeonVfx?.slash?.(from, to, false, { ...options, resourceOnly: true })
   return playPoint(scene, effect.kind, to.x, to.y, options)
 }
 
@@ -144,7 +145,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       }
       return
     }
-    const texture = particleTexture(scene, profile.particles)
+    const texture = weaponVfxTexture(scene, profile.particles)
     if (!texture) return
     const at = point(scene, anchor)
     particleManager = scene.add.particles(at.x, at.y, texture.key, particleConfig(profile.particles, texture.asset))
@@ -212,6 +213,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       scale: 0.62 + Math.min(0.28, count * 0.07),
       depth: 27,
       seed,
+      resourceOnly: true,
     })
     return scene.__dungeonVfx?.sparkle?.(from.x, from.y, {
       tint: profile.tint,
@@ -219,6 +221,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       scale: 0.72,
       depth: 28,
       seed: `${seed}:release`,
+      resourceOnly: true,
     })
   }
 
@@ -234,6 +237,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       scale,
       depth: 44,
       seed,
+      resourceOnly: true,
     })
     scene.__dungeonVfx?.impact?.(x, y, {
       explosion: true,
@@ -242,6 +246,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       scale: Math.max(0.9, scale * 0.82),
       depth: 45,
       seed: `${seed}:burst`,
+      resourceOnly: true,
     })
     return scene.__dungeonVfx?.sparkle?.(x, y, {
       tint: profile.tint,
@@ -249,6 +254,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
       scale: Math.max(0.8, scale * 0.68),
       depth: 46,
       seed: `${seed}:sparkle`,
+      resourceOnly: true,
     })
   }
 
