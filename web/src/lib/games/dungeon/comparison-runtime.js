@@ -6,6 +6,7 @@ const RARITY_COLORS = {
   uncommon: '#70ff9f',
   rare: '#67a8ff',
   epic: '#c984ff',
+  legendary: '#ffb347',
 }
 
 export function comparisonCardPosition(
@@ -39,6 +40,11 @@ function marker(direction, locale) {
 
 function rarityColor(rarity) {
   return RARITY_COLORS[rarity] ?? '#f4f0e8'
+}
+
+function identityText(model, fallback) {
+  const identity = [model?.archetypeLabel, model?.name].filter(Boolean).join(' · ')
+  return identity || fallback
 }
 
 function addText(scene, container, x, y, text, style = {}) {
@@ -92,7 +98,7 @@ export function createComparisonCard(
       container,
       12,
       y,
-      `${rarityName(model.candidate.rarity)} ${label('dungeonBlade')}`,
+      `${rarityName(model.candidate.rarity)} ${identityText(model.candidate, label('dungeonBlade'))}`,
       {
         fontSize: '13px',
         fontStyle: 'bold',
@@ -143,7 +149,7 @@ export function createComparisonCard(
         container,
         12,
         y,
-        `${rarityName(model.current.rarity)} ${label('dungeonBlade')}`,
+        `${rarityName(model.current.rarity)} ${identityText(model.current, label('dungeonBlade'))}`,
         {
           fontSize: '12px',
           fontStyle: 'bold',

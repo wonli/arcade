@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
-  import { formatAffixLabel, gameOverSummary, weaponHudModel } from '$lib/games/dungeon/presentation.js'
+  import { formatAffixLabel, gameOverSummary, weaponHudModel, weaponIdentityLabel } from '$lib/games/dungeon/presentation.js'
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { createComparisonCard } from '$lib/games/dungeon/comparison-runtime.js'
@@ -17,8 +17,8 @@
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
   const messages = {
-    'zh-CN': { title:'无尽地牢', subtitle:'WASD 移动 · 自动普攻 · Space 主动技能 · E 交互/换装', hp:'生命', damage:'伤害', kills:'击杀', floor:'层数', chapter:'章节', room:'房间', weapon:'武器', none:'无', loading:'正在进入地牢…', back:'返回 Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'装备{rarity}地牢之刃，基础伤害 +{damage}。', pickupPotion:'喝下生命药水，恢复 {heal} 点生命。', storePotion:'生命药水已收入背包。', fullHealth:'生命值已满。', dropWeapon:'{rarity}装备掉落！', dropPotion:'生命药水掉落！', gameover:'本次探索结束。', runEnded:'探索终结', runSummary:'本次地牢记录', restart:'重新开始', skill:'主动技能命中 {hits} 个敌人。', floorTitle:'第 {floor} 层', floorClear:'本层已清空', floorStart:'进入第 {floor} 层。', portal:'出口已开启，进入绿色传送门。', dungeonBlade:'地牢之刃', rarityCommon:'普通', rarityUncommon:'精良', rarityRare:'稀有', rarityEpic:'史诗', current:'当前装备', ground:'地上装备', equip:'装备', emptyWeapon:'未装备武器', combat:'战斗', elite:'精英', rest:'休息', boss:'首领', restTitle:'篝火休息', restComplete:'休整完成 · 出口已开启', restRecover:'恢复 50% 最大生命', restTemper:'强化当前武器', restFortune:'下一战利品品质提升', restEntered:'发现休息层，靠近篝火选择奖励。', restChoice:'已选择：{choice}', openChest:'打开宝箱', chestOpened:'宝箱开启！', touchSkill:'技能', touchInteract:'交互', potion:'药水', usePotion:'使用药水', details:'属性', close:'返回战斗', baseDamage:'武器伤害', totalDamage:'总伤害', affixes:'词缀', noAffixes:'暂无词缀', paused:'游戏已暂停' },
-    en: { title:'Endless Dungeon', subtitle:'WASD move · auto attack · Space skill · E interact/equip', hp:'HP', damage:'Damage', kills:'Kills', floor:'Floor', chapter:'Chapter', room:'Room', weapon:'Weapon', none:'None', loading:'Entering the dungeon…', back:'Back to Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'{rarity} Dungeon Blade equipped. Base damage +{damage}.', pickupPotion:'Health potion restored {heal} HP.', storePotion:'Health potion stored.', fullHealth:'HP is already full.', dropWeapon:'{rarity} equipment dropped!', dropPotion:'Health potion dropped!', gameover:'Run ended.', runEnded:'RUN ENDED', runSummary:'DUNGEON RECORD', restart:'Restart', skill:'Active skill hit {hits} enemies.', floorTitle:'FLOOR {floor}', floorClear:'FLOOR CLEAR', floorStart:'Entered floor {floor}.', portal:'Exit portal opened. Step into the green portal.', dungeonBlade:'Dungeon Blade', rarityCommon:'Common', rarityUncommon:'Uncommon', rarityRare:'Rare', rarityEpic:'Epic', current:'Equipped', ground:'Ground Item', equip:'Equip', emptyWeapon:'No weapon equipped', combat:'Combat', elite:'Elite', rest:'Rest', boss:'Boss', restTitle:'REST CAMP', restComplete:'Rest complete · exit opened', restRecover:'Recover 50% max HP', restTemper:'Temper current weapon', restFortune:'Improve next loot quality', restEntered:'Rest floor found. Approach the camp to choose.', restChoice:'Selected: {choice}', openChest:'Open Chest', chestOpened:'Chest opened!', touchSkill:'SKILL', touchInteract:'USE', potion:'Potion', usePotion:'Use potion', details:'Stats', close:'Resume', baseDamage:'Weapon damage', totalDamage:'Total damage', affixes:'Affixes', noAffixes:'No affixes', paused:'GAME PAUSED' }
+    'zh-CN': { title:'无尽地牢', subtitle:'WASD 移动 · 自动普攻 · Space 主动技能 · E 交互/换装', hp:'生命', damage:'伤害', kills:'击杀', floor:'层数', chapter:'章节', room:'房间', weapon:'武器', none:'无', loading:'正在进入地牢…', back:'返回 Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'装备 {rarity} · {identity}，基础伤害 +{damage}。', pickupPotion:'喝下生命药水，恢复 {heal} 点生命。', storePotion:'生命药水已收入背包。', fullHealth:'生命值已满。', dropWeapon:'{rarity} · {identity} 掉落！', dropPotion:'生命药水掉落！', gameover:'本次探索结束。', runEnded:'探索终结', runSummary:'本次地牢记录', restart:'重新开始', skill:'主动技能命中 {hits} 个敌人。', floorTitle:'第 {floor} 层', floorClear:'本层已清空', floorStart:'进入第 {floor} 层。', portal:'出口已开启，进入绿色传送门。', dungeonBlade:'地牢之刃', rarityCommon:'普通', rarityUncommon:'精良', rarityRare:'稀有', rarityEpic:'史诗', rarityLegendary:'传奇', current:'当前装备', ground:'地上装备', equip:'装备', emptyWeapon:'未装备武器', combat:'战斗', elite:'精英', rest:'休息', boss:'首领', restTitle:'篝火休息', restComplete:'休整完成 · 出口已开启', restRecover:'恢复 50% 最大生命', restTemper:'强化当前武器', restFortune:'下一战利品品质提升', restEntered:'发现休息层，靠近篝火选择奖励。', restChoice:'已选择：{choice}', openChest:'打开宝箱', chestOpened:'宝箱开启！', touchSkill:'技能', touchInteract:'交互', potion:'药水', usePotion:'使用药水', details:'属性', close:'返回战斗', baseDamage:'武器伤害', totalDamage:'总伤害', affixes:'词缀', noAffixes:'暂无词缀', paused:'游戏已暂停' },
+    en: { title:'Endless Dungeon', subtitle:'WASD move · auto attack · Space skill · E interact/equip', hp:'HP', damage:'Damage', kills:'Kills', floor:'Floor', chapter:'Chapter', room:'Room', weapon:'Weapon', none:'None', loading:'Entering the dungeon…', back:'Back to Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'Equipped {rarity} · {identity}. Base damage +{damage}.', pickupPotion:'Health potion restored {heal} HP.', storePotion:'Health potion stored.', fullHealth:'HP is already full.', dropWeapon:'{rarity} · {identity} dropped!', dropPotion:'Health potion dropped!', gameover:'Run ended.', runEnded:'RUN ENDED', runSummary:'DUNGEON RECORD', restart:'Restart', skill:'Active skill hit {hits} enemies.', floorTitle:'FLOOR {floor}', floorClear:'FLOOR CLEAR', floorStart:'Entered floor {floor}.', portal:'Exit portal opened. Step into the green portal.', dungeonBlade:'Dungeon Blade', rarityCommon:'Common', rarityUncommon:'Uncommon', rarityRare:'Rare', rarityEpic:'Epic', rarityLegendary:'Legendary', current:'Equipped', ground:'Ground Item', equip:'Equip', emptyWeapon:'No weapon equipped', combat:'Combat', elite:'Elite', rest:'Rest', boss:'Boss', restTitle:'REST CAMP', restComplete:'Rest complete · exit opened', restRecover:'Recover 50% max HP', restTemper:'Temper current weapon', restFortune:'Improve next loot quality', restEntered:'Rest floor found. Approach the camp to choose.', restChoice:'Selected: {choice}', openChest:'Open Chest', chestOpened:'Chest opened!', touchSkill:'SKILL', touchInteract:'USE', potion:'Potion', usePotion:'Use potion', details:'Stats', close:'Resume', baseDamage:'Weapon damage', totalDamage:'Total damage', affixes:'Affixes', noAffixes:'No affixes', paused:'GAME PAUSED' }
   }
 
   let mount, stageShell, gameViewport, game, gameResources
@@ -29,13 +29,14 @@
   let viewportFrame = 0
 
   const t = (key, values = {}) => { let text = messages[locale]?.[key] ?? messages.en[key] ?? key; for (const [name,value] of Object.entries(values)) text = text.replace(`{${name}}`, value); return text }
-  const rarityName = (rarity) => { const key = { common:'rarityCommon', uncommon:'rarityUncommon', rare:'rarityRare', epic:'rarityEpic' }[rarity]; return key ? t(key) : '' }
+  const rarityName = (rarity) => { const key = { common:'rarityCommon', uncommon:'rarityUncommon', rare:'rarityRare', epic:'rarityEpic', legendary:'rarityLegendary' }[rarity]; return key ? t(key) : '' }
   const roomName = (role) => t(role || 'combat')
   $: weaponModel = weaponHudModel(stats, locale)
   $: runSummary = gameOverSummary(stats, progress)
 
   function hudLabels() {
     return {
+      locale,
       hp: t('hp'),
       weapon: t('weapon'),
       details: t('details'),
@@ -51,6 +52,7 @@
       'rarity:uncommon': t('rarityUncommon'),
       'rarity:rare': t('rarityRare'),
       'rarity:epic': t('rarityEpic'),
+      'rarity:legendary': t('rarityLegendary'),
     }
   }
 
@@ -60,6 +62,7 @@
     locale = next
     localStorage.setItem('arcade.locale', next)
     dungeonScene()?.__comparisonCard?.refresh?.()
+    pickupRuntime?.refreshLabels?.()
     hudRuntime?.update()
   }
 
@@ -99,8 +102,9 @@
 
   function onEvent(event) {
     const potion = event.item?.type === 'consumable.health_potion'
-    if (event.type === 'pickup') eventText = potion ? t('pickupPotion', { heal: event.healed ?? 0 }) : t('pickupWeapon', { rarity: rarityName(event.item?.rarity), damage: event.item?.damage ?? 0 })
-    if (event.type === 'drop') eventText = potion ? t('dropPotion') : t('dropWeapon', { rarity: rarityName(event.item?.rarity) })
+    const identity = weaponIdentityLabel(event.item, locale) || t('dungeonBlade')
+    if (event.type === 'pickup') eventText = potion ? t('pickupPotion', { heal: event.healed ?? 0 }) : t('pickupWeapon', { rarity: rarityName(event.item?.rarity), identity, damage: event.item?.damage ?? 0 })
+    if (event.type === 'drop') eventText = potion ? t('dropPotion') : t('dropWeapon', { rarity: rarityName(event.item?.rarity), identity })
     if (event.type === 'gameover') { eventText = t('gameover'); gameOver = true; panelOpen = false; touchInput?.stopMove() }
     if (event.type === 'skill') eventText = t('skill', { hits: event.hits })
     if (event.type === 'floorstart') eventText = `${t('floorStart', { floor: event.floor })} · ${roomName(event.roomRole)}`
@@ -190,6 +194,7 @@
         }
 
         pickupRuntime = installPickupInteraction(scene, {
+          getLocale: () => locale,
           onSelection(next) { scene.__comparisonCard?.setSelection(next) },
         })
 
@@ -280,7 +285,7 @@
         <div class="stats-overlay" role="dialog" aria-modal="true" aria-label={t('details')}>
           <div class="stats-panel">
             <div class="pause-mark">II · {t('paused')}</div>
-            <div class="weapon-title"><div><span>{t('current')}</span><h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} ${t('dungeonBlade')}` : t('emptyWeapon')}</h2></div><button class="close" on:click={()=>setPanel(false)}>×</button></div>
+            <div class="weapon-title"><div><span>{t('current')}</span><h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'} class:legendary={stats.weaponRarity==='legendary'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} · ${weaponModel.archetypeLabel ?? t('weapon')} · ${weaponModel.name ?? t('dungeonBlade')}` : t('emptyWeapon')}</h2></div><button class="close" on:click={()=>setPanel(false)}>×</button></div>
             <div class="stat-grid"><div><span>{t('baseDamage')}</span><strong>{weaponModel.damage}</strong></div><div><span>{t('totalDamage')}</span><strong>{stats.damage}</strong></div><div><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div><div><span>{t('potion')}</span><strong class="potion-count"><span class="potion-bottle small" aria-hidden="true"></span> × {stats.healthPotions??0}</strong></div></div>
             <div class="affix-box"><span>{t('affixes')}</span>{#if weaponModel.affixes.length}<div class="affix-list">{#each weaponModel.affixes as affix}<div>◆ {affix}</div>{/each}</div>{:else}<p>{t('noAffixes')}</p>{/if}</div>
             <div class="panel-actions"><button class="use-potion" disabled={(stats.healthPotions??0)<=0} on:click={usePotion}><span class="potion-bottle small" aria-hidden="true"></span>{t('usePotion')} · {stats.healthPotions??0}</button><button class="resume" on:click={()=>setPanel(false)}>{t('close')}</button></div>
@@ -288,7 +293,7 @@
         </div>
       {/if}
 
-      {#if gameOver}<div class="gameover-overlay"><div class="gameover-panel" role="dialog" aria-modal="true"><div class="gameover-kicker">RUN ENDED</div><h2>{t('runEnded')}</h2><div class="run-stats"><div><span>{t('floor')}</span><strong>{runSummary.floor}</strong></div><div><span>{t('kills')}</span><strong>{runSummary.kills}</strong></div></div><div class="run-weapon"><span>{t('weapon')}</span><strong>{runSummary.weapon ? `${rarityName(runSummary.rarity)} ${t('dungeonBlade')} +${runSummary.damage}` : t('none')}</strong></div><div class="gameover-actions"><a href="/">{t('back')}</a><button on:click={startDungeon}>{t('restart')}</button></div></div></div>{/if}
+      {#if gameOver}<div class="gameover-overlay"><div class="gameover-panel" role="dialog" aria-modal="true"><div class="gameover-kicker">RUN ENDED</div><h2>{t('runEnded')}</h2><div class="run-stats"><div><span>{t('floor')}</span><strong>{runSummary.floor}</strong></div><div><span>{t('kills')}</span><strong>{runSummary.kills}</strong></div></div><div class="run-weapon"><span>{t('weapon')}</span><strong>{runSummary.weapon ? `${rarityName(runSummary.rarity)} · ${weaponModel.archetypeLabel ?? t('weapon')} · ${weaponModel.name ?? t('dungeonBlade')} +${runSummary.damage}` : t('none')}</strong></div><div class="gameover-actions"><a href="/">{t('back')}</a><button on:click={startDungeon}>{t('restart')}</button></div></div></div>{/if}
     </div>
   </section>
 
@@ -306,7 +311,7 @@
   .stage{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;max-width:100%!important;max-height:100%!important;margin:auto!important;touch-action:none}
   .game-viewport{position:absolute;z-index:30;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
   .potion-bottle{position:relative;display:inline-block;width:15px;height:18px;flex:0 0 auto;border-radius:3px 3px 6px 6px;background:#b92f43;box-shadow:inset 0 -5px 0 rgba(82,12,25,.42),0 2px 7px rgba(0,0,0,.36)}.potion-bottle::before{content:"";position:absolute;left:4px;top:-5px;width:7px;height:6px;border-radius:2px 2px 1px 1px;background:#c9bea5;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}.potion-bottle::after{content:"";position:absolute;left:3px;top:4px;width:3px;height:6px;border-radius:2px;background:rgba(255,210,214,.52)}.potion-bottle.small{width:12px;height:15px;border-radius:3px 3px 5px 5px}.potion-bottle.small::before{left:3px;top:-4px;width:6px;height:5px}.potion-bottle.small::after{left:2px;top:3px;width:2px;height:5px}
-  .common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}
+  .common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}.legendary{color:#ffb347}
   .touch-controls{display:none;position:absolute;inset:0;z-index:45;pointer-events:none}.joystick-slot{position:absolute;left:16px;bottom:42px;pointer-events:auto}.touch-actions{position:absolute;right:16px;bottom:42px;display:flex;align-items:flex-end;gap:12px;pointer-events:auto}.touch-button{width:72px;height:72px;border-radius:50%;border:1px solid rgba(244,240,232,.38);background:rgba(15,18,23,.68);color:#f4f0e8;font:800 10px ui-monospace,monospace;touch-action:manipulation;box-shadow:0 5px 15px rgba(0,0,0,.28)}.touch-button.skill{width:84px;height:84px;color:#d7c4ff;border-color:rgba(201,132,255,.64);background:rgba(74,38,96,.62)}.touch-button.interact{color:#c1ff56;border-color:rgba(193,255,86,.55)}
   .overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,monospace;font-weight:800;z-index:60;pointer-events:auto}.overlay.error{color:#ff6875;padding:32px;text-align:center}
   .stats-overlay,.gameover-overlay{position:absolute;inset:0;z-index:80;display:grid;place-items:center;padding:18px;background:rgba(3,4,6,.74);backdrop-filter:blur(4px);pointer-events:auto}.stats-panel,.gameover-panel{width:min(520px,calc(100% - 20px));box-sizing:border-box;padding:22px;background:rgba(14,18,23,.96);box-shadow:0 20px 55px rgba(0,0,0,.55);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.pause-mark{color:#c1ff56;font-size:9px;font-weight:900;letter-spacing:.18em}.weapon-title{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-top:10px}.weapon-title span,.affix-box>span,.stat-grid span,.run-stats span,.run-weapon span{display:block;color:#68737f;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.weapon-title h2{margin:5px 0 0;font-size:24px}.close{width:42px;height:42px;border:0;background:#1a2028;color:#d8dde2;font-size:24px;cursor:pointer}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;background:#090c10}.stat-grid>div{padding:12px;border-right:1px solid rgba(71,80,91,.45)}.stat-grid>div:last-child{border:0}.stat-grid strong{display:block;margin-top:4px;font-size:16px}.potion-count{display:flex!important;align-items:center;gap:6px}.affix-box{margin-top:12px;padding:14px;background:#090c10}.affix-list{display:grid;gap:7px;margin-top:9px;color:#cbd3dc;font-size:12px}.affix-box p{margin:8px 0 0;color:#65707c;font-size:11px}.panel-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:16px}.panel-actions button,.gameover-actions button,.gameover-actions a{min-height:50px;border:0;font:900 11px ui-monospace,monospace;letter-spacing:.05em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}.use-potion{background:#2a1319;color:#ff8993}.use-potion:disabled{opacity:.35}.resume{background:#c1ff56;color:#080a0d}.gameover-kicker{color:#ff6875;font-size:10px;font-weight:900;letter-spacing:.18em}.gameover-panel h2{margin:8px 0 16px}.run-stats{display:grid;grid-template-columns:1fr 1fr;background:#090c10}.run-stats>div,.run-weapon{padding:13px}.run-stats strong,.run-weapon strong{display:block;margin-top:4px}.run-weapon{margin-top:10px;background:#090c10}.gameover-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}.gameover-actions a{background:#171b21;color:#aab2bb}.gameover-actions button{background:#c1ff56;color:#080a0d}

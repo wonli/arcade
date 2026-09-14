@@ -1,3 +1,5 @@
+import { weaponDefinition } from './weapon-catalog.js'
+
 const NAMES = {
   'zh-CN': {
     power: '伤害', attack_speed: '攻速', critical: '暴击', movement_speed: '移速', vitality: '最大生命', life_steal: '吸血',
@@ -10,6 +12,56 @@ const NAMES = {
     whirlwind: 'Whirlwind', volley: 'Volley', arcane_nova: 'Arcane Nova', thunder: 'Thunder', executioner: 'Executioner', berserker: 'Berserker',
   },
 }
+
+const WEAPON_NAMES_ZH = Object.freeze({
+  iron_fang: '铁牙',
+  warden_blade: '守望之刃',
+  ash_saber: '灰烬刀',
+  grave_cleaver: '墓冢战斧',
+  frostbite: '霜噬',
+  storm_lance: '风暴长枪',
+  ember_maul: '余烬重刃',
+  void_edge: '虚空之锋',
+  blood_reaver: '血掠者',
+  arcane_spire: '奥术法杖',
+  tempest_bow: '风暴弓',
+  starfall_spear: '星陨长枪',
+  kings_ruin: '王者之殇',
+  sunfall: '日陨',
+  white_silence: '白色寂静',
+  stormcrown: '风暴王冠',
+  void_testament: '虚空遗言',
+  blood_oath: '血誓',
+  dawn_reaver: '黎明掠者',
+  cinder_vow: '余烬之誓',
+  winters_end: '凛冬终焉',
+  thunderwake: '雷霆余响',
+  starless_edge: '无星之锋',
+  crimson_verdict: '绯红裁决',
+})
+
+const ARCHETYPE_NAMES = Object.freeze({
+  'zh-CN': {
+    dagger: '匕首',
+    sword: '长剑',
+    katana: '太刀',
+    axe: '战斧',
+    spear: '长枪',
+    greatsword: '巨剑',
+    staff: '法杖',
+    bow: '弓',
+  },
+  en: {
+    dagger: 'Dagger',
+    sword: 'Sword',
+    katana: 'Katana',
+    axe: 'Axe',
+    spear: 'Spear',
+    greatsword: 'Greatsword',
+    staff: 'Staff',
+    bow: 'Bow',
+  },
+})
 
 const PERCENT_PREFIX = new Set(['power', 'attack_speed', 'critical', 'movement_speed', 'skill_radius', 'skill_haste'])
 const PERCENT_SUFFIX = new Set(['life_steal', 'piercing', 'chain', 'corpse_burst', 'hurt_haste', 'low_health_damage'])
@@ -28,6 +80,36 @@ const COMBAT_VISUALS = {
 
 function percent(value) {
   return Math.round((value ?? 0) * 100)
+}
+
+function weaponIdentity(item) {
+  if (!item) return null
+  const value = typeof item === 'string' ? { type: item } : item
+  const definition = weaponDefinition(value.id ?? value.type)
+  return definition ? { ...definition, ...value } : { ...value }
+}
+
+export function weaponDisplayName(item, locale = 'en') {
+  const identity = weaponIdentity(item)
+  if (!identity) return null
+  if (locale === 'zh-CN') {
+    const localized = WEAPON_NAMES_ZH[identity.id]
+    if (localized) return localized
+  }
+  return identity.name ?? null
+}
+
+export function weaponArchetypeLabel(item, locale = 'en') {
+  const identity = weaponIdentity(item)
+  if (!identity?.archetype) return null
+  const lang = ARCHETYPE_NAMES[locale] ? locale : 'en'
+  return ARCHETYPE_NAMES[lang][identity.archetype] ?? identity.archetype
+}
+
+export function weaponIdentityLabel(item, locale = 'en') {
+  const type = weaponArchetypeLabel(item, locale)
+  const name = weaponDisplayName(item, locale)
+  return [type, name].filter(Boolean).join(' · ')
 }
 
 export function combatVisualCue(type) {
@@ -65,39 +147,42 @@ function compareAffixes(entries = [], otherEntries = [], locale = 'en', side = '
   }).sort((a, b) => Number(b.build) - Number(a.build) || a._index - b._index).map(({ _index, ...entry }) => entry)
 }
 
+function comparisonWeapon(item, other, locale, side) {
+  if (!item) return null
+  return {
+    name: weaponDisplayName(item, locale),
+    archetypeLabel: weaponArchetypeLabel(item, locale),
+    legendaryLevel: item.legendaryLevel ?? null,
+    rarity: item.rarity ?? null,
+    damage: item.damage ?? 0,
+    affixes: compareAffixes(item.affixes ?? [], other?.affixes ?? [], locale, side),
+  }
+}
+
 export function weaponComparisonModel(current, candidate, locale = 'en') {
-  const currentAffixes = current?.affixes ?? []
-  const candidateAffixes = candidate?.affixes ?? []
   const currentDamage = current?.damage ?? 0
   const candidateDamage = candidate?.damage ?? 0
+  const currentModel = comparisonWeapon(current, candidate, locale, 'current')
+  const candidateModel = comparisonWeapon(candidate ?? {}, current, locale, 'candidate')
   return {
-    current: current ? {
-      name: current.name ?? null,
-      legendaryLevel: current.legendaryLevel ?? null,
-      rarity: current.rarity ?? null,
-      damage: currentDamage,
-      affixes: compareAffixes(currentAffixes, candidateAffixes, locale, 'current'),
-    } : null,
+    current: currentModel,
     candidate: {
-      name: candidate?.name ?? null,
-      legendaryLevel: candidate?.legendaryLevel ?? null,
-      rarity: candidate?.rarity ?? null,
-      damage: candidateDamage,
+      ...candidateModel,
       damageDelta: candidateDamage - currentDamage,
-      affixes: compareAffixes(candidateAffixes, currentAffixes, locale, 'candidate'),
     },
   }
 }
 
 export function weaponHudModel(stats = {}, locale = 'en') {
-  const item = stats.equippedWeapon ?? null
+  const item = stats.equippedWeapon ?? stats.weapon ?? null
   return {
     equipped: Boolean(stats.weapon),
-    name: item?.name ?? null,
-    legendaryLevel: item?.legendaryLevel ?? null,
-    rarity: stats.weaponRarity ?? item?.rarity ?? null,
-    damage: stats.weaponDamage ?? item?.damage ?? 0,
-    affixes: (stats.weaponAffixes ?? item?.affixes ?? []).map((entry) => formatAffixLabel(entry, locale)),
+    name: weaponDisplayName(item, locale),
+    archetypeLabel: weaponArchetypeLabel(item, locale),
+    legendaryLevel: typeof item === 'object' ? (item?.legendaryLevel ?? null) : null,
+    rarity: stats.weaponRarity ?? (typeof item === 'object' ? item?.rarity : null) ?? null,
+    damage: stats.weaponDamage ?? (typeof item === 'object' ? item?.damage : 0) ?? 0,
+    affixes: (stats.weaponAffixes ?? (typeof item === 'object' ? item?.affixes : []) ?? []).map((entry) => formatAffixLabel(entry, locale)),
   }
 }
 

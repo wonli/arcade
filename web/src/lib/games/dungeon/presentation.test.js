@@ -35,6 +35,20 @@ test('weapon HUD model preserves base damage rarity and all equipped affixes', (
   assert.ok(model.affixes[2].startsWith('★ Berserker'))
 })
 
+test('weapon HUD resolves catalog names and archetypes instead of generic Dungeon Blade', () => {
+  const stats = {
+    weapon: 'weapon.tempest_bow',
+    weaponRarity: 'epic',
+    weaponDamage: 18,
+  }
+  const english = weaponHudModel(stats, 'en')
+  const chinese = weaponHudModel(stats, 'zh-CN')
+  assert.equal(english.name, 'Tempest Bow')
+  assert.equal(english.archetypeLabel, 'Bow')
+  assert.equal(chinese.name, '风暴弓')
+  assert.equal(chinese.archetypeLabel, '弓')
+})
+
 test('game over summary keeps the final floor, kills, and equipped weapon', () => {
   const summary = gameOverSummary(
     { kills: 27, weapon: 'weapon.dungeon_blade', weaponRarity: 'rare', weaponDamage: 9 },
@@ -57,6 +71,18 @@ test('weapon comparison keeps ground weapon pending and marks comparable gains a
   assert.equal(model.candidate.affixes.find((entry) => entry.id === 'attack_speed').direction, 'up')
   assert.equal(model.current.affixes.find((entry) => entry.id === 'life_steal').direction, 'lost')
   assert.equal(model.candidate.affixes.find((entry) => entry.id === 'thunder').build, true)
+})
+
+test('weapon comparison carries readable localized identities for equipped and ground weapons', () => {
+  const model = weaponComparisonModel(
+    { type: 'weapon.tempest_bow', rarity: 'rare', damage: 12, affixes: [] },
+    { type: 'weapon.arcane_spire', rarity: 'epic', damage: 17, affixes: [] },
+    'zh-CN',
+  )
+  assert.equal(model.current.name, '风暴弓')
+  assert.equal(model.current.archetypeLabel, '弓')
+  assert.equal(model.candidate.name, '奥术法杖')
+  assert.equal(model.candidate.archetypeLabel, '法杖')
 })
 
 test('ranged group skills stay highlighted as build affixes in comparison cards', () => {

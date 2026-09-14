@@ -1,4 +1,4 @@
-import { weaponDefinition } from './weapon-catalog.js'
+import { weaponDisplayName } from './presentation.js'
 
 export const HUD_INSET = 56
 export const HUD_WEAPON_ICON_URL = new URL('./assets/sword-7soul1_20201212/32x32/dagger_01.png', import.meta.url).href
@@ -13,14 +13,12 @@ const HUD_BG_ALPHA = 0.48
 const HUD_WEAPON_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
 
 function equippedWeaponName(weapon, labels) {
-  if (typeof weapon === 'object' && weapon?.name) return weapon.name
-  const type = typeof weapon === 'string' ? weapon : weapon?.type
-  return weaponDefinition(type)?.name ?? labels.dungeonBlade ?? 'Dungeon Blade'
+  return weaponDisplayName(weapon, labels.locale ?? 'en') ?? labels.dungeonBlade ?? 'Dungeon Blade'
 }
 
 export function dungeonHudModel({ stats = {}, progress = {}, labels = {} } = {}) {
   const rawRarity = stats.weaponRarity ? (labels[`rarity:${stats.weaponRarity}`] ?? stats.weaponRarity) : ''
-  const chinese = /[\u3400-\u9fff]/.test(labels.dungeonBlade ?? '')
+  const chinese = (labels.locale ?? '').startsWith('zh') || /[\u3400-\u9fff]/.test(labels.dungeonBlade ?? '')
   const rarityName = rawRarity === 'legendary' ? (chinese ? '传奇' : 'Legendary') : rawRarity
   const equipped = stats.equippedWeapon ?? stats.weapon
   const levelSuffix = stats.weaponRarity === 'legendary' && Number(equipped?.legendaryLevel) > 0

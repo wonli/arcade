@@ -3,6 +3,7 @@ import { lootMotion } from './combat-feel.js'
 import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
+import { weaponIdentityLabel } from './presentation.js'
 import { createWeaponVisual, setWeaponVisualSelected } from './weapon-visual-runtime.js'
 
 const DAMAGE_RANGES = {
@@ -18,6 +19,10 @@ const DROP_SEARCH_RADIUS = 160
 const DROP_NAV_CELL = 16
 
 function clamp01(value) { return Math.max(0, Math.min(0.999999, value)) }
+
+export function groundWeaponLabel(item, locale = 'en') {
+  return weaponIdentityLabel(item, locale)
+}
 
 export function weaponDamageForFloor(rarity = 'common', floor = 1, random = Math.random) {
   const [min, max] = DAMAGE_RANGES[rarity] ?? DAMAGE_RANGES.common
@@ -138,7 +143,15 @@ function syncGroundWeaponVisual(scene, drop, position) {
   drop.visual = visual
 }
 
-export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random } = {}) {
+function syncGroundWeaponLabel(drop, locale) {
+  if (!drop?.item?.type?.startsWith?.('weapon.') || !drop.label?.setText) return
+  const identity = groundWeaponLabel(drop.item, locale)
+  if (!identity) return
+  drop.__weaponDetailText ??= drop.label.text ?? ''
+  drop.label.setText(drop.__weaponDetailText ? `${identity}\n${drop.__weaponDetailText}` : identity)
+}
+
+export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random, getLocale = () => 'en' } = {}) {
   if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
   scene.playerState.healthPotions ??= 0
@@ -170,6 +183,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     const drop = scene.drops?.[before]
     if (!drop) return null
     syncGroundWeaponVisual(scene, drop, position)
+    syncGroundWeaponLabel(drop, getLocale())
     drop.spawnedAt = scene.time?.now ?? 0
     drop.groundY = position.y
     drop.baseScaleX = drop.visual?.scaleX ?? 1
@@ -203,6 +217,9 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     useHealthPotion,
     autoUseHealthPotion,
+    refreshLabels() {
+      for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
+    },
     getHealthPotions() { return scene.playerState.healthPotions ?? 0 },
   }
   scene.__dungeonPickupRuntime = api
