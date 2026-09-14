@@ -49,24 +49,12 @@ export function dressThemedRooms(g, random) {
 
   for (const room of g.rooms) {
     if (room.theme === 'shrine') {
-      const motif = rules.assemblies.statue
-      // Pixel-tight collision is not enough when the landmark sits against the
-      // shoreline: radius-18 movement inflated the 13px foot until only a 14px
-      // centre-line slit remained on the west side. Move the whole authored
-      // assembly two tiles inward so the transparent flank has two practical
-      // 16px movement columns without changing the sprite or collision evidence.
-      const left = room.x + TILE * 3
-      const top = room.y + TILE
-      // Statue_fire's complete 5x5 assembly includes transparent floor beside
-      // its tapered body. The stone foot occupies local x=34..46, y=70..75.
-      addProp(room,'statue',motif,left,top,{
-        x:left+34,y:top+70,width:13,height:6,
-      })
-      // The landmark remains recognizable, while the approach can be short,
-      // medium or long so shrine rooms do not all read as the same composition.
+      // Statue_fire is reserved for the dedicated rest/campfire room. Keeping
+      // it out of generated shrine geometry prevents a decorative landmark from
+      // consuming ordinary traversal space or participating in collision/nav.
       const pathHeight = pick(random,[64,96,128])
       addPaving(g,room,'processional',room.center.x-32,room.y+room.height-pathHeight,64,pathHeight)
-      room.layout = {type:'altar',landmark:{x:left,y:top,width:motif.width*TILE,height:motif.height*TILE},safeLane:{x:room.center.x-32,y:room.y+32,width:64,height:128}}
+      room.layout = {type:'altar',safeLane:{x:room.center.x-32,y:room.y+32,width:64,height:128}}
       continue
     }
 
