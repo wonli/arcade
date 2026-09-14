@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "defaults": {
+    "scale": 1,
+    "grip": { "x": 0.5, "y": 0.78 },
+    "vfxAnchor": { "x": 0.5, "y": 0.08 },
+    "vfxSizeScale": 1,
+    "poses": {
+      "idle": {
+        "right": { "x": -15, "y": 6, "angle": 52 },
+        "left": { "x": 15, "y": 6, "angle": 128 },
+        "up": { "x": 8, "y": 15, "angle": 128 },
+        "down": { "x": 8, "y": -15, "angle": 52 }
+      },
+      "attack": {
+        "right": { "x": 17, "y": 5, "angle": 84 },
+        "left": { "x": -17, "y": 5, "angle": -84 },
+        "up": { "x": 10, "y": -16, "angle": -84 },
+        "down": { "x": 10, "y": 17, "angle": 84 }
+      }
+    }
+  },
+  "archetypes": {},
+  "weapons": {}
+}
