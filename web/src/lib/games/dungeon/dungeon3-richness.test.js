@@ -15,8 +15,7 @@ test('themed room density varies across seeds while complete motifs and safe rou
   for(let seed=1;seed<=120;seed++) {
     const g=generateDungeonGeometry({runSeed:seed})
     assert.ok(new Set(g.rooms.map(r=>r.theme)).size>=4,`seed ${seed}: room themes`)
-    const statues=g.decorations.filter(d=>d.kind==='statue')
-    assert.ok(statues.some(s=>s.motif?.width===5&&s.motif?.height===5&&s.motif.cells.length===25),`seed ${seed}: incomplete statue`)
+    assert.equal(g.decorations.filter(d=>d.kind==='statue').length,0,`seed ${seed}: ordinary room contains Statue_fire`)
 
     const crypts=g.rooms.filter(room=>room.theme==='crypt')
     assert.ok(crypts.length>=1,`seed ${seed}: missing crypt`)
@@ -53,7 +52,7 @@ test('themed room density varies across seeds while complete motifs and safe rou
   assert.ok(shrinePathHeights.size>1,'shrine path length never varies')
 })
 
-test('room themes reserve landmark, hazard and safe-route footprints before loose dressing', () => {
+test('room themes reserve hazard and safe-route footprints before loose dressing', () => {
   for (let seed=1;seed<=30;seed++) {
     const g=generateDungeonGeometry({runSeed:seed,floor:3})
     const shrine=g.rooms.find(room=>room.theme==='shrine')
@@ -62,7 +61,7 @@ test('room themes reserve landmark, hazard and safe-route footprints before loos
     const flooded=g.rooms.find(room=>room.theme==='flooded')
 
     assert.equal(shrine.layout?.type,'altar',`seed ${seed}: shrine layout`)
-    assert.deepEqual([shrine.layout.landmark.width,shrine.layout.landmark.height],[80,80],`seed ${seed}: statue reservation`)
+    assert.equal(shrine.layout?.landmark,undefined,`seed ${seed}: ordinary shrine reserves a statue landmark`)
     assert.ok(shrine.layout.safeLane.width>=64,`seed ${seed}: shrine safe lane`)
 
     assert.equal(crypt.layout?.type,'burial',`seed ${seed}: crypt layout`)
@@ -127,11 +126,10 @@ test('visible east-west crypt paving stays walkable near coffin groups', () => {
   }
 })
 
-test('the rendered assets keep complete motifs at every randomized density', () => {
+test('the rendered ordinary-map assets keep complete motifs at every randomized density', () => {
   for (const seed of [5,13,33,57,91]) {
     const g=generateDungeonGeometry({runSeed:seed}),plan=buildDungeon3TilePlan(g)
-    const statue=g.decorations.find(d=>d.kind==='statue')
-    assert.equal(plan.filter(t=>t.ownerX===statue.x&&t.ownerY===statue.y&&t.tileset==='Statue_fire').length,25)
+    assert.equal(plan.filter(t=>t.tileset==='Statue_fire').length,0,`seed ${seed}: ordinary map renders Statue_fire`)
     assert.ok(plan.filter(t=>t.tileset==='coffins').length>=6,`seed ${seed}: coffin motif cropped`)
     assert.ok(plan.filter(t=>t.tileset==='Spikes').length>=4,`seed ${seed}: spike motif cropped`)
     assert.ok(new Set(plan.filter(t=>t.layer==='path').map(t=>t.tileId)).size>=5,`seed ${seed}: path tiles lack connected variation`)
