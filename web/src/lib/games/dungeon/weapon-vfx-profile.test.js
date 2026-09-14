@@ -15,14 +15,15 @@ test('rare through legendary weapons scale particle intensity by rarity', () => 
   assert.equal(rare.kind, 'lightning')
   assert.equal(rare.fallbackKinds[0], 'sparkle')
   assert.ok(epic.frequency < rare.frequency)
+  assert.ok(legendary.frequency < epic.frequency)
   assert.ok(legendary.quantity > epic.quantity)
   assert.ok(legendary.burst > epic.burst)
 })
 
-test('weapon particles use compact target pixel sizes independent from texture resolution', () => {
+test('weapon particles use target pixel sizes independent from texture resolution', () => {
   assert.equal(weaponVfxProfile({ rarity: 'rare' }).particles.size, 8)
   assert.equal(weaponVfxProfile({ rarity: 'epic' }).particles.size, 10)
-  assert.equal(weaponVfxProfile({ rarity: 'legendary' }).particles.size, 12)
+  assert.equal(weaponVfxProfile({ rarity: 'legendary' }).particles.size, 16)
 })
 
 test('theme selects particle material while rarity keeps the same intensity', () => {
@@ -40,4 +41,14 @@ test('legacy named weapon state recovers its stable visual identity from the cat
   assert.equal(tempest.archetype, 'bow')
   assert.equal(tempest.variant, 1)
   assert.ok(tempest.particles)
+})
+
+test('boss legendary state recovers its weapon-specific visual identity', () => {
+  const crimson = weaponVfxProfile({ type: 'weapon.crimson_verdict', rarity: 'legendary' })
+  assert.equal(crimson.theme, 'blood')
+  assert.equal(crimson.archetype, 'sword')
+  assert.equal(crimson.variant, 3)
+  assert.equal(crimson.particles.kind, 'smoke')
+  assert.equal(crimson.particles.size, 16)
+  assert.equal(crimson.particles.burst, 12)
 })

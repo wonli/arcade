@@ -40,6 +40,7 @@ function legacyArtSelection(archetype, rarity) {
     path: rarities[artRarity],
     textureKey: `dungeon-held-weapon-${artArchetype}-${artRarity}`,
     named: false,
+    displayScale: 1,
   }
 }
 
@@ -53,6 +54,7 @@ function artSelection(item, archetype, rarity, selected = false) {
     path: new URL(relativePath, import.meta.url).href,
     textureKey: `dungeon-named-weapon-${named.number}-${selected ? 'selected' : 'base'}`,
     named: true,
+    displayScale: named.displayScale ?? 2,
   }
 }
 
@@ -73,7 +75,7 @@ export function weaponVisualProfile(item, { selected = false } = {}) {
     selected,
     path: art.path,
     textureKey: art.textureKey,
-    scale: profile.visualScale * rarityScale * (art.named ? 2 : 1),
+    scale: profile.visualScale * rarityScale * art.displayScale,
     depth: 22,
     procedural: !art.named && !ART[archetype],
   }

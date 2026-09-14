@@ -1,4 +1,5 @@
 import { deriveEquipment, rollAffixes } from './affixes.js'
+import { rollBossLegendary } from './legendary-weapons.js'
 import { weaponProfile } from './weapon-profile.js'
 
 export function nearestTarget(player, enemies) {
@@ -174,19 +175,7 @@ export function bossProfile(floor = 5) {
 }
 
 export function bossReward(random = Math.random, floor = 5) {
-  const actualFloor = Math.max(1, Math.floor(floor || 1))
-  const depth = Math.max(0, actualFloor - 1)
-  const epicThreshold = Math.max(0.40, 0.72 - Math.max(0, actualFloor - 5) * 0.015)
-  const roll = random()
-  const rarity = roll >= epicThreshold ? 'epic' : 'rare'
-  const floorBonus = Math.round(depth * 1.15 + depth * depth * 0.018)
-  return {
-    type: 'weapon.dungeon_blade',
-    archetype: rollWeaponArchetype(random),
-    rarity,
-    damage: (rarity === 'epic' ? 12 : 8) + floorBonus,
-    affixes: rollAffixes(actualFloor, rarity, random, { forceBuild: true }),
-  }
+  return rollBossLegendary(floor, random)
 }
 
 export function floorWave(floor) {

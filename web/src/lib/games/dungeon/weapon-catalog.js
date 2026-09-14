@@ -1,4 +1,6 @@
-export const WEAPON_CATALOG = Object.freeze([
+import { LEGENDARY_WEAPON_CATALOG, rollBossLegendary } from './legendary-weapons.js'
+
+const STANDARD_WEAPON_CATALOG = Object.freeze([
   { id: 'iron_fang', name: 'Iron Fang', type: 'weapon.iron_fang', archetype: 'dagger', vfxTheme: 'steel', vfxVariant: 0, minFloor: 1 },
   { id: 'warden_blade', name: 'Warden Blade', type: 'weapon.warden_blade', archetype: 'sword', vfxTheme: 'steel', vfxVariant: 1, minFloor: 1 },
   { id: 'ash_saber', name: 'Ash Saber', type: 'weapon.ash_saber', archetype: 'katana', vfxTheme: 'ember', vfxVariant: 0, minFloor: 1 },
@@ -13,18 +15,25 @@ export const WEAPON_CATALOG = Object.freeze([
   { id: 'starfall_spear', name: 'Starfall Spear', type: 'weapon.starfall_spear', archetype: 'spear', vfxTheme: 'arcane', vfxVariant: 2, minFloor: 6 },
 ])
 
+export { LEGENDARY_WEAPON_CATALOG, rollBossLegendary }
+
+export const WEAPON_CATALOG = Object.freeze([
+  ...STANDARD_WEAPON_CATALOG,
+  ...LEGENDARY_WEAPON_CATALOG,
+])
+
 export function weaponDefinition(idOrType) {
   return WEAPON_CATALOG.find((weapon) => weapon.id === idOrType || weapon.type === idOrType) ?? null
 }
 
 export function availableWeapons(floor = 1) {
   const level = Math.max(1, Math.floor(floor || 1))
-  return WEAPON_CATALOG.filter((weapon) => weapon.minFloor <= level)
+  return STANDARD_WEAPON_CATALOG.filter((weapon) => weapon.minFloor <= level)
 }
 
 export function rollWeaponDefinition(floor = 1, random = Math.random) {
   const pool = availableWeapons(floor)
-  if (!pool.length) return WEAPON_CATALOG[0] ?? null
+  if (!pool.length) return STANDARD_WEAPON_CATALOG[0] ?? null
   const roll = Math.max(0, Math.min(0.999999, random()))
   return pool[Math.floor(roll * pool.length)] ?? pool[0]
 }

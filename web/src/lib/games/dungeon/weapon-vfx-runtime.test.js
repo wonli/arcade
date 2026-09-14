@@ -101,12 +101,19 @@ test('rare storm weapon normalizes a 512px source texture to an 8px particle', (
   assert.equal(particles[0].destroyed, true)
 })
 
+test('legendary weapon normalizes a 512px source texture to a 16px particle', () => {
+  const { scene, particles } = sceneFor({ type: 'weapon.crimson_verdict', rarity: 'legendary' })
+  installDungeonWeaponVfx(scene, { anchor: () => ({ x: 8, y: 9 }) })
+  assert.equal(particles.length, 1)
+  assert.equal(particles[0].config.scale.start, 16 / 512)
+})
+
 test('legendary attack bursts particles without stopping the persistent flow', () => {
   const { scene, calls, particles } = sceneFor({ type: 'weapon.test', rarity: 'legendary', vfxTheme: 'storm' })
   const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 10, y: 11 }) })
   const frequency = particles[0].frequency
   runtime.attack({ x: 40, y: 50 })
-  assert.deepEqual(particles[0].bursts[0], [8, 10, 11])
+  assert.deepEqual(particles[0].bursts[0], [12, 10, 11])
   assert.equal(particles[0].frequency, frequency)
   assert.equal(particles[0].emitting, true)
   assert.equal(calls.at(-1)[0], 'lightning')

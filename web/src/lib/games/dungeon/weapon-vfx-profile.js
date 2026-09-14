@@ -5,7 +5,7 @@ const RARITY = {
   uncommon: { particles: null, attack: false, impact: false },
   rare: { particles: { frequency: 115, quantity: 1, lifespan: 360, size: 8, burst: 3 }, attack: true, impact: false },
   epic: { particles: { frequency: 78, quantity: 1, lifespan: 460, size: 10, burst: 5 }, attack: true, impact: true },
-  legendary: { particles: { frequency: 52, quantity: 2, lifespan: 560, size: 12, burst: 8 }, attack: true, impact: true },
+  legendary: { particles: { frequency: 44, quantity: 2, lifespan: 620, size: 16, burst: 12 }, attack: true, impact: true },
 }
 
 const THEMES = {

@@ -1,24 +1,53 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { WEAPON_CATALOG, availableWeapons, materializeWeapon, rollWeaponDefinition, weaponDefinition } from './weapon-catalog.js'
+import {
+  LEGENDARY_WEAPON_CATALOG,
+  WEAPON_CATALOG,
+  availableWeapons,
+  materializeWeapon,
+  rollBossLegendary,
+  rollWeaponDefinition,
+  weaponDefinition,
+} from './weapon-catalog.js'
 
-test('catalog contains twelve stable weapon identities independent from rarity', () => {
-  assert.equal(WEAPON_CATALOG.length, 12)
-  assert.equal(new Set(WEAPON_CATALOG.map((weapon) => weapon.id)).size, 12)
+test('catalog contains twelve standard and twelve boss-only legendary identities', () => {
+  assert.equal(WEAPON_CATALOG.length, 24)
+  assert.equal(new Set(WEAPON_CATALOG.map((weapon) => weapon.id)).size, 24)
+  assert.equal(LEGENDARY_WEAPON_CATALOG.length, 12)
+  assert.deepEqual(LEGENDARY_WEAPON_CATALOG.map((weapon) => weapon.swordNumber), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22])
+  assert.ok(LEGENDARY_WEAPON_CATALOG.every((weapon) => weapon.bossOnly))
   assert.equal(weaponDefinition('weapon.tempest_bow')?.archetype, 'bow')
-  assert.equal(weaponDefinition('starfall_spear')?.vfxTheme, 'arcane')
-  assert.equal('rarity' in WEAPON_CATALOG[0], false)
+  assert.equal(weaponDefinition('crimson_verdict')?.vfxTheme, 'blood')
 
-  for (const theme of new Set(WEAPON_CATALOG.map((weapon) => weapon.vfxTheme))) {
-    const weapons = WEAPON_CATALOG.filter((weapon) => weapon.vfxTheme === theme)
+  const standard = WEAPON_CATALOG.filter((weapon) => !weapon.bossOnly)
+  for (const theme of new Set(standard.map((weapon) => weapon.vfxTheme))) {
+    const weapons = standard.filter((weapon) => weapon.vfxTheme === theme)
     assert.equal(new Set(weapons.map((weapon) => weapon.vfxVariant)).size, weapons.length)
   }
 })
 
-test('deeper floors expand the weapon identity pool', () => {
+test('ordinary floor pools never include boss-only legendary weapons', () => {
   assert.equal(availableWeapons(1).length, 3)
+  assert.equal(availableWeapons(6).length, 12)
+  assert.equal(availableWeapons(99).some((weapon) => weapon.bossOnly), false)
   assert.ok(availableWeapons(6).length > availableWeapons(3).length)
   assert.equal(rollWeaponDefinition(1, () => 0.99).id, 'ash_saber')
+  assert.equal(rollWeaponDefinition(99, () => 0.999999).bossOnly, undefined)
+})
+
+test('boss legendary roll always returns a legendary with exaggerated fixed affixes', () => {
+  const first = rollBossLegendary(5, () => 0)
+  const last = rollBossLegendary(8, () => 0.999999)
+  assert.equal(first.type, 'weapon.kings_ruin')
+  assert.equal(last.type, 'weapon.crimson_verdict')
+  assert.equal(first.rarity, 'legendary')
+  assert.equal(last.rarity, 'legendary')
+  assert.equal(first.bossOnly, true)
+  assert.equal(last.bossOnly, true)
+  assert.equal(first.affixes.length, 4)
+  assert.equal(last.affixes.length, 4)
+  assert.ok(first.affixes.every((entry) => entry.tier === 4))
+  assert.ok(last.damage > first.damage)
 })
 
 test('materialization keeps rolled quality and stats while applying identity', () => {

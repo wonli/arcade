@@ -69,10 +69,21 @@ test('floor five boss is materially stronger and has a second phase', () => {
   const boss = bossProfile(5); assert.ok(boss.hpMultiplier >= 6); assert.equal(boss.phaseThreshold, 0.5); assert.ok(boss.scale >= 1.6); assert.ok(boss.contactDamage >= 20); assert.ok(boss.chargeCooldown > 0); assert.ok(boss.shockwaveCooldown > 0)
 })
 
-test('boss reward is rare or epic, has archetype, and always carries a build affix', () => {
-  const rare = bossReward(sequence([0.1, 0.1, 0.4, 0.2, 0.6, 0.3]), 5)
-  const epic = bossReward(sequence([0.95, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4]), 5)
-  assert.equal(rare.rarity, 'rare'); assert.equal(epic.rarity, 'epic'); assert.ok(['dagger', 'sword', 'katana'].includes(rare.archetype)); assert.ok(['dagger', 'sword', 'katana'].includes(epic.archetype)); assert.ok(rare.affixes.some((entry) => AFFIXES[entry.id].category === 'build')); assert.ok(epic.affixes.some((entry) => AFFIXES[entry.id].category === 'build')); assert.equal(rare.affixes.length, 2); assert.equal(epic.affixes.length, 3)
+test('boss reward is always a boss-only legendary sword with four exaggerated affixes', () => {
+  const first = bossReward(() => 0, 5)
+  const last = bossReward(() => 0.999999, 8)
+  assert.equal(first.rarity, 'legendary')
+  assert.equal(last.rarity, 'legendary')
+  assert.equal(first.bossOnly, true)
+  assert.equal(last.bossOnly, true)
+  assert.equal(first.type, 'weapon.kings_ruin')
+  assert.equal(last.type, 'weapon.crimson_verdict')
+  assert.ok(['sword', 'katana'].includes(first.archetype))
+  assert.ok(['sword', 'katana'].includes(last.archetype))
+  assert.equal(first.affixes.length, 4)
+  assert.equal(last.affixes.length, 4)
+  assert.ok(first.damage >= 24)
+  assert.ok(last.damage > first.damage)
 })
 
 test('weapon pickups replace equipment-derived power and preserve archetype', () => {

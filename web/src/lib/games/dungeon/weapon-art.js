@@ -11,6 +11,18 @@ const ART = Object.freeze({
   'weapon.arcane_spire': { number: '060', base: new URL('./assets/Weapons Asset 16x16/060.png', import.meta.url).href, selected: new URL('./assets/Weapons Asset 16x16/Selected Version/060.png', import.meta.url).href },
   'weapon.tempest_bow': { number: '106', base: new URL('./assets/Weapons Asset 16x16/106.png', import.meta.url).href, selected: new URL('./assets/Weapons Asset 16x16/Selected Version/106.png', import.meta.url).href },
   'weapon.starfall_spear': { number: '090', base: new URL('./assets/Weapons Asset 16x16/090.png', import.meta.url).href, selected: new URL('./assets/Weapons Asset 16x16/Selected Version/090.png', import.meta.url).href },
+  'weapon.kings_ruin': { number: 'sword-11', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_11.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_11.png', import.meta.url).href, displayScale: 1 },
+  'weapon.sunfall': { number: 'sword-12', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_12.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_12.png', import.meta.url).href, displayScale: 1 },
+  'weapon.white_silence': { number: 'sword-13', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_13.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_13.png', import.meta.url).href, displayScale: 1 },
+  'weapon.stormcrown': { number: 'sword-14', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_14.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_14.png', import.meta.url).href, displayScale: 1 },
+  'weapon.void_testament': { number: 'sword-15', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_15.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_15.png', import.meta.url).href, displayScale: 1 },
+  'weapon.blood_oath': { number: 'sword-16', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_16.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_16.png', import.meta.url).href, displayScale: 1 },
+  'weapon.dawn_reaver': { number: 'sword-17', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_17.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_17.png', import.meta.url).href, displayScale: 1 },
+  'weapon.cinder_vow': { number: 'sword-18', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_18.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_18.png', import.meta.url).href, displayScale: 1 },
+  'weapon.winters_end': { number: 'sword-19', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_19.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_19.png', import.meta.url).href, displayScale: 1 },
+  'weapon.thunderwake': { number: 'sword-20', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_20.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_20.png', import.meta.url).href, displayScale: 1 },
+  'weapon.starless_edge': { number: 'sword-21', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_21.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_21.png', import.meta.url).href, displayScale: 1 },
+  'weapon.crimson_verdict': { number: 'sword-22', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_22.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_22.png', import.meta.url).href, displayScale: 1 },
 })
 
 export function namedWeaponArt(type) {
