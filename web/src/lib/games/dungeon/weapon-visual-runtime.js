@@ -5,6 +5,7 @@ import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
 import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
 import { namedWeaponArt, namedWeaponArtEntries } from './weapon-art.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
+import { DEFAULT_WEAPON_PRESENTATION, resolveWeaponPresentation, transformWeaponAnchor } from './weapon-presentation.js'
 
 const ART = {
   dagger: {
@@ -98,8 +99,14 @@ function idleCarryLift(reachScale = 1) {
   return Math.min(14, Math.max(0, Math.round((reachScale - 1) * 28)))
 }
 
-export function weaponPose(player, facing = 'down', { attacking = false, reachScale = 1 } = {}) {
-  const base = (attacking ? ATTACK_POSES : IDLE_POSES)[facing] ?? (attacking ? ATTACK_POSES.down : IDLE_POSES.down)
+export function weaponPose(player, facing = 'down', { attacking = false, reachScale = 1, presentationConfig = null, item = null } = {}) {
+  const legacy = (attacking ? ATTACK_POSES : IDLE_POSES)[facing] ?? (attacking ? ATTACK_POSES.down : IDLE_POSES.down)
+  const presentation = presentationConfig
+    ? resolveWeaponPresentation(presentationConfig, item ?? {}, facing, { attacking })
+    : null
+  const base = presentation
+    ? { dx: presentation.pose.x, dy: presentation.pose.y, angle: presentation.pose.angle, tipDx: legacy.tipDx, tipDy: legacy.tipDy }
+    : legacy
   const carryLift = attacking ? 0 : idleCarryLift(reachScale)
   const x = (player?.x ?? 0) + base.dx
   const y = (player?.y ?? 0) + base.dy - carryLift
@@ -144,17 +151,18 @@ function createProceduralWeapon(scene, archetype, x, y) {
   return container
 }
 
-export function createWeaponVisual(scene, item, x, y, { selected = false } = {}) {
+export function createWeaponVisual(scene, item, x, y, { selected = false, presentationConfig = null } = {}) {
   const profile = weaponVisualProfile(item, { selected })
   if (!profile) return null
+  const presentation = resolveWeaponPresentation(presentationConfig ?? DEFAULT_WEAPON_PRESENTATION, item, 'down')
   let visual = null
   if (profile.procedural && scene.add?.container) {
     visual = createProceduralWeapon(scene, profile.archetype, x, y)
   } else if (scene.textures?.exists?.(profile.textureKey) && scene.add?.image) {
     visual = scene.add.image(x, y, profile.textureKey)
-    visual?.setOrigin?.(0.5, 0.78)
+    visual?.setOrigin?.(presentation.grip.x, presentation.grip.y)
   }
-  visual?.setScale?.(profile.scale)
+  visual?.setScale?.(profile.scale * presentation.scale)
   return visual
 }
 
@@ -175,6 +183,10 @@ function equippedItem(scene) {
   }
 }
 
+function presentationConfig(scene) {
+  return scene?.__dungeonWeaponPresentation ?? DEFAULT_WEAPON_PRESENTATION
+}
+
 export function installDungeonWeaponVisuals(scene) {
   if (!scene || scene.__dungeonWeaponVisuals) return scene?.__dungeonWeaponVisuals ?? null
   const weaponCatalog = installDungeonWeaponCatalog(scene)
@@ -183,6 +195,9 @@ export function installDungeonWeaponVisuals(scene) {
   let currentKey = null
   let attackUntil = 0
   let ready = false
+
+  const presentationNow = (item = equippedItem(scene), attacking = (scene.time?.now ?? 0) < attackUntil) =>
+    resolveWeaponPresentation(presentationConfig(scene), item ?? {}, scene.playerFacing, { attacking })
 
   const ensureVisual = () => {
     const item = equippedItem(scene)
@@ -194,7 +209,7 @@ export function installDungeonWeaponVisuals(scene) {
     const nextKey = `${profile.archetype}:${profile.textureKey}`
     if (!visual || currentKey !== nextKey) {
       visual?.destroy?.()
-      visual = createWeaponVisual(scene, item, scene.playerState.x, scene.playerState.y)
+      visual = createWeaponVisual(scene, item, scene.playerState.x, scene.playerState.y, { presentationConfig: presentationConfig(scene) })
       currentKey = nextKey
     }
     visual?.setVisible?.(true)
@@ -202,23 +217,41 @@ export function installDungeonWeaponVisuals(scene) {
   }
 
   const poseNow = () => {
-    const profile = weaponProfile(equippedItem(scene))
+    const item = equippedItem(scene)
+    const profile = weaponProfile(item)
     return weaponPose(scene.playerState, scene.playerFacing, {
       attacking: (scene.time?.now ?? 0) < attackUntil,
       reachScale: profile.reachScale,
+      presentationConfig: presentationConfig(scene),
+      item,
     })
   }
+
   const sync = () => {
     const object = ensureVisual()
     if (!object) return
+    const item = equippedItem(scene)
+    const profile = weaponVisualProfile(item)
+    const presentation = presentationNow(item)
     const pose = poseNow()
+    object.setOrigin?.(presentation.grip.x, presentation.grip.y)
+    object.setScale?.(profile.scale * presentation.scale)
     object.setPosition?.(pose.x, pose.y)
     object.setAngle?.(pose.angle)
     object.setFlipX?.(pose.flipX)
     object.setDepth?.(pose.depth)
   }
-  const anchor = () => poseNow().tip
-  const weaponVfx = installDungeonWeaponVfx(scene, { anchor })
+
+  const anchor = () => {
+    const object = ensureVisual()
+    if (!object) return poseNow().tip
+    const presentation = presentationNow()
+    const transformed = transformWeaponAnchor(object, presentation.vfxAnchor)
+    if (!Number.isFinite(transformed.x) || !Number.isFinite(transformed.y)) return poseNow().tip
+    return transformed
+  }
+
+  const weaponVfx = installDungeonWeaponVfx(scene, { anchor, presentation: () => presentationNow() })
   const weaponMelee = installDungeonWeaponMelee(scene)
   const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor })
   const swing = () => {
@@ -253,6 +286,17 @@ export function installDungeonWeaponVisuals(scene) {
     sync()
   }
 
+  if (!scene.__dungeonWeaponPresentation && typeof fetch === 'function') {
+    fetch('/api/dungeon/config/weapon-presentation')
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (!payload?.config || scene.__dungeonWeaponPresentation) return
+        scene.__dungeonWeaponPresentation = payload.config
+        sync()
+      })
+      .catch(() => {})
+  }
+
   scene.events?.on?.('update', sync)
   const restore = () => {
     scene.events?.off?.('update', sync)
@@ -268,7 +312,7 @@ export function installDungeonWeaponVisuals(scene) {
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { sync, swing, anchor, isReady: () => ready, restore }
+  const api = { sync, swing, anchor, presentation: presentationNow, visual: () => visual, isReady: () => ready, restore }
   scene.__dungeonWeaponVisuals = api
   return api
 }

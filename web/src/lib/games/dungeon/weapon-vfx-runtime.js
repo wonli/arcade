@@ -108,7 +108,19 @@ function playAttack(scene, effect, from, to, options) {
   return playPoint(scene, effect.kind, to.x, to.y, options)
 }
 
-export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
+function applyPresentation(profile, presentation = {}) {
+  if (!profile?.particles) return profile
+  const sizeScale = Number.isFinite(Number(presentation.vfxSizeScale)) ? Number(presentation.vfxSizeScale) : 1
+  return {
+    ...profile,
+    particles: {
+      ...profile.particles,
+      size: Math.max(1, (profile.particles.size ?? 8) * sizeScale),
+    },
+  }
+}
+
+export function installDungeonWeaponVfx(scene, { anchor = null, presentation = null } = {}) {
   if (!scene || scene.__dungeonWeaponVfx) return scene?.__dungeonWeaponVfx ?? null
 
   let currentSignature = null
@@ -121,19 +133,17 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
     particleProfile = null
   }
 
-  const ensureParticles = (item, profile) => {
+  const ensureParticles = (profile) => {
     if (!profile.particles || !scene.add?.particles) {
       destroyParticles()
       return
     }
-
     if (particleManager) {
       if (particleManager.emitting === false || particleManager.frequency < 0) {
         particleManager.flow?.(profile.particles.frequency, profile.particles.quantity)
       }
       return
     }
-
     const texture = particleTexture(scene, profile.particles)
     if (!texture) return
     const at = point(scene, anchor)
@@ -142,16 +152,18 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
     particleProfile = profile.particles
   }
 
+  const currentProfile = (item) => applyPresentation(weaponVfxProfile(item), presentation?.() ?? {})
+
   const sync = () => {
     const item = equippedItem(scene)
-    const nextSignature = signature(item)
+    const profile = item ? currentProfile(item) : null
+    const nextSignature = `${signature(item)}|${profile?.particles?.size ?? ''}`
     if (nextSignature !== currentSignature) {
       currentSignature = nextSignature
       destroyParticles()
     }
-    if (!item) return
-    const profile = weaponVfxProfile(item)
-    ensureParticles(item, profile)
+    if (!item || !profile) return
+    ensureParticles(profile)
     const at = point(scene, anchor)
     particleManager?.setPosition?.(at.x, at.y)
   }
@@ -159,12 +171,10 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
   const attack = (target) => {
     const item = equippedItem(scene)
     if (!item) return null
-    const profile = weaponVfxProfile(item)
-    ensureParticles(item, profile)
+    const profile = currentProfile(item)
+    ensureParticles(profile)
     const from = point(scene, anchor)
-    if (particleManager && particleProfile) {
-      particleManager.emitParticleAt?.(from.x, from.y, particleProfile.burst)
-    }
+    if (particleManager && particleProfile) particleManager.emitParticleAt?.(from.x, from.y, particleProfile.burst)
     if (!profile.attack) return null
     return playAttack(scene, profile.attack, from, target, {
       tint: profile.tint,
@@ -175,7 +185,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
   const impact = (x, y, { critical = false } = {}) => {
     const item = equippedItem(scene)
     if (!item) return null
-    const profile = weaponVfxProfile(item)
+    const profile = currentProfile(item)
     if (!profile.impact) return null
     const kind = critical ? 'critical' : profile.impact.kind
     return playPoint(scene, kind, x, y, {
