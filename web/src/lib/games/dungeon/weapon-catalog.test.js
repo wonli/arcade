@@ -26,13 +26,19 @@ test('catalog contains twelve standard and twelve boss-only legendary identities
   }
 })
 
-test('ordinary floor pools never include boss-only legendary weapons', () => {
-  assert.equal(availableWeapons(1).length, 3)
-  assert.equal(availableWeapons(6).length, 12)
+test('ordinary floor one pool includes real bow and staff identities without boss-only weapons', () => {
+  const floorOne = availableWeapons(1)
+  assert.ok(floorOne.some((weapon) => weapon.archetype === 'bow'))
+  assert.ok(floorOne.some((weapon) => weapon.archetype === 'staff'))
+  assert.equal(floorOne.some((weapon) => weapon.bossOnly), false)
   assert.equal(availableWeapons(99).some((weapon) => weapon.bossOnly), false)
-  assert.ok(availableWeapons(6).length > availableWeapons(3).length)
-  assert.equal(rollWeaponDefinition(1, () => 0.99).id, 'ash_saber')
-  assert.equal(rollWeaponDefinition(99, () => 0.999999).bossOnly, undefined)
+  assert.ok(availableWeapons(6).length >= availableWeapons(3).length)
+})
+
+test('rollWeaponDefinition can respect a requested archetype from floor one', () => {
+  assert.equal(rollWeaponDefinition(1, () => 0.4, 'bow')?.archetype, 'bow')
+  assert.equal(rollWeaponDefinition(1, () => 0.4, 'staff')?.archetype, 'staff')
+  assert.equal(rollWeaponDefinition(1, () => 0, 'dagger')?.id, 'iron_fang')
 })
 
 test('boss legendary roll always returns a legendary with exaggerated fixed affixes', () => {

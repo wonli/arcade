@@ -22,6 +22,17 @@ test('classifies the full dungeon vfx taxonomy by semantic path name', () => {
   for (const [path, kind] of cases) assert.equal(classifyVfxAsset(path, 96, 96)?.kind, kind, path)
 })
 
+test('semantic folders classify generic filenames from mixed vfx packs', () => {
+  assert.equal(classifyVfxAsset('/assets/vfx/foozle/Lightning/001.png', 64, 64, { source: 'foozle' })?.kind, 'lightning')
+  assert.equal(classifyVfxAsset('/assets/vfx/free-pixel-magic/Fire/0007.png', 64, 64, { source: 'free-pixel-magic' })?.kind, 'flame')
+  assert.equal(classifyVfxAsset('/assets/vfx/free-pixel-magic/Magic Circle/03.png', 64, 64, { source: 'free-pixel-magic' })?.kind, 'aura')
+})
+
+test('lightning source context safely classifies generic lightning pack filenames', () => {
+  assert.equal(classifyVfxAsset('/assets/vfx/cache/001.png', 64, 64, { source: 'lightning' })?.kind, 'lightning')
+  assert.equal(classifyVfxAsset('/assets/vfx/cache/001.png', 64, 64, { source: 'unknown-pack' }), null)
+})
+
 test('specific semantic rules beat broad aliases', () => {
   assert.equal(classifyVfxAsset('/assets/vfx/retro/critical_hit_burst.png', 96, 96)?.kind, 'critical')
   assert.equal(classifyVfxAsset('/assets/vfx/spells/heal_sparkle.png', 96, 96)?.kind, 'heal')
@@ -47,4 +58,5 @@ test('retro impact source is limited to impact-oriented categories', () => {
   assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/smoke.png', 96, 96)?.kind, 'smoke')
   assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/fire_flame.png', 96, 96), null)
   assert.equal(classifyVfxAsset('/assets/vfx/retro-impact/lightning_bolt.png', 96, 96), null)
+  assert.equal(classifyVfxAsset('/assets/vfx/cache/lightning_bolt.png', 96, 96, { source: 'retro-impact' }), null)
 })

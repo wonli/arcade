@@ -1,5 +1,10 @@
-import { attackInterval, nearestTarget } from './combat.js'
+import { attackInterval } from './combat.js'
+import { nearestAttackableTarget, isWeaponTargetAttackable } from './weapon-targeting.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
+
+function roomGeometry(scene) {
+  return scene.__roomGeometry ?? scene.__dungeonSpatial?.getGeometry?.() ?? null
+}
 
 export function installDungeonWeaponCombat(scene) {
   if (!scene || scene.__dungeonWeaponCombat) return scene?.__dungeonWeaponCombat ?? null
@@ -9,6 +14,8 @@ export function installDungeonWeaponCombat(scene) {
 
   scene.slash = function archetypeSlash(target) {
     if (!target || target.hp <= 0) return
+    const profile = weaponProfile(scene.playerState)
+    if (!isWeaponTargetAttackable(scene.playerState, target, profile, roomGeometry(scene))) return
     const beforeDamage = scene.playerState.damage
     const originalDamageEnemy = scene.damageEnemy
     scene.playerState.damage = weaponAttackDamage(scene.playerState, beforeDamage)
@@ -25,8 +32,9 @@ export function installDungeonWeaponCombat(scene) {
 
   if (originalAutoAttack) scene.autoAttack = function archetypeAutoAttack(time) {
     if (time - scene.lastAttackAt < attackInterval(scene.playerState, time)) return
-    const target = nearestTarget(scene.playerState, scene.enemies ?? [])
-    if (!target || Math.hypot(target.x - scene.playerState.x, target.y - scene.playerState.y) > weaponProfile(scene.playerState).range) return
+    const profile = weaponProfile(scene.playerState)
+    const target = nearestAttackableTarget(scene.playerState, scene.enemies ?? [], profile, roomGeometry(scene))
+    if (!target) return
     scene.lastAttackAt = time
     scene.slash(target)
   }

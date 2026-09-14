@@ -6,6 +6,7 @@ import {
   rollDrop,
   rollEquipment,
   rollPotion,
+  rollWeaponArchetype,
   enemyArchetype,
   floorWave,
   bossProfile,
@@ -39,14 +40,34 @@ test('rollDrop keeps the legacy single-roll behavior', () => {
   assert.equal(rollDrop(7, () => 0.9), null)
 })
 
+test('generic weapon archetypes use 60 percent melee, 20 percent bow, and 20 percent staff', () => {
+  assert.equal(rollWeaponArchetype(() => 0), 'dagger')
+  assert.equal(rollWeaponArchetype(() => 0.179999), 'dagger')
+  assert.equal(rollWeaponArchetype(() => 0.18), 'sword')
+  assert.equal(rollWeaponArchetype(() => 0.431999), 'sword')
+  assert.equal(rollWeaponArchetype(() => 0.432), 'katana')
+  assert.equal(rollWeaponArchetype(() => 0.599999), 'katana')
+  assert.equal(rollWeaponArchetype(() => 0.60), 'bow')
+  assert.equal(rollWeaponArchetype(() => 0.799999), 'bow')
+  assert.equal(rollWeaponArchetype(() => 0.80), 'staff')
+  assert.equal(rollWeaponArchetype(() => 0.999999), 'staff')
+})
+
 test('generated equipment carries rarity slots and a weapon archetype', () => {
   const common = rollEquipment(1, sequence([0.02, 0.1]))
   assert.equal(common.rarity, 'common'); assert.equal(common.damage, 2); assert.equal(common.archetype, 'dagger'); assert.deepEqual(common.affixes, [])
-  const uncommon = rollEquipment(1, sequence([0.17, 0.45, 0.1, 0.3]))
+  const uncommon = rollEquipment(1, sequence([0.17, 0.3, 0.1, 0.3]))
   assert.equal(uncommon.rarity, 'uncommon'); assert.equal(uncommon.archetype, 'sword'); assert.equal(uncommon.affixes.length, affixSlots('uncommon'))
-  const epic = rollEquipment(5, sequence([0.23, 0.9, 0.98, 0.5, 0.97, 0.4, 0.96, 0.3]))
+  const epic = rollEquipment(5, sequence([0.23, 0.55, 0.98, 0.5, 0.97, 0.4, 0.96, 0.3]))
   assert.equal(epic.rarity, 'epic'); assert.equal(epic.archetype, 'katana'); assert.equal(epic.affixes.length, affixSlots('epic')); assert.ok(epic.affixes.some((entry) => AFFIXES[entry.id].category === 'build'))
   assert.equal(rollEquipment(5, () => 0.99), null)
+})
+
+test('normal boss rewards use the same generic ranged archetype distribution', () => {
+  const bow = bossReward(sequence([0.5, 0.5, 0.70, 0.2, 0.3, 0.4, 0.5]), 5)
+  const staff = bossReward(sequence([0.5, 0.5, 0.90, 0.2, 0.3, 0.4, 0.5]), 5)
+  assert.equal(bow.archetype, 'bow')
+  assert.equal(staff.archetype, 'staff')
 })
 
 test('potions roll independently from equipment', () => {

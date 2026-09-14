@@ -2,6 +2,9 @@ import { healFromHit, modifiedDamage, rollDamage } from './combat.js'
 import { circleHitsSolid } from './spatial.js'
 import { rangedProjectileArt } from './weapon-art.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
+import { installDungeonWeaponSignatures } from './weapon-signature-runtime.js'
+import { bowVolleyTargets } from './weapon-skill.js'
+import { hasWeaponLineOfSight } from './weapon-targeting.js'
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 import { weaponVfxTexture } from './weapon-vfx-runtime.js'
 
@@ -16,6 +19,11 @@ function directionFromTarget(player, target, fallback = 'down') {
   if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
   if (Math.abs(dy) > 0) return dy < 0 ? 'up' : 'down'
   return fallback
+}
+
+function weaponIdentity(player) {
+  const item = player?.equippedWeapon
+  return [item?.type ?? player?.weapon ?? '', item?.archetype ?? '', item?.signature ?? ''].join('|')
 }
 
 export function weaponProjectileSpec(player) {
@@ -108,7 +116,10 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
   if (!originalSlash) return null
   preloadProjectileArt(scene)
   const projectiles = []
+  const signatures = installDungeonWeaponSignatures(scene)
   const originalVfxSlash = scene.__dungeonVfx?.slash?.bind(scene.__dungeonVfx)
+  let cadenceWeapon = weaponIdentity(scene.playerState)
+  let bowLaunches = 0
 
   if (originalVfxSlash) {
     scene.__dungeonVfx.slash = (...args) => weaponProjectileSpec(scene.playerState) ? null : originalVfxSlash(...args)
@@ -118,19 +129,22 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     projectile.visual?.destroy?.()
   }
 
-  const hit = (projectile) => {
-    const target = projectile.target
-    if (!target || target.hp <= 0) return
-    scene.damageEnemy?.(target, projectile.damage, projectile.critical, projectile.knockback, {
-      direct: projectile.direct,
-      canProc: projectile.canProc,
-      source: projectile.source,
-    })
-    if (projectile.heal) {
-      scene.healPlayer?.(healFromHit(scene.playerState, projectile.damage, projectile.critical, { direct: true }))
-    }
-    if (projectile.canProc) scene.applyWeaponProcs?.(target, projectile.damage, projectile.critical)
+  const resolveHit = (projectile, target, {
+    damage = projectile.damage,
+    direct = projectile.direct,
+    canProc = projectile.canProc,
+    heal = projectile.heal,
+    source = projectile.source,
+  } = {}) => {
+    if (!target || target.hp <= 0) return false
+    scene.damageEnemy?.(target, damage, projectile.critical, projectile.knockback, { direct, canProc, source })
+    if (heal) scene.healPlayer?.(healFromHit(scene.playerState, damage, projectile.critical, { direct: true }))
+    if (canProc) scene.applyWeaponProcs?.(target, damage, projectile.critical)
     scene.__dungeonWeaponVfx?.impact?.(target.x, target.y, { critical: projectile.critical })
+    if (projectile.archetype === 'staff' && direct && canProc && source === 'weapon') {
+      signatures?.onStaffHit?.(target, damage)
+    }
+    return true
   }
 
   const makeVisual = (spec, start, angle, profile) => {
@@ -138,24 +152,41 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     return createSpellVisual(scene, start, angle, profile) ?? { visual: null, rotationOffset: 0 }
   }
 
-  const launchVfx = (spec, start, profile) => {
+  const launchVfx = (spec, start, profile, powerShot = false) => {
     const kind = spec.archetype === 'staff' ? 'aura' : 'sparkle'
     scene.__dungeonVfx?.[kind]?.(start.x, start.y, {
       tint: profile.tint,
-      alpha: 0.72,
-      scale: spec.archetype === 'staff' ? 0.72 : 0.58,
+      alpha: powerShot ? 0.94 : 0.72,
+      scale: powerShot ? 0.84 : spec.archetype === 'staff' ? 0.72 : 0.58,
       depth: 27,
-      seed: `weapon-projectile-launch:${profile.theme}:${Math.round(start.x)}:${Math.round(start.y)}`,
+      seed: `weapon-projectile-launch:${profile.theme}:${powerShot ? 'power:' : ''}${Math.round(start.x)}:${Math.round(start.y)}`,
       resourceOnly: true,
     })
   }
+
+  const syncCadenceWeapon = () => {
+    const next = weaponIdentity(scene.playerState)
+    if (next !== cadenceWeapon) {
+      cadenceWeapon = next
+      bowLaunches = 0
+    }
+  }
+
+  let volley = () => []
 
   const fire = (target, options = {}) => {
     const spec = weaponProjectileSpec(scene.playerState)
     if (!spec) return options.secondary ? null : originalSlash(target)
     if (!target || target.hp <= 0) return null
 
+    syncCadenceWeapon()
     const secondary = options.secondary === true
+    let powerShot = false
+    if (spec.archetype === 'bow' && !secondary) {
+      bowLaunches = (bowLaunches + 1) % 4
+      powerShot = bowLaunches === 0
+    }
+
     const start = anchor?.() ?? scene.__dungeonWeaponVisuals?.anchor?.() ?? { x: scene.playerState.x, y: scene.playerState.y }
     const dx = target.x - start.x
     const dy = target.y - start.y
@@ -165,9 +196,10 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     const rolled = Number.isFinite(options.damage)
       ? { damage: Math.max(1, Math.round(options.damage)), critical: Boolean(options.critical) }
       : rollDamage({ ...scene.playerState, damage: effectiveDamage }, random)
-    const damage = Number.isFinite(options.damage)
+    const baseDamage = Number.isFinite(options.damage)
       ? rolled.damage
       : modifiedDamage(scene.playerState, target, rolled.damage)
+    const damage = powerShot ? Math.max(1, Math.round(baseDamage * 1.6)) : baseDamage
     const vfxProfile = weaponVfxProfile(scene.playerState.equippedWeapon ?? { rarity: scene.playerState.weaponRarity ?? 'common' })
     const visuals = makeVisual(spec, start, angle, vfxProfile)
 
@@ -179,7 +211,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
         scene.playerAttacking = false
         scene.syncPlayerAnimation?.()
       })
-      launchVfx(spec, start, vfxProfile)
+      launchVfx(spec, start, vfxProfile, powerShot)
     }
 
     projectiles.push({
@@ -189,19 +221,38 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       vx: (dx / distance) * spec.speed,
       vy: (dy / distance) * spec.speed,
       target,
+      baseDamage,
       damage,
       critical: rolled.critical,
       direct: options.direct ?? !secondary,
       canProc: options.canProc ?? !secondary,
       heal: options.heal ?? !secondary,
       source: options.source ?? (secondary ? 'volley' : 'weapon'),
+      powerShot,
+      hitEnemies: new Set(),
       visual: visuals.visual,
       rotationOffset: visuals.rotationOffset ?? 0,
     })
-    return projectiles.at(-1)
+    const projectile = projectiles.at(-1)
+
+    if (powerShot) {
+      const effects = scene.playerState.effects ?? {}
+      if ((effects.volley ?? 0) > 0) {
+        const radius = Math.round(190 * (1 + (effects.skillRadius ?? 0)))
+        const targets = bowVolleyTargets(target, scene.enemies ?? [], radius, 2)
+        if (targets.length) {
+          volley(targets, {
+            damage: baseDamage,
+            damageScale: 0.35 + effects.volley,
+          })
+        }
+      }
+    }
+
+    return projectile
   }
 
-  const volley = (targets = [], { damage = scene.playerState.damage ?? 1, damageScale = 0.62 } = {}) => {
+  volley = (targets = [], { damage = scene.playerState.damage ?? 1, damageScale = 0.62 } = {}) => {
     const spec = weaponProjectileSpec(scene.playerState)
     if (spec?.archetype !== 'bow') return []
     const livingTargets = targets.filter((target) => target?.hp > 0)
@@ -222,12 +273,48 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       .filter(Boolean)
   }
 
+  const bowCollisionTarget = (projectile) => {
+    let best = null
+    let bestDistance = Infinity
+    for (const enemy of scene.enemies ?? []) {
+      if (!enemy || enemy.hp <= 0 || projectile.hitEnemies.has(enemy)) continue
+      const hitRadius = projectile.radius + (enemy.hitRadius ?? (enemy.boss ? 26 : 15))
+      const distance = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y)
+      if (distance <= hitRadius && distance < bestDistance) {
+        best = enemy
+        bestDistance = distance
+      }
+    }
+    return best
+  }
+
+  const reacquireStaffTarget = (projectile, geometry) => {
+    let best = null
+    let bestDistance = 180
+    for (const enemy of scene.enemies ?? []) {
+      if (!enemy || enemy.hp <= 0 || enemy === projectile.target) continue
+      const distance = Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y)
+      if (distance > bestDistance) continue
+      if (!hasWeaponLineOfSight(projectile, enemy, geometry, projectile.radius)) continue
+      best = enemy
+      bestDistance = distance
+    }
+    return best
+  }
+
   scene.slash = fire
 
   const update = (_time, delta = 16) => {
-    const dt = Math.min(40, Math.max(0, delta)) / 1000
+    const elapsed = Math.min(40, Math.max(0, delta))
+    signatures?.update?.(elapsed)
+    const dt = elapsed / 1000
     for (let index = projectiles.length - 1; index >= 0; index--) {
       const projectile = projectiles[index]
+      const geometry = scene.__roomGeometry ?? scene.__dungeonSpatial?.getGeometry?.()
+
+      if (projectile.homing && projectile.target?.hp <= 0) {
+        projectile.target = reacquireStaffTarget(projectile, geometry)
+      }
       if (projectile.homing && projectile.target?.hp > 0) {
         const dx = projectile.target.x - projectile.x
         const dy = projectile.target.y - projectile.y
@@ -242,15 +329,42 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       projectile.visual?.setPosition?.(projectile.x, projectile.y)
       projectile.visual?.setRotation?.(Math.atan2(projectile.vy, projectile.vx) + (projectile.rotationOffset ?? 0))
 
+      const blocked = geometry ? circleHitsSolid(projectile, projectile.radius, geometry) : false
+
+      if (projectile.archetype === 'bow') {
+        const target = bowCollisionTarget(projectile)
+        if (target) {
+          const firstHit = projectile.hitEnemies.size === 0
+          const hitDamage = firstHit ? projectile.damage : Math.max(1, Math.round(projectile.baseDamage * 0.70))
+          const hit = resolveHit(projectile, target, firstHit ? {} : {
+            damage: hitDamage,
+            direct: false,
+            canProc: false,
+            heal: false,
+            source: 'power_shot',
+          })
+          if (hit) projectile.hitEnemies.add(target)
+          const keepFlying = projectile.powerShot && projectile.hitEnemies.size === 1
+          if (!keepFlying) {
+            destroyProjectile(projectile)
+            projectiles.splice(index, 1)
+            continue
+          }
+        }
+        if (blocked || projectile.life <= 0) {
+          destroyProjectile(projectile)
+          projectiles.splice(index, 1)
+        }
+        continue
+      }
+
       const target = projectile.target
       const hitRadius = projectile.radius + (target?.hitRadius ?? (target?.boss ? 26 : 15))
       const targetHit = target?.hp > 0 && Math.hypot(projectile.x - target.x, projectile.y - target.y) <= hitRadius
-      const geometry = scene.__roomGeometry ?? scene.__dungeonSpatial?.getGeometry?.()
-      const blocked = geometry ? circleHitsSolid(projectile, projectile.radius, geometry) : false
-      const expired = projectile.life <= 0 || target?.hp <= 0 || blocked
+      const expired = projectile.life <= 0 || !target || target.hp <= 0 || blocked
       if (!targetHit && !expired) continue
 
-      if (targetHit) hit(projectile)
+      if (targetHit) resolveHit(projectile, target)
       destroyProjectile(projectile)
       projectiles.splice(index, 1)
     }
@@ -262,6 +376,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     scene.events?.off?.('update', update)
     for (const projectile of projectiles) destroyProjectile(projectile)
     projectiles.length = 0
+    signatures?.restore?.()
     scene.slash = originalSlash
     if (originalVfxSlash && scene.__dungeonVfx) scene.__dungeonVfx.slash = originalVfxSlash
     scene.__dungeonWeaponProjectiles = null
@@ -269,7 +384,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { fire, volley, update, restore, count: () => projectiles.length }
+  const api = { fire, volley: (...args) => volley(...args), update, restore, count: () => projectiles.length }
   scene.__dungeonWeaponProjectiles = api
   return api
 }

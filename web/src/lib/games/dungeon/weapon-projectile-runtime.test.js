@@ -58,6 +58,7 @@ function rangedScene(archetype = 'bow') {
   const scene = {
     playerState: actor(archetype),
     playerFacing: 'right',
+    enemies: [],
     slash() { throw new Error('melee slash should not run') },
     damageEnemy(target, damage, critical, knockback, context) { hits.push({ target, damage, critical, knockback, context }); target.hp -= damage },
     healPlayer(value) { heals.push(value) },
@@ -83,6 +84,10 @@ function rangedScene(archetype = 'bow') {
   }
   const runtime = installDungeonWeaponProjectiles(scene, { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) })
   return { scene, runtime, hits, heals, procs, volleyVfx, images, update: (...args) => update(...args) }
+}
+
+function advance(update, steps = 5) {
+  for (let step = 0; step < steps; step++) update(step * 40, 40)
 }
 
 test('bow and staff expose distinct projectile behavior while melee does not', () => {
@@ -118,6 +123,7 @@ test('Arcane Spire projectile stays on a beam asset instead of falling back to a
 test('ranged slash delays damage until projectile reaches target', () => {
   const { scene, runtime, hits, update } = rangedScene('bow')
   const target = { x: 40, y: 0, hp: 100, hitRadius: 10 }
+  scene.enemies = [target]
   scene.slash(target)
   assert.equal(hits.length, 0)
   update(0, 40)
@@ -126,12 +132,64 @@ test('ranged slash delays damage until projectile reaches target', () => {
   assert.equal(runtime.count(), 0)
 })
 
+test('every fourth primary bow launch is a deterministic Power Shot with 160 percent primary damage', () => {
+  const { scene, hits, update } = rangedScene('bow')
+  const target = { id: 'target', x: 40, y: 0, hp: 1000, hitRadius: 10 }
+  scene.enemies = [target]
+
+  for (let shot = 0; shot < 4; shot++) {
+    scene.slash(target)
+    advance(update, 3)
+  }
+
+  assert.deepEqual(hits.map((hit) => hit.damage), [20, 20, 20, 32])
+})
+
+test('Power Shot penetrates exactly one second enemy for 70 percent damage without healing or recursive procs', () => {
+  const { scene, hits, heals, procs, update } = rangedScene('bow')
+  const primary = { id: 'primary', x: 40, y: 0, hp: 1000, hitRadius: 10 }
+  const secondary = { id: 'secondary', x: 76, y: 0, hp: 1000, hitRadius: 10 }
+  scene.enemies = [primary, secondary]
+
+  for (let shot = 0; shot < 3; shot++) {
+    scene.slash(primary)
+    advance(update, 3)
+  }
+  const baselineHealCount = heals.length
+  const baselineProcCount = procs.length
+
+  scene.slash(primary)
+  advance(update, 6)
+
+  const powerHits = hits.slice(-2)
+  assert.deepEqual(powerHits.map((hit) => [hit.target.id, hit.damage]), [['primary', 32], ['secondary', 14]])
+  assert.equal(powerHits[1].context.direct, false)
+  assert.equal(powerHits[1].context.canProc, false)
+  assert.equal(heals.length, baselineHealCount + 1)
+  assert.equal(procs.length, baselineProcCount + 1)
+})
+
+test('bow arrow survives original target death and can hit another enemy on its path', () => {
+  const { scene, hits, update } = rangedScene('bow')
+  const original = { id: 'original', x: 84, y: 0, hp: 100, hitRadius: 10 }
+  const intercept = { id: 'intercept', x: 42, y: 0, hp: 100, hitRadius: 10 }
+  scene.enemies = [original, intercept]
+
+  scene.slash(original)
+  original.hp = 0
+  advance(update, 4)
+
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0].target.id, 'intercept')
+})
+
 test('bow volley launches real secondary arrows without healing or recursive procs', () => {
-  const { runtime, hits, heals, procs, volleyVfx, images, update } = rangedScene('bow')
+  const { scene, runtime, hits, heals, procs, volleyVfx, images, update } = rangedScene('bow')
   const targets = [
     { id: 'a', x: 40, y: -8, hp: 100, hitRadius: 10 },
     { id: 'b', x: 48, y: 10, hp: 100, hitRadius: 10 },
   ]
+  scene.enemies = targets
 
   const shots = runtime.volley(targets, { damage: 20 })
   assert.equal(shots.length, 2)

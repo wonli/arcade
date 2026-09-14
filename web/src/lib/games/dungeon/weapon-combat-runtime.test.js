@@ -7,11 +7,15 @@ function sceneFor(archetype) {
   const scene = {
     playerState: { x: 0, y: 0, damage: 20, hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype } },
     enemies: [], lastAttackAt: 0, events: { once() {} },
-    damageEnemy(enemy, damage, critical, knockback, context) { calls.push({ damage, knockback, context }) },
+    damageEnemy(enemy, damage, critical, knockback, context) { calls.push({ enemy, damage, knockback, context }) },
     slash(target) { this.damageEnemy(target, this.playerState.damage, false, 22, { direct: true, source: 'weapon' }) },
     autoAttack() {},
   }
   return { scene, calls }
+}
+
+function wallBetweenPlayerAndTarget() {
+  return { solids: [{ x: 40, y: -22, width: 22, height: 44 }] }
 }
 
 test('direct slash applies archetype damage and knockback then restores player state', () => {
@@ -24,6 +28,31 @@ test('direct slash applies archetype damage and knockback then restores player s
 test('auto attack range follows current archetype', () => {
   const dagger = sceneFor('dagger'); dagger.scene.enemies = [{ hp: 10, x: 150, y: 0 }]; installDungeonWeaponCombat(dagger.scene); dagger.scene.autoAttack(1000); assert.equal(dagger.calls.length, 0)
   const katana = sceneFor('katana'); katana.scene.enemies = [{ hp: 10, x: 190, y: 0 }]; installDungeonWeaponCombat(katana.scene); katana.scene.autoAttack(1000); assert.equal(katana.calls.length, 1)
+})
+
+test('auto attack skips a closer enemy behind a wall and attacks the nearest visible enemy', () => {
+  const { scene, calls } = sceneFor('katana')
+  scene.__roomGeometry = wallBetweenPlayerAndTarget()
+  scene.enemies = [
+    { id: 'blocked', hp: 10, x: 100, y: 0 },
+    { id: 'visible', hp: 10, x: 0, y: 150 },
+  ]
+  installDungeonWeaponCombat(scene)
+
+  scene.autoAttack(1000)
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].enemy.id, 'visible')
+})
+
+test('direct melee slash cannot damage an enemy through solid room geometry', () => {
+  const { scene, calls } = sceneFor('sword')
+  scene.__roomGeometry = wallBetweenPlayerAndTarget()
+  installDungeonWeaponCombat(scene)
+
+  scene.slash({ id: 'blocked', hp: 10, x: 100, y: 0 })
+
+  assert.equal(calls.length, 0)
 })
 
 test('runtime exposes current auto attack range', () => { const { scene } = sceneFor('katana'); assert.equal(installDungeonWeaponCombat(scene).range(), 196) })

@@ -98,11 +98,13 @@ function damageForRarity(rarity, roll) {
   return min + Math.floor(normalized * (max - min + 1))
 }
 
-function rollWeaponArchetype(random) {
+export function rollWeaponArchetype(random = Math.random) {
   const roll = random()
-  if (roll < 0.3) return 'dagger'
-  if (roll < 0.72) return 'sword'
-  return 'katana'
+  if (roll < 0.18) return 'dagger'
+  if (roll < 0.432) return 'sword'
+  if (roll < 0.60) return 'katana'
+  if (roll < 0.80) return 'bow'
+  return 'staff'
 }
 
 function equipmentThresholds(floor) {

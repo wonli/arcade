@@ -10,8 +10,8 @@ const STANDARD_WEAPON_CATALOG = Object.freeze([
   { id: 'ember_maul', name: 'Ember Maul', type: 'weapon.ember_maul', archetype: 'greatsword', vfxTheme: 'ember', vfxVariant: 1, minFloor: 3 },
   { id: 'void_edge', name: 'Void Edge', type: 'weapon.void_edge', archetype: 'katana', vfxTheme: 'arcane', vfxVariant: 0, minFloor: 4 },
   { id: 'blood_reaver', name: 'Blood Reaver', type: 'weapon.blood_reaver', archetype: 'greatsword', vfxTheme: 'blood', vfxVariant: 1, minFloor: 4 },
-  { id: 'arcane_spire', name: 'Arcane Spire', type: 'weapon.arcane_spire', archetype: 'staff', vfxTheme: 'arcane', vfxVariant: 1, minFloor: 5 },
-  { id: 'tempest_bow', name: 'Tempest Bow', type: 'weapon.tempest_bow', archetype: 'bow', vfxTheme: 'storm', vfxVariant: 1, minFloor: 5 },
+  { id: 'arcane_spire', name: 'Arcane Spire', type: 'weapon.arcane_spire', archetype: 'staff', vfxTheme: 'arcane', vfxVariant: 1, minFloor: 1 },
+  { id: 'tempest_bow', name: 'Tempest Bow', type: 'weapon.tempest_bow', archetype: 'bow', vfxTheme: 'storm', vfxVariant: 1, minFloor: 1 },
   { id: 'starfall_spear', name: 'Starfall Spear', type: 'weapon.starfall_spear', archetype: 'spear', vfxTheme: 'arcane', vfxVariant: 2, minFloor: 6 },
 ])
 
@@ -31,8 +31,10 @@ export function availableWeapons(floor = 1) {
   return STANDARD_WEAPON_CATALOG.filter((weapon) => weapon.minFloor <= level)
 }
 
-export function rollWeaponDefinition(floor = 1, random = Math.random) {
-  const pool = availableWeapons(floor)
+export function rollWeaponDefinition(floor = 1, random = Math.random, archetype = null) {
+  const available = availableWeapons(floor)
+  const matching = archetype ? available.filter((weapon) => weapon.archetype === archetype) : []
+  const pool = matching.length ? matching : available
   if (!pool.length) return STANDARD_WEAPON_CATALOG[0] ?? null
   const roll = Math.max(0, Math.min(0.999999, random()))
   return pool[Math.floor(roll * pool.length)] ?? pool[0]

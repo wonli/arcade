@@ -130,7 +130,7 @@ function walkVfx(pack, dir) {
     const size = pngSize(full)
     if (!size) continue
     const path = pack.publicBase + relative(pack.output, full).split('\\').join('/')
-    const classified = classifyVfxAsset(path, size.width, size.height, { hasAlpha: pngHasAlpha(full) })
+    const classified = classifyVfxAsset(path, size.width, size.height, { hasAlpha: pngHasAlpha(full), source: pack.source })
     if (!classified) continue
     files.push({ ...classified, source: pack.source, ...inferVfxFrames(size.width, size.height) })
   }

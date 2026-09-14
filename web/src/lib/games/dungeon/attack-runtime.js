@@ -9,7 +9,7 @@ import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
 import { installDungeonPlayerFacing } from './player-facing-runtime.js'
 import { installDungeonEnemyFeedback } from './enemy-feedback-runtime.js'
 import { installDungeonEnemyBehaviors } from './enemy-behavior-runtime.js'
-import { bowVolleyTargets, weaponGroupSkill } from './weapon-skill.js'
+import { weaponGroupSkill } from './weapon-skill.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -235,70 +235,18 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
       }
     }
 
-    if (critical && effects.thunder > 0 && random() < effects.thunder) {
+    if (effects.thunder > 0 && random() < effects.thunder) {
       const segments = thunderChain(scene.playerState, primary, scene.enemies, 3, 190)
       segments.forEach((segment, index) => {
         scene.__dungeonVfx?.lightning?.(segment.from, segment.to, { primary: index === 0 })
-        if (index !== 0) {
-          scene.damageEnemy(
-            segment.to,
-            Math.max(1, Math.round(damage * 0.68)),
-            false,
-            6,
-            { direct: false, canProc: false, source: 'thunder' },
-          )
-        }
+        scene.damageEnemy(
+          segment.to,
+          Math.max(1, Math.round(damage * 0.68)),
+          false,
+          6,
+          { direct: false, canProc: false, source: 'thunder' },
+        )
       })
-    }
-
-    const legacyGroupChance = effects.whirlwind ?? 0
-
-    if (groupSkill === 'volley') {
-      const chance = Math.max(effects.volley ?? 0, legacyGroupChance)
-      if (chance > 0 && random() < chance) {
-        const radius = Math.round(190 * (1 + (effects.skillRadius ?? 0)))
-        const targets = bowVolleyTargets(primary, scene.enemies, radius, 2)
-        if (targets.length) {
-          if (scene.__dungeonWeaponProjectiles?.volley) {
-            scene.__dungeonWeaponProjectiles.volley(targets, { damage })
-          } else {
-            scene.__dungeonWeaponVfx?.volley?.(targets)
-            for (const target of targets) {
-              scene.damageEnemy(
-                target,
-                Math.max(1, Math.round(damage * 0.62)),
-                false,
-                8,
-                { direct: false, canProc: false, source: 'volley' },
-              )
-            }
-          }
-        }
-      }
-    }
-
-    if (groupSkill === 'arcane_nova') {
-      const chance = Math.max(effects.arcaneNova ?? 0, legacyGroupChance)
-      if (primary && chance > 0 && random() < chance) {
-        const radius = Math.round(118 * (1 + (effects.skillRadius ?? 0)))
-        const attack = { center: { x: primary.x, y: primary.y }, radius }
-        if (scene.__dungeonWeaponVfx?.nova) {
-          scene.__dungeonWeaponVfx.nova(primary.x, primary.y, { radius })
-        } else {
-          scene.__dungeonVfx?.aura?.(primary.x, primary.y, { scale: radius / 96 })
-          scene.__dungeonVfx?.impact?.(primary.x, primary.y, { explosion: true })
-        }
-        for (const enemy of targetsInCircle(attack, scene.enemies)) {
-          if (enemy === primary) continue
-          scene.damageEnemy(
-            enemy,
-            Math.max(1, Math.round(damage * 0.58)),
-            false,
-            10,
-            { direct: false, canProc: false, source: 'arcane_nova' },
-          )
-        }
-      }
     }
 
     if (groupSkill === 'whirlwind' && effects.whirlwind > 0 && random() < effects.whirlwind) {

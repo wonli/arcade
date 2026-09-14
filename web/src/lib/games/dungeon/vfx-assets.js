@@ -15,17 +15,27 @@ const RULES = [
 ]
 
 const RETRO_IMPACT_KINDS = new Set(['impact', 'critical', 'explosion', 'smoke'])
+const SOURCE_DEFAULT_KIND = Object.freeze({
+  lightning: 'lightning',
+})
 
-export function classifyVfxAsset(path, width, height, { hasAlpha = true } = {}) {
+function semanticPath(normalized) {
+  return normalized.replace(/\/vfx\/[^/]+\//i, '/vfx/')
+}
+
+export function classifyVfxAsset(path, width, height, { hasAlpha = true, source = null } = {}) {
   const normalized = String(path || '').replaceAll('\\', '/')
   if (!/\.png$/i.test(normalized)) return null
   if (!hasAlpha) return null
-  if (/(preview|thumbnail|sheet[_ -]?guide|readme)/i.test(normalized)) return null
-  const filename = normalized.split('/').pop() ?? normalized
-  const matched = RULES.find(([, pattern]) => pattern.test(filename))
-  if (!matched) return null
-  const kind = matched[0]
-  if (normalized.includes('/retro-impact/') && !RETRO_IMPACT_KINDS.has(kind)) return null
+  if (/(preview|thumbnail|sheet[_ -]?guide|readme|background)/i.test(normalized)) return null
+
+  const matched = RULES.find(([, pattern]) => pattern.test(semanticPath(normalized)))
+  const kind = matched?.[0] ?? SOURCE_DEFAULT_KIND[source] ?? null
+  if (!kind) return null
+
+  const retroImpact = source === 'retro-impact' || normalized.includes('/retro-impact/')
+  if (retroImpact && !RETRO_IMPACT_KINDS.has(kind)) return null
+
   return {
     kind,
     width: Math.max(1, Math.floor(width || 1)),
