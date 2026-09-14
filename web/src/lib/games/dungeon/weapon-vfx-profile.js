@@ -3,60 +3,18 @@ import { weaponDefinition } from './weapon-catalog.js'
 const RARITY = {
   common: { particles: null, attack: false, impact: false },
   uncommon: { particles: null, attack: false, impact: false },
-  rare: { particles: { frequency: 115, quantity: 1, lifespan: 360, scale: 0.08, burst: 3 }, attack: true, impact: false },
-  epic: { particles: { frequency: 78, quantity: 1, lifespan: 460, scale: 0.1, burst: 5 }, attack: true, impact: true },
-  legendary: { particles: { frequency: 52, quantity: 2, lifespan: 560, scale: 0.13, burst: 8 }, attack: true, impact: true },
+  rare: { particles: { frequency: 115, quantity: 1, lifespan: 360, size: 8, burst: 3 }, attack: true, impact: false },
+  epic: { particles: { frequency: 78, quantity: 1, lifespan: 460, size: 10, burst: 5 }, attack: true, impact: true },
+  legendary: { particles: { frequency: 52, quantity: 2, lifespan: 560, size: 12, burst: 8 }, attack: true, impact: true },
 }
 
 const THEMES = {
-  steel: {
-    tint: 0xeaf4ff,
-    particle: 'sparkle',
-    sources: ['kenney-particles', 'spell-effects', 'foozle', 'free-pixel-magic'],
-    fallbackKinds: ['aura', 'smoke', 'flame'],
-    attack: 'slash',
-    impact: 'impact',
-  },
-  ember: {
-    tint: 0xff8a4c,
-    particle: 'flame',
-    sources: ['foozle', 'spell-effects', 'kenney-particles'],
-    fallbackKinds: ['sparkle', 'aura', 'smoke'],
-    attack: 'slash',
-    impact: 'explosion',
-  },
-  frost: {
-    tint: 0x8edfff,
-    particle: 'sparkle',
-    sources: ['kenney-particles', 'spell-effects', 'foozle'],
-    fallbackKinds: ['aura', 'smoke', 'flame'],
-    attack: 'slash',
-    impact: 'sparkle',
-  },
-  storm: {
-    tint: 0x9ae9ff,
-    particle: 'lightning',
-    sources: ['lightning', 'kenney-particles', 'spell-effects', 'foozle', 'free-pixel-magic'],
-    fallbackKinds: ['sparkle', 'aura', 'flame'],
-    attack: 'lightning',
-    impact: 'impact',
-  },
-  arcane: {
-    tint: 0xc984ff,
-    particle: 'aura',
-    sources: ['spell-effects', 'foozle', 'kenney-particles'],
-    fallbackKinds: ['sparkle', 'smoke', 'flame'],
-    attack: 'beam',
-    impact: 'sparkle',
-  },
-  blood: {
-    tint: 0xff6470,
-    particle: 'smoke',
-    sources: ['retro-impact', 'foozle', 'spell-effects', 'kenney-particles'],
-    fallbackKinds: ['sparkle', 'aura', 'flame'],
-    attack: 'slash',
-    impact: 'critical',
-  },
+  steel: { tint: 0xeaf4ff, particle: 'sparkle', sources: ['kenney-particles', 'spell-effects', 'foozle', 'free-pixel-magic'], fallbackKinds: ['aura', 'smoke', 'flame'], attack: 'slash', impact: 'impact' },
+  ember: { tint: 0xff8a4c, particle: 'flame', sources: ['foozle', 'spell-effects', 'kenney-particles'], fallbackKinds: ['sparkle', 'aura', 'smoke'], attack: 'slash', impact: 'explosion' },
+  frost: { tint: 0x8edfff, particle: 'sparkle', sources: ['kenney-particles', 'spell-effects', 'foozle'], fallbackKinds: ['aura', 'smoke', 'flame'], attack: 'slash', impact: 'sparkle' },
+  storm: { tint: 0x9ae9ff, particle: 'lightning', sources: ['lightning', 'kenney-particles', 'spell-effects', 'foozle', 'free-pixel-magic'], fallbackKinds: ['sparkle', 'aura', 'flame'], attack: 'lightning', impact: 'impact' },
+  arcane: { tint: 0xc984ff, particle: 'aura', sources: ['spell-effects', 'foozle', 'kenney-particles'], fallbackKinds: ['sparkle', 'smoke', 'flame'], attack: 'beam', impact: 'sparkle' },
+  blood: { tint: 0xff6470, particle: 'smoke', sources: ['retro-impact', 'foozle', 'spell-effects', 'kenney-particles'], fallbackKinds: ['sparkle', 'aura', 'flame'], attack: 'slash', impact: 'critical' },
 }
 
 const ARCHETYPE_MOTION = {
@@ -81,9 +39,7 @@ function weaponIdentity(item = {}) {
   return { theme, archetype, variant }
 }
 
-export function weaponVfxTheme(item = {}) {
-  return weaponIdentity(item).theme
-}
+export function weaponVfxTheme(item = {}) { return weaponIdentity(item).theme }
 
 export function weaponVfxProfile(item = {}) {
   const rarity = RARITY[item?.rarity] ? item.rarity : 'common'

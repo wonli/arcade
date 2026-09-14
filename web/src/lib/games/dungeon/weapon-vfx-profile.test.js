@@ -19,10 +19,10 @@ test('rare through legendary weapons scale particle intensity by rarity', () => 
   assert.ok(legendary.burst > epic.burst)
 })
 
-test('weapon particles stay compact around the weapon', () => {
-  assert.equal(weaponVfxProfile({ rarity: 'rare' }).particles.scale, 0.08)
-  assert.equal(weaponVfxProfile({ rarity: 'epic' }).particles.scale, 0.1)
-  assert.equal(weaponVfxProfile({ rarity: 'legendary' }).particles.scale, 0.13)
+test('weapon particles use compact target pixel sizes independent from texture resolution', () => {
+  assert.equal(weaponVfxProfile({ rarity: 'rare' }).particles.size, 8)
+  assert.equal(weaponVfxProfile({ rarity: 'epic' }).particles.size, 10)
+  assert.equal(weaponVfxProfile({ rarity: 'legendary' }).particles.size, 12)
 })
 
 test('theme selects particle material while rarity keeps the same intensity', () => {

@@ -66,12 +66,19 @@ export function weaponParticleCandidates(catalog, profile = {}) {
 function particleTexture(scene, profile) {
   for (const candidate of weaponParticleCandidates(scene.__dungeonVfx?.catalog, profile)) {
     const key = `dungeon-vfx-${candidate.kind}-${candidate.index}`
-    if (scene.textures?.exists?.(key)) return key
+    if (scene.textures?.exists?.(key)) return { key, asset: candidate.asset }
   }
   return null
 }
 
-function particleConfig(profile) {
+function particleScale(profile, asset) {
+  const width = asset?.frameWidth ?? asset?.width ?? 128
+  const height = asset?.frameHeight ?? asset?.height ?? 128
+  const sourceSize = Math.max(1, width, height)
+  return Math.min(1, Math.max(1, profile.size ?? 8) / sourceSize)
+}
+
+function particleConfig(profile, asset) {
   return {
     emitting: true,
     frequency: profile.frequency,
@@ -79,7 +86,7 @@ function particleConfig(profile) {
     lifespan: { min: Math.round(profile.lifespan * 0.72), max: profile.lifespan },
     speed: { min: profile.speed?.[0] ?? 4, max: profile.speed?.[1] ?? 18 },
     angle: { min: 0, max: 360 },
-    scale: { start: profile.scale, end: 0 },
+    scale: { start: particleScale(profile, asset), end: 0 },
     alpha: { start: 0.82, end: 0 },
     rotate: { min: 0, max: 360 },
     tint: profile.tint,
@@ -126,10 +133,10 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
       return
     }
 
-    const key = particleTexture(scene, profile.particles)
-    if (!key) return
+    const texture = particleTexture(scene, profile.particles)
+    if (!texture) return
     const at = point(scene, anchor)
-    particleManager = scene.add.particles(at.x, at.y, key, particleConfig(profile.particles))
+    particleManager = scene.add.particles(at.x, at.y, texture.key, particleConfig(profile.particles, texture.asset))
     particleManager?.setDepth?.(23)
     particleProfile = profile.particles
   }

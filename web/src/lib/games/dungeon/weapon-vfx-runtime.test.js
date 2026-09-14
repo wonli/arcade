@@ -6,10 +6,13 @@ function sceneFor(item) {
   const calls = []
   const particles = []
   const catalog = {
-    sparkle: [{ source: 'foozle', frames: 1 }, { source: 'kenney-particles', frames: 1 }],
-    flame: [{ source: 'kenney-particles', frames: 1 }],
-    aura: [{ source: 'kenney-particles', frames: 1 }],
-    smoke: [{ source: 'kenney-particles', frames: 1 }],
+    sparkle: [
+      { source: 'foozle', frames: 1, width: 512, height: 512 },
+      { source: 'kenney-particles', frames: 1, width: 512, height: 512 },
+    ],
+    flame: [{ source: 'kenney-particles', frames: 1, width: 512, height: 512 }],
+    aura: [{ source: 'kenney-particles', frames: 1, width: 512, height: 512 }],
+    smoke: [{ source: 'kenney-particles', frames: 1, width: 512, height: 512 }],
   }
   const vfx = new Proxy(
     { catalog },
@@ -40,9 +43,7 @@ function sceneFor(item) {
           flows: [],
           setDepth() { return this },
           setPosition(nx, ny) { this.x = nx; this.y = ny; return this },
-          emitParticleAt(ex, ey, count) {
-            this.bursts.push([count, ex, ey])
-          },
+          emitParticleAt(ex, ey, count) { this.bursts.push([count, ex, ey]) },
           flow(frequency, quantity) {
             this.frequency = frequency
             this.quantity = quantity
@@ -88,11 +89,12 @@ test('particle selection falls back to a static loaded candidate', () => {
   assert.deepEqual([candidates[0].kind, candidates[0].index], ['sparkle', 0])
 })
 
-test('rare storm weapon falls back to a loaded static texture in a real particle emitter', () => {
+test('rare storm weapon normalizes a 512px source texture to an 8px particle', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'rare', vfxTheme: 'storm' })
   const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 8, y: 9 }) })
   assert.equal(particles.length, 1)
   assert.equal(particles[0].key, 'dungeon-vfx-sparkle-1')
+  assert.equal(particles[0].config.scale.start, 8 / 512)
   assert.equal(particles[0].config.blendMode, 'ADD')
   assert.equal(particles[0].config.emitting, true)
   runtime.restore()
@@ -100,11 +102,7 @@ test('rare storm weapon falls back to a loaded static texture in a real particle
 })
 
 test('legendary attack bursts particles without stopping the persistent flow', () => {
-  const { scene, calls, particles } = sceneFor({
-    type: 'weapon.test',
-    rarity: 'legendary',
-    vfxTheme: 'storm',
-  })
+  const { scene, calls, particles } = sceneFor({ type: 'weapon.test', rarity: 'legendary', vfxTheme: 'storm' })
   const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 10, y: 11 }) })
   const frequency = particles[0].frequency
   runtime.attack({ x: 40, y: 50 })
@@ -115,11 +113,7 @@ test('legendary attack bursts particles without stopping the persistent flow', (
 })
 
 test('sync restarts a particle flow that was stopped during a floor transition', () => {
-  const { scene, particles } = sceneFor({
-    type: 'weapon.test',
-    rarity: 'epic',
-    vfxTheme: 'storm',
-  })
+  const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'epic', vfxTheme: 'storm' })
   const runtime = installDungeonWeaponVfx(scene)
   particles[0].frequency = -1
   particles[0].emitting = false
