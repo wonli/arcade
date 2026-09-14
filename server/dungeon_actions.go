@@ -39,7 +39,6 @@ func (a *Actions) dungeonInput(c *ws.Context) {
 		return
 	}
 	c.Pub(roomTopic(roomID), ws.H{"type": "dungeon.input", "playerId": playerID, "input": req.Input})
-	c.Send(ws.H{"ok": true})
 }
 
 func (a *Actions) dungeonState(c *ws.Context) {
@@ -59,5 +58,4 @@ func (a *Actions) dungeonState(c *ws.Context) {
 		return
 	}
 	c.Pub(roomTopic(roomID), ws.H{"type": "dungeon.state", "playerId": playerID, "state": req.State})
-	c.Send(ws.H{"ok": true})
 }
