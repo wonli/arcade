@@ -2,18 +2,27 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
-test('rarity controls weapon vfx intensity rather than theme color', () => {
-  assert.equal(weaponVfxProfile({ rarity: 'common', vfxTheme: 'storm' }).idle, null)
-  assert.equal(weaponVfxProfile({ rarity: 'rare', vfxTheme: 'storm' }).idle.kind, 'sparkle')
-  assert.equal(weaponVfxProfile({ rarity: 'epic', vfxTheme: 'storm' }).attack.kind, 'lightning')
-  assert.ok(weaponVfxProfile({ rarity: 'legendary', vfxTheme: 'storm' }).impact)
+test('common and uncommon weapons do not run persistent particle emitters', () => {
+  assert.equal(weaponVfxProfile({ rarity: 'common', vfxTheme: 'storm' }).particles, null)
+  assert.equal(weaponVfxProfile({ rarity: 'uncommon', vfxTheme: 'storm' }).particles, null)
 })
 
-test('theme selects effect language while rarity controls cadence', () => {
+test('rare through legendary weapons scale real particle intensity by rarity', () => {
+  const rare = weaponVfxProfile({ rarity: 'rare', vfxTheme: 'storm' }).particles
+  const epic = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'storm' }).particles
+  const legendary = weaponVfxProfile({ rarity: 'legendary', vfxTheme: 'storm' }).particles
+  assert.equal(rare.source, 'kenney-particles')
+  assert.equal(rare.kind, 'sparkle')
+  assert.ok(epic.frequency < rare.frequency)
+  assert.ok(legendary.quantity > epic.quantity)
+  assert.ok(legendary.burst > epic.burst)
+})
+
+test('theme selects particle material while rarity keeps the same intensity', () => {
   const ember = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'ember' })
   const arcane = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'arcane' })
-  assert.equal(ember.idle.kind, 'flame')
-  assert.equal(arcane.idle.kind, 'aura')
+  assert.equal(ember.particles.kind, 'flame')
+  assert.equal(arcane.particles.kind, 'aura')
+  assert.equal(ember.particles.frequency, arcane.particles.frequency)
   assert.notEqual(ember.tint, arcane.tint)
-  assert.equal(ember.idle.delay, arcane.idle.delay)
 })
