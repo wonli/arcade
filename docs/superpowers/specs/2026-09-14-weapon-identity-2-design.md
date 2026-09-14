@@ -68,14 +68,23 @@ With the current bow attack-speed and damage multipliers, the extra 60% damage e
 
 `volley` is no longer a chance to unlock the bow's identity. It becomes a deterministic modifier of the fourth-shot signature.
 
-When a bow has `volley`, Power Shot also launches secondary real-arrow projectiles toward nearby valid targets. The affix value scales the secondary volley damage. These projectiles:
+When a bow has `volley`, every Power Shot also launches real-arrow secondary projectiles at up to two nearby attackable enemies other than the primary target.
+
+Each secondary Volley arrow deals:
+
+`weapon damage × (0.35 + volley affix value)`
+
+With the existing roll range this is approximately 49-71% weapon damage per secondary arrow.
+
+Secondary Volley arrows:
 
 - use real arrow art;
 - do not heal;
 - do not recursively trigger build procs;
-- do not consume extra signature progress.
+- do not consume extra signature progress;
+- do not receive Power Shot's guaranteed penetration.
 
-`piercing` continues to improve bow multi-target pressure, but Power Shot always has its one guaranteed penetration even without the affix.
+`piercing` continues to improve normal bow multi-target pressure, but Power Shot always has its one guaranteed penetration even without the affix.
 
 ## Staff Identity
 
@@ -99,7 +108,7 @@ Every third **successful staff hit** releases the staff's signature spell.
 
 Only a real hit advances and consumes staff signature progress. Shooting into a wall or losing every valid target does not waste the third-hit signature.
 
-Signature progress resets when the equipped weapon changes.
+Signature progress resets when the equipped weapon identity changes.
 
 ### Signature field
 
@@ -122,7 +131,8 @@ The baseline staff signature and balance reference.
 On the third successful hit:
 
 - primary target receives `+60% weapon damage`;
-- enemies within approximately 88 px of the primary receive `35% weapon damage`;
+- other enemies within approximately 88 px of the primary receive `35% weapon damage`;
+- the primary does not also receive the 35% splash component;
 - signature damage does not recursively trigger another signature;
 - use arcane/sparkle/explosion resource VFX.
 
@@ -152,9 +162,9 @@ On the third successful hit:
 - create a resource-backed blizzard area centered near the primary target;
 - radius approximately 92 px;
 - duration approximately 1.2 seconds;
-- 3 damage ticks;
-- if the primary stays for the full duration, total bonus damage is approximately `60% weapon damage`;
-- other enemies inside receive the same tick model;
+- 3 evenly spaced damage ticks;
+- each tick deals `20% weapon damage` to each enemy currently inside the area;
+- a target that remains for all three ticks therefore receives `60% weapon damage` total signature damage;
 - enemies inside are slowed by approximately 22%;
 - slow ends when the effect expires unless refreshed by a later blizzard.
 
@@ -194,7 +204,7 @@ Projectile collision behavior:
 
 ## Ordinary Weapon Drops
 
-Promote bow and staff to first-class ordinary drops.
+Promote bow and staff to first-class generic weapon drops.
 
 Top-level archetype weight:
 
@@ -203,6 +213,8 @@ Top-level archetype weight:
 - Staff: 20%
 
 For the first implementation, preserve the current melee sub-distribution among dagger/sword/katana rather than introducing new ordinary greatsword/spear/axe drop behavior in the same change.
+
+All generic equipment-generation paths must share this archetype selection rule, including normal boss weapon rewards. Explicit named/fixed drops such as a deliberately hard-coded `weapon.rust_sword` remain fixed and are not silently converted into random archetypes.
 
 Existing rarity, damage, depth bonus, and affix-slot rules remain unchanged.
 
@@ -216,17 +228,22 @@ The existing affix system remains, but build affixes stop acting as basic skill 
 
 ### `volley`
 
-Bow-only specialization behavior remains. It augments Power Shot with secondary arrows rather than being the only way to get a special bow attack.
+Bow-only specialization behavior remains. It augments Power Shot with the deterministic secondary arrows defined above rather than being the only way to get a special bow attack.
 
 ### `arcane_nova`
 
-Staff-only specialization behavior remains. It augments any staff signature by adding a small nova around the signature's primary impact point.
+Staff-only specialization behavior remains. Every deterministic staff signature also emits a small Arcane Nova centered on that signature's primary impact point.
 
-Recommended first-pass behavior:
+Arcane Nova:
 
-- nova bonus damage budget scales from the rolled affix value;
-- resource-only VFX;
-- no recursive signature/proc loops.
+- base radius: approximately 76 px, multiplied by `1 + skillRadius`;
+- affects enemies other than the primary target;
+- damage to each affected enemy: `weapon damage × (0.20 + arcane_nova affix value)`;
+- with current affix ranges this is approximately 34-56% weapon damage;
+- uses resource-only VFX;
+- cannot advance signature counters or recursively trigger signature/build procs.
+
+Excluding the primary target keeps the staff single-target balance budget stable while making the affix a clear group-damage upgrade.
 
 ### `whirlwind`
 
@@ -254,7 +271,7 @@ The current legendary catalog is melee-only. That is not acceptable as the final
 
 Implementation is split into two milestones:
 
-1. Core weapon identity, ordinary drops, targeting/collision fairness, affix migration, and VFX availability.
+1. Core weapon identity, generic drops, targeting/collision fairness, affix migration, and VFX availability.
 2. Add at least one bow legendary and one staff legendary using the same deterministic signature system, then expand content in later balancing passes.
 
 No legendary may require an active-skill button.
@@ -317,13 +334,14 @@ Minimum regression coverage:
 10. Staff projectile target death triggers bounded visible-target reacquisition instead of immediate expiry.
 11. Auto-targeting ignores enemies blocked by walls when another attackable target exists.
 12. Melee cannot damage through solid room geometry.
-13. Ordinary drop generation includes approximately 60/20/20 melee/bow/staff weighting in deterministic distribution tests.
-14. Staff drop signatures follow the configured 40/30/30 distribution under deterministic random fixtures.
-15. `volley` and `arcane_nova` augment deterministic signatures instead of acting as the only unlock path.
-16. Signature secondary damage cannot recursively proc signatures.
-17. Combat VFX remain resource-only.
-18. VFX manifest generation no longer silently drops known supported packs without an explicit test expectation.
-19. Production web build succeeds.
+13. Generic weapon generation includes approximately 60/20/20 melee/bow/staff weighting in deterministic distribution tests.
+14. Normal boss generic weapon rewards use the same archetype weighting.
+15. Staff drop signatures follow the configured 40/30/30 distribution under deterministic random fixtures.
+16. `volley` and `arcane_nova` augment deterministic signatures instead of acting as the only unlock path.
+17. Signature secondary damage cannot recursively proc signatures.
+18. Combat VFX remain resource-only.
+19. VFX manifest generation no longer silently drops known supported packs without an explicit test expectation.
+20. Production web build succeeds.
 
 ## Acceptance Criteria
 
@@ -335,7 +353,7 @@ The change is ready when all of the following are true:
 - Bow rewards enemy line-up and range without exceeding melee single-target output by default.
 - Neither ranged nor melee auto-attacks repeatedly damage/target through solid walls.
 - Ranged projectiles behave like world objects instead of disposable messages to one target.
-- Ordinary gameplay can actually drop bow and staff weapons.
+- Generic gameplay can actually drop bow and staff weapons.
 - Existing build affixes remain valuable as modifiers rather than required fun unlocks.
 - No active-skill UI, mana system, or new control scheme is introduced.
 - No procedural combat VFX fallback is reintroduced.
