@@ -1,8 +1,20 @@
 import { enemyBehaviorStep, enemyIntentProfile } from './enemy-behavior.js'
 import { installDungeonGameplayPass } from './gameplay-pass-runtime.js'
 
+function legacyLocalPlayer(scene) {
+  if (!scene?.playerState) return null
+  return {
+    id: 'local',
+    state: scene.playerState,
+    dead: scene.playerState.hp != null && scene.playerState.hp <= 0,
+  }
+}
+
 function targetFor(scene, enemy, requested = null) {
-  return requested ?? scene.__dungeonPlayerRuntime?.nearestPlayer?.(enemy) ?? scene.localPlayer ?? null
+  if (requested?.state) return requested
+  return scene.__dungeonPlayerRuntime?.nearestPlayer?.(enemy)
+    ?? scene.localPlayer
+    ?? legacyLocalPlayer(scene)
 }
 
 function distanceToPlayer(enemy, player) {
@@ -48,7 +60,7 @@ export function installDungeonEnemyBehaviors(scene) {
   const update = (enemy, time, dt, requestedPlayer = null) => {
     if (!enemy || enemy.hp <= 0) return
     const player = targetFor(scene, enemy, requestedPlayer)
-    if (!player?.state) return
+    if (!player?.state || player.dead) return
 
     const dx = player.state.x - enemy.x
     const dy = player.state.y - enemy.y
@@ -97,6 +109,7 @@ export function installDungeonEnemyBehaviors(scene) {
       enemy.specialLockedUntil = time + step.durationMs
       enemy.nextSpecialAt = enemy.specialLockedUntil + step.cooldownMs
       const targetId = player.id
+      const capturedTarget = player
 
       const warning = scene.add
         ?.circle?.(enemy.x, enemy.y, 20, 0xffa34d, 0.08)
@@ -115,8 +128,9 @@ export function installDungeonEnemyBehaviors(scene) {
 
       scene.time?.delayedCall?.(step.durationMs, () => {
         if (enemy.hp <= 0 || scene.dead) return
-        const target = scene.__dungeonPlayerRuntime?.playerById?.(targetId)
-        if (!target || target.dead) return
+        const runtime = scene.__dungeonPlayerRuntime
+        const target = runtime?.playerById ? runtime.playerById(targetId) : capturedTarget
+        if (!target || target.dead || (target.state?.hp ?? 1) <= 0) return
         if (distanceToPlayer(enemy, target) <= step.radius) {
           scene.hitPlayer?.(enemy.contactDamage + 4, target)
         }
