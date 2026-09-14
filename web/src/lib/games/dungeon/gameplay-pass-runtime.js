@@ -38,31 +38,36 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
   }
 
   if (originalProjectile) {
-    scene.fireEnemyProjectile = function boundedEnemyProjectile(enemy) {
+    scene.fireEnemyProjectile = function boundedEnemyProjectile(enemy, player = null) {
       if ((scene.enemyProjectiles?.length ?? 0) >= 20) return
-      return originalProjectile(enemy)
+      return originalProjectile(enemy, player)
     }
   }
 
   if (originalBoss) {
-    scene.updateBoss = function updateGameplayBoss(enemy, time, dt) {
-      if (enemy?.encounter?.id !== 'stormcaller') return originalBoss(enemy, time, dt)
+    scene.updateBoss = function updateGameplayBoss(enemy, time, dt, requestedPlayer = null) {
+      if (enemy?.encounter?.id !== 'stormcaller') return originalBoss(enemy, time, dt, requestedPlayer)
 
       if (enemy.hp / enemy.maxHp <= enemy.phaseThreshold && enemy.phase === 1) {
         enemy.phase = 2
         enemy.visual?.setTint?.(enemy.encounter.accent)
       }
 
-      scene.moveEnemyTowardPlayer?.(enemy, time, dt)
+      const target = requestedPlayer ?? scene.__dungeonPlayerRuntime?.nearestPlayer?.(enemy) ?? scene.localPlayer
+      if (!target || target.dead) return
+      scene.moveEnemyTowardPlayer?.(enemy, time, dt, target)
       if (time < (enemy.nextVariantAttackAt ?? 0)) return
 
       enemy.nextVariantAttackAt = time + (enemy.phase === 2 ? 1050 : 1450)
       const burst = enemy.phase === 2 ? 5 : 3
+      const targetId = target.id
       for (let i = 0; i < burst; i++) {
         scene.time?.delayedCall?.(i * 95, () => {
           if (enemy.hp <= 0 || scene.dead) return
           if ((scene.enemyProjectiles?.length ?? 0) >= 20) return
-          originalProjectile?.(enemy)
+          const nextTarget = scene.__dungeonPlayerRuntime?.playerById?.(targetId)
+          if (!nextTarget || nextTarget.dead) return
+          originalProjectile?.(enemy, nextTarget)
         })
       }
     }
@@ -73,32 +78,30 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
       const result = originalStart(...args)
       const progress = scene.__infiniteDungeon?.getProgress?.()
       const role = progress?.roomRole
+      const players = scene.__dungeonPlayerRuntime?.livingPlayers?.() ?? [scene.localPlayer].filter(Boolean)
 
       if (role === 'treasure') {
         scene.clearEnemies?.()
         scene.clearEnemyProjectiles?.()
         scene.floorCleared = true
+        const anchor = players[0]?.state ?? scene.playerState
         scene.spawnDrop?.(
-          (scene.playerState?.x ?? 480) + 42,
-          scene.playerState?.y ?? 300,
+          (anchor?.x ?? 480) + 42,
+          anchor?.y ?? 300,
           bossReward(random, scene.floor ?? 1),
         )
         scene.showBanner?.('TREASURE ROOM', '#ffd56a', 30)
         scene.time?.delayedCall?.(350, () => scene.openPortal?.())
       } else if (role === 'antechamber') {
-        const maxHp = scene.playerState?.maxHp ?? 0
-        const heal = Math.round(maxHp * 0.12)
-        if (heal > 0) {
-          scene.playerState.hp = Math.min(maxHp, (scene.playerState.hp ?? 0) + heal)
-          scene.updateHealthBar?.(
-            scene.playerBar,
-            scene.playerState.x,
-            scene.playerState.y - 42,
-            scene.playerState.hp,
-            maxHp,
-          )
-          scene.emitStats?.()
+        for (const player of players) {
+          const state = player?.state
+          const maxHp = state?.maxHp ?? 0
+          const heal = Math.round(maxHp * 0.12)
+          if (heal <= 0) continue
+          state.hp = Math.min(maxHp, (state.hp ?? 0) + heal)
+          scene.__dungeonPlayerRuntime?.updatePlayerVisual?.(player)
         }
+        scene.emitStats?.()
         scene.showBanner?.('BOSS ANTECHAMBER', '#ffb55c', 28)
       }
 
