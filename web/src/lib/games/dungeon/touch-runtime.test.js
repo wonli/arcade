@@ -12,19 +12,17 @@ test('joystickVector keeps direction, caps radius, and applies deadzone', () => 
   assert.ok(Math.abs(Math.hypot(diagonal.x, diagonal.y) - 1) < 1e-9)
 })
 
-test('touch movement merges with keyboard for one update then restores key state', () => {
-  let observed = null
+test('touch movement exposes normalized intent without mutating keyboard state', () => {
   const scene = {
-    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { _justDown: false } },
-    updatePlayer() { observed = { A: this.keys.A.isDown, D: this.keys.D.isDown, W: this.keys.W.isDown, S: this.keys.S.isDown } },
-    trySkill() {},
+    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { isDown: false, _justDown: false } },
     input: { keyboard: { addKey() { return null } } },
     events: { once() {} },
   }
   const touch = installDungeonTouchInput(scene)
   touch.setMove(0.8, -0.6)
-  scene.updatePlayer(0.016)
-  assert.deepEqual(observed, { A: false, D: true, W: true, S: false })
+  const input = touch.getState()
+  assert.equal(input.moveX, 0.8)
+  assert.equal(input.moveY, -0.6)
   assert.equal(scene.keys.D.isDown, false)
   assert.equal(scene.keys.W.isDown, false)
 })
@@ -32,9 +30,7 @@ test('touch movement merges with keyboard for one update then restores key state
 test('install clears stale keyboard state left behind by a destroyed run', () => {
   let resetCalls = 0
   const scene = {
-    keys: { A: { isDown: true }, D: { isDown: false }, W: { isDown: true }, S: { isDown: false }, SPACE: { _justDown: true } },
-    updatePlayer() {},
-    trySkill() {},
+    keys: { A: { isDown: true }, D: { isDown: false }, W: { isDown: true }, S: { isDown: false }, SPACE: { isDown: true, _justDown: true } },
     input: { keyboard: { resetKeys() { resetCalls++ }, addKey() { return null } } },
     events: { once() {} },
   }
@@ -42,26 +38,24 @@ test('install clears stale keyboard state left behind by a destroyed run', () =>
   assert.equal(resetCalls, 1)
   assert.equal(scene.keys.A.isDown, false)
   assert.equal(scene.keys.W.isDown, false)
+  assert.equal(scene.keys.SPACE.isDown, false)
   assert.equal(scene.keys.SPACE._justDown, false)
 })
 
-test('skill and interact reuse existing scene input paths', () => {
-  let skillObserved = false
+test('skill and interact are one-shot normalized intents while interact still reaches solo E listeners', () => {
   let interacts = 0
   const eKey = { emit(event) { if (event === 'down') interacts++ } }
   const scene = {
-    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { _justDown: false } },
-    updatePlayer() {},
-    trySkill() { skillObserved = this.keys.SPACE._justDown; this.keys.SPACE._justDown = false },
+    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { isDown: false, _justDown: false } },
     input: { keyboard: { addKey(name) { return name === 'E' ? eKey : null } } },
     events: { once() {} },
   }
   const touch = installDungeonTouchInput(scene)
   touch.triggerSkill()
-  scene.trySkill(100)
   touch.triggerInteract()
-  assert.equal(skillObserved, true)
   assert.equal(interacts, 1)
+  assert.deepEqual(touch.consumeInput(), { moveX: 0, moveY: 0, skill: true, interact: true })
+  assert.deepEqual(touch.getState(), { moveX: 0, moveY: 0, skill: false, interact: false })
 })
 
 test('touch audio cannot restart after the scene is dead', () => {
@@ -69,9 +63,7 @@ test('touch audio cannot restart after the scene is dead', () => {
   const scene = {
     dead: true,
     ambient: { start() { starts++; return Promise.resolve() } },
-    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { _justDown: false } },
-    updatePlayer() {},
-    trySkill() {},
+    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { isDown: false, _justDown: false } },
     input: { keyboard: { addKey() { return null } } },
     events: { once() {} },
   }
@@ -80,20 +72,20 @@ test('touch audio cannot restart after the scene is dead', () => {
   assert.equal(starts, 0)
 })
 
-test('shutdown restores wrapped scene methods', () => {
+test('shutdown clears touch runtime without replacing scene gameplay methods', () => {
   let shutdown = null
   const originalUpdate = function () {}
   const originalSkill = function () {}
   const scene = {
-    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { _justDown: false } },
+    keys: { A: { isDown: false }, D: { isDown: false }, W: { isDown: false }, S: { isDown: false }, SPACE: { isDown: false, _justDown: false } },
     updatePlayer: originalUpdate,
     trySkill: originalSkill,
     input: { keyboard: { addKey() { return null } } },
     events: { once(event, fn) { if (event === 'shutdown') shutdown = fn } },
   }
   installDungeonTouchInput(scene)
-  assert.notEqual(scene.updatePlayer, originalUpdate)
-  assert.notEqual(scene.trySkill, originalSkill)
+  assert.equal(scene.updatePlayer, originalUpdate)
+  assert.equal(scene.trySkill, originalSkill)
   shutdown()
   assert.equal(scene.updatePlayer, originalUpdate)
   assert.equal(scene.trySkill, originalSkill)
