@@ -31,6 +31,8 @@ const ART = {
   },
 }
 
+const PROCEDURAL_ARCHETYPES = new Set(['greatsword', 'spear', 'axe', 'bow', 'staff'])
+
 function legacyArtSelection(archetype, rarity) {
   const artArchetype = ART[archetype] ? archetype : 'sword'
   const rarities = ART[artArchetype]
@@ -146,6 +148,7 @@ function createProceduralWeapon(scene, archetype, x, y) {
     push(part(scene, 'circle', 0, -18, 7, 0xc984ff, 0.95)?.setStrokeStyle?.(2, 0xf0d9ff, 0.9))
     push(part(scene, 'circle', 0, -18, 12, 0xc984ff, 0.12))
   }
+  if (!children.length) return null
   const container = scene.add?.container?.(x, y, children)
   container?.setSize?.(40, 52)
   return container
@@ -155,12 +158,13 @@ export function createWeaponVisual(scene, item, x, y, { selected = false, presen
   const profile = weaponVisualProfile(item, { selected })
   if (!profile) return null
   const presentation = resolveWeaponPresentation(presentationConfig ?? DEFAULT_WEAPON_PRESENTATION, item, 'down')
+  const textureAvailable = Boolean(scene.textures?.exists?.(profile.textureKey))
   let visual = null
-  if (profile.procedural && scene.add?.container) {
-    visual = createProceduralWeapon(scene, profile.archetype, x, y)
-  } else if (scene.textures?.exists?.(profile.textureKey) && scene.add?.image) {
+  if (textureAvailable && scene.add?.image) {
     visual = scene.add.image(x, y, profile.textureKey)
     visual?.setOrigin?.(presentation.grip.x, presentation.grip.y)
+  } else if (PROCEDURAL_ARCHETYPES.has(profile.archetype) && scene.add?.container) {
+    visual = createProceduralWeapon(scene, profile.archetype, x, y)
   }
   visual?.setScale?.(profile.scale * presentation.scale)
   return visual

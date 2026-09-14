@@ -9,12 +9,15 @@
   import { installDungeonEditorRuntime } from '$lib/games/dungeon/editor-runtime.js'
   import { createDungeonEditorConfigClient } from '$lib/games/dungeon/editor-config.js'
   import { normalizeWeaponPresentationConfig, resolveWeaponPresentation, transformWeaponAnchor } from '$lib/games/dungeon/weapon-presentation.js'
-  import { WEAPON_CATALOG, weaponDefinition } from '$lib/games/dungeon/weapon-catalog.js'
+  import { WEAPON_CATALOG, materializeWeapon, weaponDefinition } from '$lib/games/dungeon/weapon-catalog.js'
+  import { materializeBossLegendary } from '$lib/games/dungeon/legendary-weapons.js'
+  import { materializeLegendary } from '$lib/games/dungeon/legendary-growth.js'
   import { weaponVisualProfile } from '$lib/games/dungeon/weapon-visual-runtime.js'
 
   const PREVIEW_WIDTH = 360
   const PREVIEW_HEIGHT = 310
   const PREVIEW_ZOOM = 4
+  const VFX_RADIUS_UNIT = 26
   const CENTER = { x: PREVIEW_WIDTH / 2, y: 184 }
   const configClient = createDungeonEditorConfigClient()
   const rarities = ['common', 'uncommon', 'rare', 'epic']
@@ -33,14 +36,7 @@
   let weaponNaturalWidth = 32, weaponNaturalHeight = 32
 
   $: selectedDefinition = weaponDefinition(selectedWeaponType)
-  $: selectedItem = selectedDefinition ? {
-    ...selectedDefinition,
-    rarity: selectedDefinition.bossOnly ? 'legendary' : selectedRarity,
-    vfxTheme: selectedTheme || selectedDefinition.vfxTheme,
-    legendaryLevel: selectedDefinition.bossOnly ? legendaryLevel : undefined,
-    damage: selectedDefinition.baseDamage ?? 12,
-    affixes: (selectedDefinition.affixes ?? []).map((entry) => ({ ...entry })),
-  } : null
+  $: selectedItem = materializeEditorWeapon(selectedDefinition)
   $: resolved = workingConfig && selectedItem
     ? resolveWeaponPresentation(workingConfig, selectedItem, facing, { attacking: poseMode === 'attack' })
     : null
@@ -61,12 +57,32 @@
     flipX: facing === 'right',
   } : null
   $: anchorPoint = previewVisual && resolved ? transformWeaponAnchor(previewVisual, resolved.vfxAnchor) : CENTER
+  $: vfxRadius = Math.max(8, VFX_RADIUS_UNIT * (resolved?.vfxSizeScale ?? 1))
   $: playerAsset = resources?.assets?.player?.source === 'rpg-main-character'
     ? resources.assets.player[facing === 'up' ? 'up' : facing === 'down' ? 'down' : 'side']?.[poseMode === 'attack' ? 'attack' : 'idle']
     : resources?.assets?.player
 
+  function materializeEditorWeapon(definition) {
+    if (!definition) return null
+    if (definition.bossOnly) {
+      const base = materializeBossLegendary(definition, 5)
+      return { ...materializeLegendary(base, Number(legendaryLevel) || 1), vfxTheme: selectedTheme || definition.vfxTheme }
+    }
+    return {
+      ...materializeWeapon(definition, { rarity: selectedRarity, damage: 12, affixes: [] }),
+      vfxTheme: selectedTheme || definition.vfxTheme,
+    }
+  }
+
   function sceneNow() {
     return game?.scene?.getScene?.('Dungeon') ?? scene
+  }
+
+  function commitWorking(next) {
+    workingConfig = normalizeWeaponPresentationConfig(next)
+    dirty = true
+    error = ''
+    applyWorking()
   }
 
   function applyWorking() {
@@ -95,10 +111,9 @@
     const override = weaponOverride(next)
     override.poses ??= {}
     override.poses[poseMode] ??= {}
-    override.poses[poseMode][facing] = { ...resolved.pose, [field]: number }
-    workingConfig = normalizeWeaponPresentationConfig(next)
-    dirty = true
-    applyWorking()
+    const existing = override.poses[poseMode][facing] ?? {}
+    override.poses[poseMode][facing] = { ...resolved.pose, ...existing, [field]: number }
+    commitWorking(next)
   }
 
   function updateWeaponValue(field, value) {
@@ -107,9 +122,7 @@
     if (!Number.isFinite(number)) return
     const next = cloneConfig()
     weaponOverride(next)[field] = number
-    workingConfig = normalizeWeaponPresentationConfig(next)
-    dirty = true
-    applyWorking()
+    commitWorking(next)
   }
 
   function updatePoint(field, axis, value) {
@@ -118,10 +131,8 @@
     if (!Number.isFinite(number)) return
     const next = cloneConfig()
     const override = weaponOverride(next)
-    override[field] = { ...resolved[field], [axis]: number }
-    workingConfig = normalizeWeaponPresentationConfig(next)
-    dirty = true
-    applyWorking()
+    override[field] = { ...resolved[field], ...(override[field] ?? {}), [axis]: number }
+    commitWorking(next)
   }
 
   function equipSelected() {
@@ -141,11 +152,10 @@
   function setFacing(next) {
     facing = next
     const current = sceneNow()
-    if (current) {
-      current.playerFacing = next
-      current.syncPlayerAnimation?.()
-      current.__dungeonWeaponVisuals?.sync?.()
-    }
+    if (!current) return
+    current.playerFacing = next
+    current.syncPlayerAnimation?.()
+    current.__dungeonWeaponVisuals?.sync?.()
   }
 
   function previewAttack() {
@@ -169,12 +179,12 @@
     if (!resolved) return
     event.preventDefault()
     event.stopPropagation()
-    const start = pointerInPreview(event)
     dragState = {
       kind,
-      start,
+      start: pointerInPreview(event),
       pose: { ...resolved.pose },
       anchor: { ...resolved.vfxAnchor },
+      vfxSizeScale: resolved.vfxSizeScale,
     }
     window.addEventListener('pointermove', dragMove)
     window.addEventListener('pointerup', endDrag, { once: true })
@@ -205,6 +215,11 @@
       const y = resolved.grip.y + localY / Math.max(1, weaponNaturalHeight * visualScale)
       updatePoint('vfxAnchor', 'x', Math.max(0, Math.min(1, x)))
       updatePoint('vfxAnchor', 'y', Math.max(0, Math.min(1, y)))
+      return
+    }
+    if (dragState.kind === 'vfx-size') {
+      const distance = Math.hypot(point.x - anchorPoint.x, point.y - anchorPoint.y)
+      updateWeaponValue('vfxSizeScale', Math.max(0, Math.min(3, Math.round(distance / VFX_RADIUS_UNIT * 100) / 100)))
     }
   }
 
@@ -218,8 +233,8 @@
     const rect = game.canvas.getBoundingClientRect()
     const x = (event.clientX - rect.left) * game.canvas.width / rect.width
     const y = (event.clientY - rect.top) * game.canvas.height / rect.height
-    editorRuntime.spawnEnemyAt(x, y)
-    message = `Enemy placed at ${Math.round(x)}, ${Math.round(y)}`
+    const enemy = editorRuntime.spawnEnemyAt(x, y)
+    if (enemy) message = `Enemy placed at ${Math.round(enemy.x)}, ${Math.round(enemy.y)}`
   }
 
   function randomRoom() {
@@ -232,16 +247,13 @@
     message = 'Reloaded current room geometry'
   }
 
-  function spawnAround() {
-    editorRuntime?.spawnAroundPlayer?.(spawnCount)
-  }
-
   async function saveConfig() {
     try {
       const result = await configClient.save(workingConfig)
       configSource = result.source
       workingConfig = normalizeWeaponPresentationConfig(result.config)
       dirty = false
+      error = ''
       applyWorking()
       message = 'Saved to data/dungeon/weapon-presentation.json'
     } catch (cause) {
@@ -255,6 +267,7 @@
       configSource = result.source
       workingConfig = normalizeWeaponPresentationConfig(result.config)
       dirty = false
+      error = ''
       applyWorking()
       message = 'Runtime override removed; using embedded defaults'
     } catch (cause) {
@@ -263,6 +276,7 @@
   }
 
   function exportConfig() {
+    if (!workingConfig) return
     const blob = new Blob([JSON.stringify(workingConfig, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -278,6 +292,7 @@
     try {
       workingConfig = normalizeWeaponPresentationConfig(JSON.parse(await file.text()))
       dirty = true
+      error = ''
       applyWorking()
       message = `Imported ${file.name}`
     } catch (cause) {
@@ -361,7 +376,7 @@
 
 <main class="editor-page">
   <header>
-    <div><a href="/dungeon">← DUNGEON</a><strong>DUNGEON EDITOR</strong><span class:dirty>{dirty ? 'UNSAVED' : configSource.toUpperCase()}</span></div>
+    <div class="identity"><a href="/dungeon">← DUNGEON</a><strong>DUNGEON EDITOR</strong><span class:dirty>{dirty ? 'UNSAVED' : configSource.toUpperCase()}</span></div>
     <div class="header-actions">
       <button on:click={() => fileInput?.click()}>导入 JSON</button>
       <button on:click={exportConfig} disabled={!workingConfig}>导出 JSON</button>
@@ -377,8 +392,8 @@
         <button on:click={randomRoom}>随机房间</button>
         <button on:click={reloadRoom}>重载房间</button>
         <button class:active={placeMode} on:click={() => placeMode = !placeMode}>{placeMode ? '点击地图放怪中' : '放置小怪'}</button>
-        <button on:click={spawnAround}>玩家周围 × {spawnCount}</button>
-        <input type="number" min="1" max="24" bind:value={spawnCount} />
+        <button on:click={() => editorRuntime?.spawnAroundPlayer?.(spawnCount)}>玩家周围 × {spawnCount}</button>
+        <input aria-label="spawn count" type="number" min="1" max="24" bind:value={spawnCount} />
         <button on:click={() => editorRuntime?.clearEnemies?.()}>清怪</button>
         <label><input type="checkbox" bind:checked={aiEnabled} on:change={() => editorRuntime?.setAiEnabled(aiEnabled)} /> AI</label>
         <label><input type="checkbox" bind:checked={playerInvincible} on:change={() => editorRuntime?.setPlayerInvincible(playerInvincible)} /> 玩家无敌</label>
@@ -393,6 +408,7 @@
       <select bind:value={selectedWeaponType} on:change={onWeaponChange}>
         {#each WEAPON_CATALOG as weapon}<option value={weapon.type}>{weapon.name}</option>{/each}
       </select>
+
       <div class="row thirds">
         <label>品质<select bind:value={selectedRarity} disabled={selectedDefinition?.bossOnly} on:change={equipSelected}>{#if selectedDefinition?.bossOnly}<option value="legendary">legendary</option>{:else}{#each rarities as rarity}<option value={rarity}>{rarity}</option>{/each}{/if}</select></label>
         <label>主题<select bind:value={selectedTheme} on:change={equipSelected}>{#each themes as theme}<option value={theme}>{theme}</option>{/each}</select></label>
@@ -407,14 +423,17 @@
         {#if playerAsset?.path}
           <div class="player-frame" style={`left:${CENTER.x}px;top:${CENTER.y}px;width:${playerAsset.frameWidth || 32}px;height:${playerAsset.frameHeight || 32}px;transform:translate(-50%,-70%) scale(4) scaleX(${facing==='right'?-1:1});background-image:url('${playerAsset.path}');background-size:${Math.max(1,playerAsset.frames||1)*100}% 100%;`}></div>
         {:else}<div class="player-placeholder" style={`left:${CENTER.x}px;top:${CENTER.y}px`}></div>{/if}
+
         {#if art?.path && resolved}
           <div class="weapon-origin" style={`left:${weaponX}px;top:${weaponY}px;transform:rotate(${resolved.pose.angle}deg)`} on:pointerdown={(event) => beginDrag('move', event)}>
             <img src={art.path} alt="" draggable="false" on:load={(event) => { weaponNaturalWidth=event.currentTarget.naturalWidth||32; weaponNaturalHeight=event.currentTarget.naturalHeight||32 }} style={`left:${-resolved.grip.x*weaponNaturalWidth}px;top:${-resolved.grip.y*weaponNaturalHeight}px;width:${weaponNaturalWidth}px;height:${weaponNaturalHeight}px;transform-origin:${resolved.grip.x*100}% ${resolved.grip.y*100}%;transform:scale(${facing==='right'?-visualScale:visualScale},${visualScale})`} />
           </div>
-          <button class="anchor-handle" title="VFX Anchor" style={`left:${anchorPoint.x}px;top:${anchorPoint.y}px`} on:pointerdown={(event)=>beginDrag('anchor',event)}>✦</button>
-          <button class="rotate-handle" title="Rotate" style={`left:${weaponX + Math.sin(resolved.pose.angle*Math.PI/180)*70}px;top:${weaponY - Math.cos(resolved.pose.angle*Math.PI/180)*70}px`} on:pointerdown={(event)=>beginDrag('rotate',event)}>↻</button>
+          <div class="vfx-ring" style={`left:${anchorPoint.x-vfxRadius}px;top:${anchorPoint.y-vfxRadius}px;width:${vfxRadius*2}px;height:${vfxRadius*2}px`}></div>
+          <button class="handle anchor-handle" title="VFX Anchor" style={`left:${anchorPoint.x}px;top:${anchorPoint.y}px`} on:pointerdown={(event)=>beginDrag('anchor',event)}>✦</button>
+          <button class="handle size-handle" title="VFX Size" style={`left:${anchorPoint.x+vfxRadius}px;top:${anchorPoint.y}px`} on:pointerdown={(event)=>beginDrag('vfx-size',event)}>↔</button>
+          <button class="handle rotate-handle" title="Rotate" style={`left:${weaponX + Math.sin(resolved.pose.angle*Math.PI/180)*70}px;top:${weaponY - Math.cos(resolved.pose.angle*Math.PI/180)*70}px`} on:pointerdown={(event)=>beginDrag('rotate',event)}>↻</button>
         {/if}
-        <div class="preview-note">拖武器移动 · 拖 ↻ 旋转 · 拖 ✦ 修改 VFX 挂点</div>
+        <div class="preview-note">拖武器移动 · ↻ 旋转 · ✦ VFX 挂点 · ↔ VFX 尺寸</div>
       </div>
 
       {#if resolved}
@@ -436,6 +455,6 @@
 
 <style>
   :global(html),:global(body){margin:0;width:100%;height:100%;overflow:hidden;background:#080a0d;color:#e8edf2;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-  button,select,input{font:inherit}.editor-page{height:100dvh;display:grid;grid-template-rows:48px minmax(0,1fr);background:#080a0d}header{display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #20262e;background:#0c0f13}header>div{display:flex;align-items:center;gap:12px}header a{color:#7f8a96;text-decoration:none;font:800 10px ui-monospace,monospace}header strong{font:900 13px ui-monospace,monospace;letter-spacing:.12em;color:#c1ff56}header span{padding:4px 7px;background:#161c22;color:#7d8995;font:800 9px ui-monospace,monospace}header span.dirty{color:#ffd56a;background:#282115}.header-actions{gap:6px!important}.header-actions button,.sandbox-toolbar button,.buttons button{border:1px solid #252d36;background:#12171d;color:#aeb7c1;padding:7px 9px;cursor:pointer}.header-actions .save{background:#c1ff56;color:#071008;border-color:#c1ff56;font-weight:900}.header-actions button:disabled{opacity:.35;cursor:default}.hidden{display:none}.workspace{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 430px}.game-column{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) 28px;border-right:1px solid #20262e}.sandbox-toolbar{display:flex;align-items:center;gap:6px;padding:8px;background:#0b0e12;border-bottom:1px solid #1b2129;overflow-x:auto}.sandbox-toolbar button.active,.sandbox-toolbar button:hover,.buttons button.active{border-color:#6f9242;color:#c1ff56;background:#172015}.sandbox-toolbar input[type=number]{width:42px}.sandbox-toolbar label{display:flex;gap:4px;align-items:center;white-space:nowrap;color:#88939e;font-size:10px}.game-stage{min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#050607;touch-action:none;user-select:none}.game-stage:global(canvas){display:block!important;max-width:100%!important;max-height:100%!important}.game-stage.placing{cursor:crosshair;box-shadow:inset 0 0 0 2px rgba(193,255,86,.35)}.status{padding:6px 10px;color:#66717c;font:10px ui-monospace,monospace;background:#0a0d10}.status .error{color:#ff7a86}.inspector{min-height:0;overflow:auto;padding:14px;background:#0d1116}.section-title{color:#c1ff56;font:900 10px ui-monospace,monospace;letter-spacing:.16em;margin-bottom:8px}.inspector>select{width:100%;height:36px;background:#151b22;color:#e5ebf1;border:1px solid #27313c;padding:0 8px}.row{display:flex;gap:7px;margin-top:10px}.row.thirds>label{flex:1;min-width:0;color:#697581;font-size:9px}.row.thirds select{display:block;width:100%;margin-top:4px;height:31px;background:#12171d;color:#b7c0ca;border:1px solid #252d36}.buttons{align-items:center}.buttons span{width:44px;color:#697581;font-size:9px}.buttons button{flex:1;padding:6px 4px;font-size:9px}.preview{position:relative;width:100%;aspect-ratio:360/310;margin-top:12px;overflow:hidden;background:#080b0e;border:1px solid #222b35;touch-action:none}.preview-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(102,118,134,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(102,118,134,.11) 1px,transparent 1px);background-size:16px 16px}.player-frame{position:absolute;background-repeat:no-repeat;background-position:left top;image-rendering:pixelated;transform-origin:center center;pointer-events:none}.player-placeholder{position:absolute;width:24px;height:36px;transform:translate(-50%,-70%);background:#394552;border:2px solid #8493a1}.weapon-origin{position:absolute;width:1px;height:1px;cursor:move;z-index:5}.weapon-origin img{position:absolute;max-width:none;image-rendering:pixelated;user-select:none;pointer-events:auto}.anchor-handle,.rotate-handle{position:absolute;z-index:12;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:1px solid #314454;background:#0b1218;color:#72e9ff;font:900 13px ui-monospace,monospace;cursor:grab}.rotate-handle{color:#ffd56a;border-color:#55492b}.preview-note{position:absolute;left:8px;bottom:7px;color:#54616d;font:9px ui-monospace,monospace;pointer-events:none}.numbers{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.numbers label{display:grid;grid-template-columns:1fr 74px;align-items:center;gap:6px;padding:7px 8px;background:#11161c;color:#737f8a;font:9px ui-monospace,monospace}.numbers input[type=number]{width:100%;box-sizing:border-box;background:#080b0f;border:1px solid #27313b;color:#d8e0e8;padding:5px}.numbers .wide{grid-column:1/-1;grid-template-columns:auto 1fr 74px}.numbers input[type=range]{width:100%}
+  button,select,input{font:inherit}.editor-page{height:100dvh;display:grid;grid-template-rows:48px minmax(0,1fr);background:#080a0d}header{display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #20262e;background:#0c0f13}.identity,.header-actions{display:flex;align-items:center;gap:12px}header a{color:#7f8a96;text-decoration:none;font:800 10px ui-monospace,monospace}header strong{font:900 13px ui-monospace,monospace;letter-spacing:.12em;color:#c1ff56}header span{padding:4px 7px;background:#161c22;color:#7d8995;font:800 9px ui-monospace,monospace}header span.dirty{color:#ffd56a;background:#282115}.header-actions{gap:6px}.header-actions button,.sandbox-toolbar button,.buttons button{border:1px solid #252d36;background:#12171d;color:#aeb7c1;padding:7px 9px;cursor:pointer}.header-actions .save{background:#c1ff56;color:#071008;border-color:#c1ff56;font-weight:900}.header-actions button:disabled{opacity:.35;cursor:default}.hidden{display:none}.workspace{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 430px}.game-column{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) 28px;border-right:1px solid #20262e}.sandbox-toolbar{display:flex;align-items:center;gap:6px;padding:8px;background:#0b0e12;border-bottom:1px solid #1b2129;overflow-x:auto}.sandbox-toolbar button.active,.sandbox-toolbar button:hover,.buttons button.active{border-color:#6f9242;color:#c1ff56;background:#172015}.sandbox-toolbar input[type=number]{width:42px}.sandbox-toolbar label{display:flex;gap:4px;align-items:center;white-space:nowrap;color:#88939e;font-size:10px}.game-stage{min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#050607;touch-action:none;user-select:none}.game-stage :global(canvas){display:block!important;max-width:100%!important;max-height:100%!important}.game-stage.placing{cursor:crosshair;box-shadow:inset 0 0 0 2px rgba(193,255,86,.35)}.status{padding:6px 10px;color:#66717c;font:10px ui-monospace,monospace;background:#0a0d10}.status .error{color:#ff7a86}.inspector{min-height:0;overflow:auto;padding:14px;background:#0d1116}.section-title{color:#c1ff56;font:900 10px ui-monospace,monospace;letter-spacing:.16em;margin-bottom:8px}.inspector>select{width:100%;height:36px;background:#151b22;color:#e5ebf1;border:1px solid #27313c;padding:0 8px}.row{display:flex;gap:7px;margin-top:10px}.row.thirds>label{flex:1;min-width:0;color:#697581;font-size:9px}.row.thirds select{display:block;width:100%;margin-top:4px;height:31px;background:#12171d;color:#b7c0ca;border:1px solid #252d36}.buttons{align-items:center}.buttons span{width:44px;color:#697581;font-size:9px}.buttons button{flex:1;padding:6px 4px;font-size:9px}.preview{position:relative;width:100%;aspect-ratio:360/310;margin-top:12px;overflow:hidden;background:#080b0e;border:1px solid #222b35;touch-action:none}.preview-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(102,118,134,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(102,118,134,.11) 1px,transparent 1px);background-size:16px 16px}.player-frame{position:absolute;background-repeat:no-repeat;background-position:left top;image-rendering:pixelated;transform-origin:center center;pointer-events:none}.player-placeholder{position:absolute;width:24px;height:36px;transform:translate(-50%,-70%);background:#394552;border:2px solid #8493a1}.weapon-origin{position:absolute;width:1px;height:1px;cursor:move;z-index:5}.weapon-origin img{position:absolute;max-width:none;image-rendering:pixelated;user-select:none;pointer-events:auto}.vfx-ring{position:absolute;border:1px dashed rgba(114,233,255,.48);border-radius:50%;pointer-events:none;box-sizing:border-box}.handle{position:absolute;z-index:12;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:1px solid #314454;background:#0b1218;color:#72e9ff;font:900 12px ui-monospace,monospace;cursor:grab}.size-handle{color:#8df6b2;border-color:#31533b}.rotate-handle{color:#ffd56a;border-color:#55492b}.preview-note{position:absolute;left:8px;bottom:7px;color:#54616d;font:9px ui-monospace,monospace;pointer-events:none}.numbers{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.numbers label{display:grid;grid-template-columns:1fr 74px;align-items:center;gap:6px;padding:7px 8px;background:#11161c;color:#737f8a;font:9px ui-monospace,monospace}.numbers input[type=number]{width:100%;box-sizing:border-box;background:#080b0f;border:1px solid #27313b;color:#d8e0e8;padding:5px}.numbers .wide{grid-column:1/-1;grid-template-columns:auto 1fr 74px}.numbers input[type=range]{width:100%}
   @media(max-width:980px){.workspace{grid-template-columns:1fr}.inspector{position:absolute;right:0;top:48px;bottom:0;width:min(430px,92vw);z-index:30;box-shadow:-18px 0 40px rgba(0,0,0,.5)}.game-column{border:0}.header-actions button:nth-child(-n+3){display:none}}
 </style>

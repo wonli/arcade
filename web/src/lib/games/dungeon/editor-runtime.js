@@ -1,3 +1,6 @@
+import { applyPickup } from './combat.js'
+import { safeEnemySpawn } from './room-anchors.js'
+
 function syncEnemy(scene, enemy) {
   enemy.visual?.setPosition?.(enemy.x, enemy.y)
   scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - (enemy.barOffset ?? 28), enemy.hp, enemy.maxHp)
@@ -53,8 +56,10 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
   const spawnEnemyAt = (x, y, { elite = false } = {}) => {
     const enemy = scene.spawnEnemy?.(scene.enemies?.length ?? 0, { elite })
     if (!enemy) return null
-    enemy.x = Number(x) || 0
-    enemy.y = Number(y) || 0
+    const desired = { x: Number(x) || 0, y: Number(y) || 0 }
+    const safe = safeEnemySpawn(scene.__roomGeometry, desired, enemy.boss ? 26 : 15) ?? desired
+    enemy.x = safe.x
+    enemy.y = safe.y
     syncEnemy(scene, enemy)
     return enemy
   }
@@ -88,13 +93,11 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   const equipWeapon = (item) => {
     if (!item?.type) return null
-    scene.playerState.equippedWeapon = { ...item, affixes: [...(item.affixes ?? [])] }
-    scene.playerState.weapon = item.type
-    scene.playerState.weaponRarity = item.rarity ?? 'common'
-    scene.playerState.weaponDamage = item.damage ?? 0
-    scene.playerState.weaponAffixes = [...(item.affixes ?? [])]
-    scene.playerState.weaponArchetype = item.archetype
-    scene.playerState.weaponVfxTheme = item.vfxTheme
+    const baseStats = scene.playerState?.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+    scene.playerState = {
+      ...applyPickup(scene.playerState ?? {}, item, baseStats),
+      baseStats: { ...baseStats },
+    }
     scene.__dungeonWeaponVisuals?.sync?.()
     scene.__dungeonWeaponVfx?.sync?.()
     scene.emitStats?.()
