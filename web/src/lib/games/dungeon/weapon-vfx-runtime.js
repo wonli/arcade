@@ -71,7 +71,14 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
       destroyParticles()
       return
     }
-    if (particleManager) return
+
+    if (particleManager) {
+      if (particleManager.emitting === false || particleManager.frequency < 0) {
+        particleManager.flow?.(profile.particles.frequency, profile.particles.quantity)
+      }
+      return
+    }
+
     const key = particleTexture(scene, profile.particles)
     if (!key) return
     const at = point(scene, anchor)
@@ -101,7 +108,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null } = {}) {
     ensureParticles(item, profile)
     const from = point(scene, anchor)
     if (particleManager && particleProfile) {
-      particleManager.explode?.(particleProfile.burst, from.x, from.y)
+      particleManager.emitParticleAt?.(from.x, from.y, particleProfile.burst)
     }
     if (!profile.attack) return null
     return playAttack(scene, profile.attack, from, target, {

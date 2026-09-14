@@ -18,6 +18,12 @@ test('rare through legendary weapons scale real particle intensity by rarity', (
   assert.ok(legendary.burst > epic.burst)
 })
 
+test('weapon particles stay compact around the weapon', () => {
+  assert.equal(weaponVfxProfile({ rarity: 'rare' }).particles.scale, 0.08)
+  assert.equal(weaponVfxProfile({ rarity: 'epic' }).particles.scale, 0.1)
+  assert.equal(weaponVfxProfile({ rarity: 'legendary' }).particles.scale, 0.13)
+})
+
 test('theme selects particle material while rarity keeps the same intensity', () => {
   const ember = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'ember' })
   const arcane = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'arcane' })
