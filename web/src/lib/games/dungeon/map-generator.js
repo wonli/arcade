@@ -1,4 +1,5 @@
-import { dressThemedRooms, populateWater } from './dungeon3-dressing.js'
+import { layoutContractViolations, pointInDamageArea } from './dungeon3-layout-validation.js'
+import { dressThemedRooms, populateWater, populateRoomHazards } from './dungeon3-dressing.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
 import { circleHitsSolid } from './spatial.js'
 import { dungeon3Rules } from './dungeon3-rules.js'
@@ -195,7 +196,8 @@ function build(seed, floor, attempt) {
       ? rect(lower.x + lower.width - TILE, from.y - half, Math.max(TILE * 2, upper.x - lower.x - lower.width + TILE * 2), half * 2, 'bridge', { orientation: 'horizontal' })
       : rect(from.x - half, lower.y + lower.height - TILE, CORRIDOR, Math.max(TILE * 2, upper.y - lower.y - lower.height + TILE * 2), 'bridge', { orientation: 'vertical' })
     bridge.pathId = path.id; bridge.level = path.level
-    bridges.push(bridge)
+    const waterGap = horizontal ? upper.x - lower.x - lower.width : upper.y - lower.y - lower.height
+    if (waterGap > 0) bridges.push(bridge)
     carve(path, 'bridge', path.level, true)
   }
 
@@ -258,8 +260,6 @@ function build(seed, floor, attempt) {
     }
   }
 
-  const protectedAnchors = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints]
-  const safeHazard = area => !protectedAnchors.some(p => overlaps(area, rect(p.x - 24, p.y - 24, 48, 48, 'safe')))
   for (const room of rooms) {
     const northConnection = paths.some(p => {
       const other = p.from === room.id ? rooms[p.to] : p.to === room.id ? rooms[p.from] : null
@@ -276,16 +276,12 @@ function build(seed, floor, attempt) {
       g.solids.push(rect(x, room.y + TILE, TILE, TILE, 'wall'))
     }
     if (!northConnection) g.doors.push({ x: room.center.x, y: room.y + 8, wallId: wall.id, orientation: 'down', role: 'alcove', motif: dungeon3Rules.assemblies.door, static: true })
-    const wallTrap = dungeon3Rules.assemblies.wallTrap
-    const trapX = room.x + TILE * 2, trapY = wall.y
-    const damageArea = rect(trapX, trapY + 32, 32, 64, 'hazard')
-    if (['gallery', 'flooded'].includes(room.theme) && safeHazard(damageArea)) g.traps.push({ id: `wall-trap-${room.id}`, roomId: room.id, wallId: wall.id, kind: 'wall-trap', x: trapX + 16, y: trapY + 48, motif: wallTrap, damageArea, orientation: 'down' })
-    const plateX = room.x + room.width - 48, plateY = room.y + room.height - 48
-    const plateArea = rect(plateX, plateY, 32, 32, 'hazard')
-    if (room.theme !== 'crypt' && safeHazard(plateArea)) g.traps.push({ id: `floor-trap-${room.id}`, roomId: room.id, kind: 'plate-trap', x: plateX + 16, y: plateY + 16, motif: dungeon3Rules.assemblies.floorTrap, damageArea: plateArea })
   }
 
   dressThemedRooms(g, random)
+  // Theme inlets are final before collision rectangles and hazards are built.
+  g.water = rectanglesFor(cells, 'water')
+  populateRoomHazards(g)
   populateWater(g, random)
 
   const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints, ...g.doors]
@@ -302,7 +298,7 @@ function build(seed, floor, attempt) {
   const placeDecoration = (room, pool, blocking = true, preferLargest = false) => {
     if (!pool.length) return false
     const entries = shuffle(random, pool)
-    const safeLane = room.layout?.safeLane ?? null
+    const reservedLanes = [room.layout?.safeLane, ...(room.layout?.approachLanes ?? [])].filter(Boolean)
     if (preferLargest) entries.sort((a, b) => b.motif.width * b.motif.height - a.motif.width * a.motif.height)
     for (const entry of entries) {
       const width = entry.motif.width * TILE, height = entry.motif.height * TILE
@@ -313,7 +309,7 @@ function build(seed, floor, attempt) {
         const collisionHeight = scale === 'large' ? Math.min(height, TILE) : height
         const collision = rect(candidate.x + (width - collisionWidth) / 2, candidate.y + height - collisionHeight, collisionWidth, collisionHeight, 'prop')
         const valid = inside(point(candidate.x, candidate.y), room, TILE) && inside(point(candidate.x + width, candidate.y + height), room, TILE) &&
-          (!safeLane || !overlaps(candidate, safeLane, 4)) &&
+          !reservedLanes.some(lane => overlaps(candidate, lane, 4)) &&
           (!blocking || !paths.some(path => overlaps(collision, path))) &&
           Array.from({ length: width / TILE * (height / TILE) }, (_, i) => cells[(candidate.y / TILE + Math.floor(i / (width / TILE))) * COLS + candidate.x / TILE + i % (width / TILE)]).every(c => c?.kind === 'floor') &&
           !g.solids.some(s => overlaps(candidate, s)) &&
@@ -345,9 +341,13 @@ function build(seed, floor, attempt) {
 }
 
 function validate(g) {
+  if (layoutContractViolations(g).length) return false
   const anchors = [g.spawn, g.exit, g.rest, ...g.spawnPoints, ...g.chests]
   if (anchors.some(p => circleHitsSolid(p, RADIUS, g))) return false
   const grid = buildNavGrid(g, { cellSize: TILE, actorRadius: RADIUS })
+  // Find a route that remains safe throughout every trap phase. This changes
+  // only the generation proof; traps stay traversable during actual gameplay.
+  for (const cell of grid.cells.values()) if (g.traps.some(trap => pointInDamageArea(cell, trap))) cell.blocked = true
   for (const target of anchors.slice(1)) {
     const path = findPath(grid, g.spawn, target)
     if (!path.length) return false
