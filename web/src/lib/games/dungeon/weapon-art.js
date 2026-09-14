@@ -25,10 +25,27 @@ const ART = Object.freeze({
   'weapon.crimson_verdict': { number: 'sword-22', base: new URL('./assets/sword-7soul1_20201212/32x32/sword_22.png', import.meta.url).href, selected: new URL('./assets/sword-7soul1_20201212/32x32/sword_22.png', import.meta.url).href, displayScale: 1 },
 })
 
+const PROJECTILE_ART = Object.freeze({
+  bow: {
+    key: 'dungeon-projectile-arrow',
+    path: new URL('./assets/Weapons Asset 16x16/088.png', import.meta.url).href,
+    rotationOffset: Math.PI / 4,
+    size: 24,
+  },
+})
+
 export function namedWeaponArt(type) {
   return ART[type] ?? null
 }
 
 export function namedWeaponArtEntries() {
   return Object.entries(ART).map(([type, art]) => ({ type, ...art }))
+}
+
+export function rangedProjectileArt(archetype) {
+  return PROJECTILE_ART[archetype] ?? null
+}
+
+export function rangedProjectileArtEntries() {
+  return Object.entries(PROJECTILE_ART).map(([archetype, art]) => ({ archetype, ...art }))
 }

@@ -1,5 +1,6 @@
 import { healFromHit, modifiedDamage, rollDamage } from './combat.js'
 import { circleHitsSolid } from './spatial.js'
+import { rangedProjectileArt } from './weapon-art.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 import { weaponVfxTexture } from './weapon-vfx-runtime.js'
@@ -31,28 +32,81 @@ export function weaponProjectileSpec(player) {
   }
 }
 
-function projectileTextureProfile(spec, profile) {
+function projectileTextureProfile(profile) {
   const sources = profile.particles?.sources ?? (profile.particles?.source ? [profile.particles.source] : [])
-  if (spec.archetype === 'staff') {
-    return {
-      kind: profile.attack?.kind ?? 'beam',
-      sources,
-      fallbackKinds: ['aura', 'sparkle', 'lightning', 'impact'],
-      variant: profile.variant ?? 0,
-    }
-  }
   return {
-    kind: profile.attack?.kind ?? 'sparkle',
+    kind: profile.attack?.kind ?? 'beam',
     sources,
-    fallbackKinds: ['sparkle', 'lightning', 'beam', 'impact'],
+    fallbackKinds: ['lightning', 'sparkle', 'impact'],
     variant: profile.variant ?? 0,
   }
+}
+
+function ensureProjectileAnimation(scene, texture) {
+  const frames = texture?.asset?.frames ?? 1
+  if (frames <= 1 || !scene.anims) return null
+  const key = `${texture.key}-projectile-loop`
+  if (!scene.anims.exists?.(key)) {
+    scene.anims.create?.({
+      key,
+      frames: scene.anims.generateFrameNumbers?.(texture.key, { start: 0, end: frames - 1 }) ?? [],
+      frameRate: Math.max(10, Math.min(24, Math.round(frames * 2.2))),
+      repeat: -1,
+    })
+  }
+  return key
+}
+
+function preloadProjectileArt(scene) {
+  const art = rangedProjectileArt('bow')
+  if (art && !scene.textures?.exists?.(art.key)) scene.load?.image?.(art.key, art.path)
+}
+
+function createArrowVisual(scene, spec, start, angle) {
+  const art = rangedProjectileArt(spec.archetype)
+  if (!art || !scene.textures?.exists?.(art.key) || !scene.add?.image) return null
+  const visual = scene.add.image(start.x, start.y, art.key)
+  const rotationOffset = art.rotationOffset ?? 0
+  visual.setRotation?.(angle + rotationOffset)
+  visual.setDepth?.(28)
+  visual.setAlpha?.(1)
+  visual.setBlendMode?.('NORMAL')
+  visual.displayWidth = art.size ?? 24
+  visual.displayHeight = art.size ?? 24
+  return { visual, rotationOffset }
+}
+
+function createSpellVisual(scene, start, angle, profile) {
+  const texture = weaponVfxTexture(scene, projectileTextureProfile(profile), { staticOnly: false })
+  if (!texture) return null
+  const animated = (texture.asset?.frames ?? 1) > 1
+  const visual = animated && scene.add?.sprite
+    ? scene.add.sprite(start.x, start.y, texture.key, 0)
+    : scene.add?.image?.(start.x, start.y, texture.key)
+  if (!visual) return null
+
+  visual.setRotation?.(angle)
+  visual.setDepth?.(28)
+  visual.setAlpha?.(0.96)
+  visual.setTint?.(profile.tint)
+  visual.setBlendMode?.('ADD')
+
+  const frameWidth = texture.asset?.frameWidth ?? texture.asset?.width ?? 32
+  const frameHeight = texture.asset?.frameHeight ?? texture.asset?.height ?? 32
+  const aspect = Math.max(0.6, Math.min(3.5, frameWidth / Math.max(1, frameHeight)))
+  visual.displayWidth = Math.max(24, Math.min(36, 28 * aspect))
+  visual.displayHeight = Math.max(10, Math.min(18, 28 / aspect))
+
+  const animation = ensureProjectileAnimation(scene, texture)
+  if (animation) visual.play?.(animation)
+  return { visual, rotationOffset: 0 }
 }
 
 export function installDungeonWeaponProjectiles(scene, { random = Math.random, anchor = null } = {}) {
   if (!scene || scene.__dungeonWeaponProjectiles) return scene?.__dungeonWeaponProjectiles ?? null
   const originalSlash = scene.slash?.bind(scene)
   if (!originalSlash) return null
+  preloadProjectileArt(scene)
   const projectiles = []
   const originalVfxSlash = scene.__dungeonVfx?.slash?.bind(scene.__dungeonVfx)
 
@@ -80,23 +134,8 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
   }
 
   const makeVisual = (spec, start, angle, profile) => {
-    const texture = weaponVfxTexture(scene, projectileTextureProfile(spec, profile))
-    if (!texture || !scene.add?.image) return { visual: null }
-
-    const visual = scene.add.image(start.x, start.y, texture.key)
-    visual.setRotation?.(angle)
-    visual.setDepth?.(28)
-    visual.setAlpha?.(0.94)
-    visual.setTint?.(profile.tint)
-    visual.setBlendMode?.('ADD')
-    if (spec.archetype === 'bow') {
-      visual.displayWidth = 24
-      visual.displayHeight = 7
-    } else {
-      visual.displayWidth = 20
-      visual.displayHeight = 14
-    }
-    return { visual }
+    if (spec.archetype === 'bow') return createArrowVisual(scene, spec, start, angle) ?? { visual: null, rotationOffset: 0 }
+    return createSpellVisual(scene, start, angle, profile) ?? { visual: null, rotationOffset: 0 }
   }
 
   const launchVfx = (spec, start, profile) => {
@@ -157,6 +196,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       heal: options.heal ?? !secondary,
       source: options.source ?? (secondary ? 'volley' : 'weapon'),
       visual: visuals.visual,
+      rotationOffset: visuals.rotationOffset ?? 0,
     })
     return projectiles.at(-1)
   }
@@ -200,7 +240,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       projectile.y += projectile.vy * dt
       projectile.life -= dt
       projectile.visual?.setPosition?.(projectile.x, projectile.y)
-      projectile.visual?.setRotation?.(Math.atan2(projectile.vy, projectile.vx))
+      projectile.visual?.setRotation?.(Math.atan2(projectile.vy, projectile.vx) + (projectile.rotationOffset ?? 0))
 
       const target = projectile.target
       const hitRadius = projectile.radius + (target?.hitRadius ?? (target?.boss ? 26 : 15))

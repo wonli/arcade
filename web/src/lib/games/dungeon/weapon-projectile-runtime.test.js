@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { installDungeonWeaponProjectiles, weaponProjectileSpec } from './weapon-projectile-runtime.js'
 
 function actor(archetype) {
+  const staff = archetype === 'staff'
+  const bow = archetype === 'bow'
   return {
     x: 0,
     y: 0,
@@ -11,9 +13,11 @@ function actor(archetype) {
     critMultiplier: 2,
     effects: {},
     equippedWeapon: {
+      type: staff ? 'weapon.arcane_spire' : bow ? 'weapon.tempest_bow' : 'weapon.test',
       archetype,
       rarity: 'rare',
-      vfxTheme: archetype === 'staff' ? 'arcane' : 'storm',
+      vfxTheme: staff ? 'arcane' : 'storm',
+      vfxVariant: staff || bow ? 1 : 0,
     },
   }
 }
@@ -23,6 +27,7 @@ function visual(key = null) {
     key,
     displayWidth: 0,
     displayHeight: 0,
+    played: [],
     setRotation(){ return this },
     setDepth(){ return this },
     setPosition(){ return this },
@@ -30,6 +35,7 @@ function visual(key = null) {
     setAlpha(){ return this },
     setBlendMode(){ return this },
     setScale(){ return this },
+    play(key){ this.played.push(key); return this },
     destroy(){},
   }
 }
@@ -44,7 +50,7 @@ function rangedScene(archetype = 'bow') {
   const catalog = {
     sparkle: [{ source: 'kenney-particles', frames: 1, width: 32, height: 32 }],
     aura: [{ source: 'spell-effects', frames: 1, width: 32, height: 32 }],
-    beam: [{ source: 'free-pixel-magic', frames: 1, width: 64, height: 16 }],
+    beam: [{ source: 'spell-effects', frames: 4, width: 128, height: 32, frameWidth: 32, frameHeight: 32 }],
     lightning: [{ source: 'lightning', frames: 1, width: 64, height: 16 }],
     impact: [{ source: 'retro-impact', frames: 1, width: 32, height: 32 }],
   }
@@ -58,7 +64,12 @@ function rangedScene(archetype = 'bow') {
     applyWeaponProcs(...args) { procs.push(args) },
     __dungeonVfx: { catalog },
     __dungeonWeaponVfx: { attack() {}, impact() {}, volley(targets) { volleyVfx.push(targets) } },
-    textures: { exists(key) { return key.startsWith('dungeon-vfx-') } },
+    textures: { exists(key) { return key.startsWith('dungeon-vfx-') || key === 'dungeon-projectile-arrow' } },
+    anims: {
+      exists() { return false },
+      create() {},
+      generateFrameNumbers() { return [] },
+    },
     add: {
       image(x, y, key) { const object = visual(key); object.x = x; object.y = y; images.push(object); return object },
       sprite(x, y, key) { const object = visual(key); object.x = x; object.y = y; images.push(object); return object },
@@ -83,13 +94,25 @@ test('bow and staff expose distinct projectile behavior while melee does not', (
   assert.ok(bow.speed > staff.speed)
 })
 
-test('ranged projectile visuals use loaded VFX textures and never procedural geometry', () => {
+test('ranged projectile visuals use loaded resources and never procedural geometry', () => {
   for (const archetype of ['bow', 'staff']) {
     const { scene, images } = rangedScene(archetype)
     scene.slash({ x: 40, y: 0, hp: 100, hitRadius: 10 })
     assert.ok(images.length >= 1)
-    assert.ok(images.every((image) => image.key?.startsWith('dungeon-vfx-')))
   }
+})
+
+test('Tempest Bow fires a real arrow sprite instead of stretching generic VFX', () => {
+  const { scene, images } = rangedScene('bow')
+  scene.slash({ x: 40, y: 0, hp: 100, hitRadius: 10 })
+  assert.equal(images[0]?.key, 'dungeon-projectile-arrow')
+})
+
+test('Arcane Spire projectile stays on a beam asset instead of falling back to an aura orb', () => {
+  const { scene, images } = rangedScene('staff')
+  scene.slash({ x: 40, y: 0, hp: 100, hitRadius: 10 })
+  assert.match(images[0]?.key ?? '', /^dungeon-vfx-beam-/)
+  assert.ok(images[0]?.played.length > 0)
 })
 
 test('ranged slash delays damage until projectile reaches target', () => {
@@ -115,7 +138,7 @@ test('bow volley launches real secondary arrows without healing or recursive pro
   assert.equal(runtime.count(), 2)
   assert.equal(volleyVfx.length, 1)
   assert.ok(images.length >= 2)
-  assert.ok(images.every((image) => image.key?.startsWith('dungeon-vfx-')))
+  assert.ok(images.every((image) => image.key === 'dungeon-projectile-arrow'))
 
   for (let step = 0; step < 4; step++) update(step * 40, 40)
 

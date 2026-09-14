@@ -75,6 +75,20 @@ test('same-theme weapon variants choose different stable particle candidates', (
   assert.notDeepEqual([first.kind, first.index], [second.kind, second.index])
 })
 
+test('weapon variant stays inside the requested VFX kind before using fallbacks', () => {
+  const catalog = {
+    beam: [{ source: 'spell-effects', frames: 1 }],
+    aura: [{ source: 'spell-effects', frames: 1 }],
+  }
+  const candidate = weaponParticleCandidates(catalog, {
+    kind: 'beam',
+    sources: ['spell-effects'],
+    fallbackKinds: ['aura'],
+    variant: 1,
+  })[0]
+  assert.deepEqual([candidate.kind, candidate.index], ['beam', 0])
+})
+
 test('particle selection falls back to a static loaded candidate', () => {
   const catalog = {
     flame: [{ source: 'foozle', frames: 8 }],

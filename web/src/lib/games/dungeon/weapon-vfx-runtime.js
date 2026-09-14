@@ -30,15 +30,23 @@ function rotate(entries, offset = 0) {
   return [...entries.slice(index), ...entries.slice(0, index)]
 }
 
-function staticRefs(catalog, kind) {
+function refs(catalog, kind, { staticOnly = true } = {}) {
   return (catalog?.[kind] ?? [])
     .map((asset, index) => ({ asset, index, kind }))
-    .filter(({ asset }) => asset && (asset.frames ?? 1) === 1)
+    .filter(({ asset }) => asset && (!staticOnly || (asset.frames ?? 1) === 1))
 }
 
 function sourceRank(asset, sources) {
   const index = sources.indexOf(asset?.source)
   return index < 0 ? sources.length + 1 : index
+}
+
+function rankedRefs(catalog, kind, sources, variant, options) {
+  const ranked = refs(catalog, kind, options).sort((a, b) => {
+    const rank = sourceRank(a.asset, sources) - sourceRank(b.asset, sources)
+    return rank || a.index - b.index
+  })
+  return rotate(ranked, variant)
 }
 
 function uniqueRefs(refs) {
@@ -51,21 +59,22 @@ function uniqueRefs(refs) {
   })
 }
 
-export function weaponParticleCandidates(catalog, profile = {}) {
+export function weaponVfxCandidates(catalog, profile = {}, { staticOnly = true } = {}) {
   const sources = profile.sources ?? (profile.source ? [profile.source] : [])
   const kinds = [...new Set([profile.kind, ...(profile.fallbackKinds ?? [])].filter(Boolean))]
-  const preferred = kinds.flatMap((kind) =>
-    staticRefs(catalog, kind).sort((a, b) => {
-      const rank = sourceRank(a.asset, sources) - sourceRank(b.asset, sources)
-      return rank || a.index - b.index
-    }),
-  )
-  const allStatic = Object.keys(catalog ?? {}).flatMap((kind) => staticRefs(catalog, kind))
-  return rotate(uniqueRefs([...preferred, ...allStatic]), profile.variant ?? 0)
+  const variant = profile.variant ?? 0
+  const preferred = kinds.flatMap((kind) => rankedRefs(catalog, kind, sources, variant, { staticOnly }))
+  const remainingKinds = Object.keys(catalog ?? {}).filter((kind) => !kinds.includes(kind))
+  const remaining = remainingKinds.flatMap((kind) => rankedRefs(catalog, kind, sources, variant, { staticOnly }))
+  return uniqueRefs([...preferred, ...remaining])
 }
 
-export function weaponVfxTexture(scene, profile = {}) {
-  for (const candidate of weaponParticleCandidates(scene?.__dungeonVfx?.catalog, profile)) {
+export function weaponParticleCandidates(catalog, profile = {}) {
+  return weaponVfxCandidates(catalog, profile, { staticOnly: true })
+}
+
+export function weaponVfxTexture(scene, profile = {}, { staticOnly = true } = {}) {
+  for (const candidate of weaponVfxCandidates(scene?.__dungeonVfx?.catalog, profile, { staticOnly })) {
     const key = `dungeon-vfx-${candidate.kind}-${candidate.index}`
     if (scene?.textures?.exists?.(key)) return { key, asset: candidate.asset, kind: candidate.kind, index: candidate.index }
   }
