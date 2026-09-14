@@ -3,6 +3,9 @@ import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
+import { renderRestStatue, restStatuePlan } from './rest-statue.js'
+
+export { restStatuePlan }
 
 const RARITIES = ['common', 'uncommon', 'rare', 'epic']
 
@@ -239,9 +242,9 @@ export function installInfiniteDungeon(scene, {
     const { x, y } = roomAnchor(scene.__roomGeometry, 'rest')
     const objects = []
     const glow = scene.add.circle(x, y, 56, 0xffc66d, 0.08).setDepth(8)
-    const fire = scene.add.circle(x, y + 5, 18, 0xff9e52, 0.5).setStrokeStyle(3, 0xffd27c, 0.9).setDepth(9)
+    const statue = renderRestStatue(scene, { x, y }, { depth: 9 })
     const title = scene.add.text(x, y - 74, label('restTitle'), { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '20px', fontStyle: 'bold', color: '#ffd27c', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(30)
-    objects.push(glow, fire, title)
+    objects.push(glow, ...statue, title)
     scene.tweens.add({ targets: glow, scale: 1.18, alpha: 0.16, duration: 900, yoyo: true, repeat: -1 })
 
     const keys = ['ONE', 'TWO', 'THREE'].map((name) => scene.input.keyboard.addKey(name))
