@@ -24,6 +24,14 @@ func Register(engine *gin.Engine) {
 	registerFS(engine, root)
 }
 
+func isDungeonRoomRoute(name string) bool {
+	parts := strings.Split(strings.Trim(name, "/"), "/")
+	if len(parts) != 2 || parts[1] != "dungeon" {
+		return false
+	}
+	return parts[0] == "new" || len(parts[0]) == 6
+}
+
 func registerFS(engine *gin.Engine, root fs.FS) {
 	fileServer := http.FileServer(http.FS(root))
 
@@ -54,7 +62,7 @@ func registerFS(engine *gin.Engine, root fs.FS) {
 
 		// Runtime client routes cannot all be prerendered. The fallback document
 		// boots the SvelteKit client router for clean URLs.
-		if name == "room" || strings.HasPrefix(name, "room/") || name == "dungeon" || strings.HasPrefix(name, "dungeon/") {
+		if name == "room" || strings.HasPrefix(name, "room/") || name == "dungeon" || strings.HasPrefix(name, "dungeon/") || isDungeonRoomRoute(name) {
 			serveHTML(c, root, "200.html")
 			return
 		}
