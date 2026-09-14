@@ -10,5 +10,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run focused Dungeon3 regression
-        run: node --test web/src/lib/games/dungeon/dungeon3-statue-collision.test.js
+      - name: Run focused Dungeon3 regressions
+        run: >-
+          node --test
+          web/src/lib/games/dungeon/dungeon3-statue-collision.test.js
+          web/src/lib/games/dungeon/dungeon3-richness.test.js
+          web/src/lib/games/dungeon/dungeon3-walkability.test.js
+          web/src/lib/games/dungeon/infinite-runtime.test.js
+          web/src/lib/games/dungeon/rest-pointer.test.js
