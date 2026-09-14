@@ -8,6 +8,11 @@ test('catalog contains twelve stable weapon identities independent from rarity',
   assert.equal(weaponDefinition('weapon.tempest_bow')?.archetype, 'bow')
   assert.equal(weaponDefinition('starfall_spear')?.vfxTheme, 'arcane')
   assert.equal('rarity' in WEAPON_CATALOG[0], false)
+
+  for (const theme of new Set(WEAPON_CATALOG.map((weapon) => weapon.vfxTheme))) {
+    const weapons = WEAPON_CATALOG.filter((weapon) => weapon.vfxTheme === theme)
+    assert.equal(new Set(weapons.map((weapon) => weapon.vfxVariant)).size, weapons.length)
+  }
 })
 
 test('deeper floors expand the weapon identity pool', () => {
@@ -21,6 +26,7 @@ test('materialization keeps rolled quality and stats while applying identity', (
   assert.equal(item.type, 'weapon.storm_lance')
   assert.equal(item.archetype, 'spear')
   assert.equal(item.vfxTheme, 'storm')
+  assert.equal(item.vfxVariant, 0)
   assert.equal(item.rarity, 'epic')
   assert.equal(item.damage, 22)
   assert.equal(item.affixes.length, 1)

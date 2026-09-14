@@ -10,19 +10,65 @@ function equippedItem(scene) {
 }
 
 function signature(item) {
-  return [item?.type ?? '', item?.rarity ?? '', item?.vfxTheme ?? item?.theme ?? ''].join('|')
+  return [
+    item?.type ?? '',
+    item?.rarity ?? '',
+    item?.vfxTheme ?? item?.theme ?? '',
+    item?.archetype ?? '',
+    item?.vfxVariant ?? '',
+  ].join('|')
 }
 
 function point(scene, anchor) {
   return anchor?.() ?? { x: scene?.playerState?.x ?? 0, y: scene?.playerState?.y ?? 0 }
 }
 
+function rotate(entries, offset = 0) {
+  if (entries.length < 2) return entries
+  const index = ((Math.floor(offset) % entries.length) + entries.length) % entries.length
+  return [...entries.slice(index), ...entries.slice(0, index)]
+}
+
+function staticRefs(catalog, kind) {
+  return (catalog?.[kind] ?? [])
+    .map((asset, index) => ({ asset, index, kind }))
+    .filter(({ asset }) => asset && (asset.frames ?? 1) === 1)
+}
+
+function sourceRank(asset, sources) {
+  const index = sources.indexOf(asset?.source)
+  return index < 0 ? sources.length + 1 : index
+}
+
+function uniqueRefs(refs) {
+  const seen = new Set()
+  return refs.filter((ref) => {
+    const key = `${ref.kind}:${ref.index}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+export function weaponParticleCandidates(catalog, profile = {}) {
+  const sources = profile.sources ?? (profile.source ? [profile.source] : [])
+  const kinds = [...new Set([profile.kind, ...(profile.fallbackKinds ?? [])].filter(Boolean))]
+  const preferred = kinds.flatMap((kind) =>
+    staticRefs(catalog, kind).sort((a, b) => {
+      const rank = sourceRank(a.asset, sources) - sourceRank(b.asset, sources)
+      return rank || a.index - b.index
+    }),
+  )
+  const allStatic = Object.keys(catalog ?? {}).flatMap((kind) => staticRefs(catalog, kind))
+  return rotate(uniqueRefs([...preferred, ...allStatic]), profile.variant ?? 0)
+}
+
 function particleTexture(scene, profile) {
-  const candidates = scene.__dungeonVfx?.catalog?.[profile.kind] ?? []
-  const index = candidates.findIndex((asset) => asset?.source === profile.source && (asset?.frames ?? 1) === 1)
-  if (index < 0) return null
-  const key = `dungeon-vfx-${profile.kind}-${index}`
-  return scene.textures?.exists?.(key) ? key : null
+  for (const candidate of weaponParticleCandidates(scene.__dungeonVfx?.catalog, profile)) {
+    const key = `dungeon-vfx-${candidate.kind}-${candidate.index}`
+    if (scene.textures?.exists?.(key)) return key
+  }
+  return null
 }
 
 function particleConfig(profile) {
@@ -31,11 +77,12 @@ function particleConfig(profile) {
     frequency: profile.frequency,
     quantity: profile.quantity,
     lifespan: { min: Math.round(profile.lifespan * 0.72), max: profile.lifespan },
-    speed: { min: 4, max: 18 },
+    speed: { min: profile.speed?.[0] ?? 4, max: profile.speed?.[1] ?? 18 },
     angle: { min: 0, max: 360 },
     scale: { start: profile.scale, end: 0 },
     alpha: { start: 0.82, end: 0 },
     rotate: { min: 0, max: 360 },
+    tint: profile.tint,
     blendMode: 'ADD',
   }
 }

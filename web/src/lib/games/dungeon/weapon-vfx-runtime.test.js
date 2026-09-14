@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
+import { installDungeonWeaponVfx, weaponParticleCandidates } from './weapon-vfx-runtime.js'
 
 function sceneFor(item) {
   const calls = []
@@ -60,7 +60,35 @@ function sceneFor(item) {
   return { scene, calls, particles }
 }
 
-test('rare weapon uses a Kenney texture in a real particle emitter', () => {
+test('same-theme weapon variants choose different stable particle candidates', () => {
+  const catalog = {
+    sparkle: [
+      { source: 'kenney-particles', frames: 1 },
+      { source: 'spell-effects', frames: 1 },
+    ],
+    aura: [{ source: 'foozle', frames: 1 }],
+  }
+  const base = { kind: 'sparkle', sources: ['kenney-particles', 'spell-effects'], fallbackKinds: ['aura'] }
+  const first = weaponParticleCandidates(catalog, { ...base, variant: 0 })[0]
+  const second = weaponParticleCandidates(catalog, { ...base, variant: 1 })[0]
+  assert.notDeepEqual([first.kind, first.index], [second.kind, second.index])
+})
+
+test('particle selection falls back to a static loaded candidate', () => {
+  const catalog = {
+    flame: [{ source: 'foozle', frames: 8 }],
+    sparkle: [{ source: 'kenney-particles', frames: 1 }],
+  }
+  const candidates = weaponParticleCandidates(catalog, {
+    kind: 'flame',
+    sources: ['foozle'],
+    fallbackKinds: ['sparkle'],
+    variant: 0,
+  })
+  assert.deepEqual([candidates[0].kind, candidates[0].index], ['sparkle', 0])
+})
+
+test('rare storm weapon falls back to a loaded static texture in a real particle emitter', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'rare', vfxTheme: 'storm' })
   const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 8, y: 9 }) })
   assert.equal(particles.length, 1)

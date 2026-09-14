@@ -7,12 +7,13 @@ test('common and uncommon weapons do not run persistent particle emitters', () =
   assert.equal(weaponVfxProfile({ rarity: 'uncommon', vfxTheme: 'storm' }).particles, null)
 })
 
-test('rare through legendary weapons scale real particle intensity by rarity', () => {
+test('rare through legendary weapons scale particle intensity by rarity', () => {
   const rare = weaponVfxProfile({ rarity: 'rare', vfxTheme: 'storm' }).particles
   const epic = weaponVfxProfile({ rarity: 'epic', vfxTheme: 'storm' }).particles
   const legendary = weaponVfxProfile({ rarity: 'legendary', vfxTheme: 'storm' }).particles
-  assert.equal(rare.source, 'kenney-particles')
-  assert.equal(rare.kind, 'sparkle')
+  assert.equal(rare.source, 'lightning')
+  assert.equal(rare.kind, 'lightning')
+  assert.equal(rare.fallbackKinds[0], 'sparkle')
   assert.ok(epic.frequency < rare.frequency)
   assert.ok(legendary.quantity > epic.quantity)
   assert.ok(legendary.burst > epic.burst)
@@ -31,4 +32,12 @@ test('theme selects particle material while rarity keeps the same intensity', ()
   assert.equal(arcane.particles.kind, 'aura')
   assert.equal(ember.particles.frequency, arcane.particles.frequency)
   assert.notEqual(ember.tint, arcane.tint)
+})
+
+test('legacy named weapon state recovers its stable visual identity from the catalog', () => {
+  const tempest = weaponVfxProfile({ type: 'weapon.tempest_bow', rarity: 'rare' })
+  assert.equal(tempest.theme, 'storm')
+  assert.equal(tempest.archetype, 'bow')
+  assert.equal(tempest.variant, 1)
+  assert.ok(tempest.particles)
 })
