@@ -10,7 +10,9 @@ import (
 
 	"github.com/wonli/arcade/arcade"
 	"github.com/wonli/arcade/internal/frontend"
+	"github.com/wonli/arcade/internal/gameconfig"
 	arcadeserver "github.com/wonli/arcade/server"
+	webconfig "github.com/wonli/arcade/web/config"
 )
 
 func main() {
@@ -26,6 +28,7 @@ func main() {
 	engine.GET("/ws", func(c *gin.Context) {
 		ws.HttpHandler(c.Writer, c.Request)
 	})
+	gameconfig.RegisterRoutes(engine, gameconfig.NewStore(webconfig.Files, "data"))
 
 	router := ws.NewRouter().Use(middlewares.Recovery())
 	actions := arcadeserver.NewActions(arcade.NewService())
