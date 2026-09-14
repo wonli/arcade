@@ -117,7 +117,7 @@ export function weaponPose(player, facing = 'down', { attacking = false, reachSc
     y,
     angle: base.angle,
     flipX: facing === 'right',
-    depth: attacking ? 22 : 18,
+    depth: attacking ? 22 : (facing === 'up' ? 21 : 18),
     tip: { x: x + (base.tipDx ?? 0) * reachScale, y: y + (base.tipDy ?? 0) * reachScale },
   }
 }

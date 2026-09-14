@@ -29,11 +29,17 @@ test('procedural axe visual is available without a PNG texture', () => {
   assert.ok(visual.scaleX > 1)
 })
 
-test('idle weapon trails behind player facing and stays behind character layer', () => {
+test('idle weapon uses facing-aware character layering', () => {
   const player = { x: 100, y: 120 }
-  const poses = ['right', 'left', 'up', 'down'].map((facing) => weaponPose(player, facing))
-  assert.ok(poses[0].x < player.x); assert.ok(poses[1].x > player.x); assert.ok(poses[2].y > player.y); assert.ok(poses[3].y < player.y)
-  for (const pose of poses) assert.ok(pose.depth < 20)
+  const [right, left, up, down] = ['right', 'left', 'up', 'down'].map((facing) => weaponPose(player, facing))
+  assert.ok(right.x < player.x)
+  assert.ok(left.x > player.x)
+  assert.ok(up.y > player.y)
+  assert.ok(down.y < player.y)
+  assert.ok(right.depth < 20)
+  assert.ok(left.depth < 20)
+  assert.ok(down.depth < 20)
+  assert.ok(up.depth > 20)
 })
 
 test('idle weapon is rotated ninety degrees into a vertical back carry', () => {
