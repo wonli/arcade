@@ -12,6 +12,13 @@ export function healthPotionPickupMode() {
   return 'store'
 }
 
+export function storeHealthPotion(state = {}) {
+  return {
+    ...state,
+    healthPotions: Number(state.healthPotions ?? 0) + 1,
+  }
+}
+
 export function useStoredHealthPotion(state = {}, healRatio = HEALTH_POTION_HEAL_RATIO) {
   const hp = Number(state.hp ?? 0)
   const maxHp = Number(state.maxHp ?? hp)
