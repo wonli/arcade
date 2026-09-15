@@ -2,6 +2,7 @@ import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwind
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
+import { currentEffects } from './player-loadout.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
@@ -52,7 +53,7 @@ function createImpactAudio(windowImpl = globalThis.window) {
       now,
     )
     lowGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
-    lowGain.connect(master)
+    lowGain.connect(ctx.destination)
 
     const low = ctx.createOscillator()
     low.type = 'sine'
@@ -203,7 +204,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
 
   scene.applyWeaponProcs = function spatialWeaponProcs(primary, damage, critical, attacker = player) {
     if (!attacker) return
-    const effects = attacker.state.effects ?? {}
+    const effects = currentEffects(attacker.state)
     const groupSkill = weaponGroupSkill(attacker.state)
 
     if (primary?.hp > 0 && effects.piercing > 0 && random() < effects.piercing) {
