@@ -76,7 +76,7 @@ test('weapon flip follows corrected side-sprite facing semantics', () => {
   assert.equal(weaponPose({ x: 0, y: 0 }, 'left').flipX, false); assert.equal(weaponPose({ x: 0, y: 0 }, 'right').flipX, true)
 })
 
-test('runtime uses archetype swing duration and follows the player', () => {
+test('runtime uses archetype swing duration, follows the player, and is owned by that player', () => {
   let update = null, delayed = null
   const created = []
   const scene = {
@@ -86,5 +86,6 @@ test('runtime uses archetype swing duration and follows the player', () => {
     load: { image() {}, once() {}, start() {} }, events: { on(event, handler) { if (event === 'update') update = handler }, off() {}, once() {} },
   }
   const runtime = installDungeonWeaponVisuals(attachLegacyTestPlayer(scene)); update(); assert.match(created[0].key, /dagger-rare$/); assert.ok(created[0].x < scene.localPlayer.state.x)
+  assert.equal(scene.localPlayer.runtime.weaponVisuals, runtime)
   const tip = runtime.swing(); assert.equal(delayed, 110); assert.ok(tip.x > scene.localPlayer.state.x)
 })
