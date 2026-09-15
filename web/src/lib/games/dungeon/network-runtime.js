@@ -103,14 +103,16 @@ export function createDungeonNetworkRuntime({
     try { onError(error) } catch {}
   }
 
-  async function flushSnapshot() {
+  async function flushSnapshot({ syncWorld = false } = {}) {
     if (snapshotInFlight) return false
     snapshotInFlight = true
     syncLocalPlayerLabel(scene.localPlayer)
     try {
+      const snapshot = serializePlayerSnapshot(scene.localPlayer)
+      if (syncWorld) snapshot.syncWorld = true
       await socket.request('dungeon.snapshot', {
         roomId: normalizedRoomId,
-        snapshot: serializePlayerSnapshot(scene.localPlayer),
+        snapshot,
       })
       return true
     } catch (error) {
@@ -184,12 +186,9 @@ export function createDungeonNetworkRuntime({
     const id = String(playerId ?? '').trim()
     if (!id || id === normalizedLocalId || !snapshot || typeof snapshot !== 'object') return null
     const trustedSnapshot = { ...snapshot, id }
+    delete trustedSnapshot.syncWorld
     const existing = scene.players.get(id)
-    if (!existing) {
-      const player = spawnRemotePlayer(scene, trustedSnapshot)
-      if (isHost) worldRuntime?.publishState?.()
-      return player
-    }
+    if (!existing) return spawnRemotePlayer(scene, trustedSnapshot)
     applyPlayerSnapshot(existing, trustedSnapshot)
     syncRemotePlayerPresentation(scene, existing)
     return existing
@@ -204,7 +203,9 @@ export function createDungeonNetworkRuntime({
     if (!sourcePlayerId || sourcePlayerId === normalizedLocalId) return null
 
     if (payload.type === 'dungeon.snapshot') {
-      return applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
+      const player = applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
+      if (isHost && payload.snapshot?.syncWorld === true) worldRuntime?.publishState?.()
+      return player
     }
 
     if (payload.type === 'dungeon.command') {
@@ -282,7 +283,9 @@ export function createDungeonNetworkRuntime({
     unsubscribe = socket.subscribe(topic, handleMessage)
     installLocalCommandMirrors()
     timer = setIntervalImpl(() => { void flushSnapshot() }, snapshotInterval)
-    void flushSnapshot()
+    // A fresh guest scene is only a local bootstrap. Ask the host to replace it
+    // with the canonical durable world immediately, including on browser refresh.
+    void flushSnapshot({ syncWorld: !isHost })
     return api
   }
 
