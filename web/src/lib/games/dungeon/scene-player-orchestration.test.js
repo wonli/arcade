@@ -41,7 +41,8 @@ function player(id, x = 100, y = 100) {
       speed: 190,
       critChance: 0.18,
       baseStats: { damage: 10, speed: 190, critChance: 0.18, maxHp: 100 },
-      effects: {},
+      equipment: { weapon: null },
+      modifiers: {},
     },
   })
 }
