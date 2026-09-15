@@ -126,3 +126,31 @@ test('derived effects expose normalized combat hooks and summary is compact', ()
   assert.equal(result.effects.thunder, 0.45)
   assert.equal(affixSummary(item).length, 3)
 })
+
+test('equipping a weapon preserves passive and temporary modifier layers', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const current = {
+    hp: 80,
+    maxHp: 100,
+    modifiers: {
+      passive: { skillRadius: 0.1 },
+      temporary: { attackSpeed: 0.15 },
+      equipment: { lifeSteal: 0.03 },
+    },
+  }
+  const result = deriveEquipment(base, {
+    type: 'weapon.dungeon_blade', archetype: 'sword', rarity: 'rare', damage: 7,
+    affixes: [
+      { id: 'attack_speed', tier: 1, value: 0.12 },
+      { id: 'life_steal', tier: 1, value: 0.05 },
+    ],
+  }, current)
+
+  assert.equal(result.equipment.weapon.type, 'weapon.dungeon_blade')
+  assert.equal(result.modifiers.passive.skillRadius, 0.1)
+  assert.equal(result.modifiers.temporary.attackSpeed, 0.15)
+  assert.equal(result.modifiers.equipment.attackSpeed, 0.12)
+  assert.equal(result.effects.attackSpeed, 0.27)
+  assert.equal(result.effects.skillRadius, 0.1)
+  assert.equal(result.effects.lifeSteal, 0.05)
+})
