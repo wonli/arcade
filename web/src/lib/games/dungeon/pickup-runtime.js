@@ -282,7 +282,7 @@ export function installPickupInteraction(scene, {
       const nearby = Math.hypot((drop.x ?? 0) - target.state.x, (drop.y ?? 0) - target.state.y) <= 34
       if (potion && nearby) {
         const result = pickupHealthPotion(target.state)
-        target.state = result.state
+        Object.assign(target.state, result.state)
         scene.destroyDrop?.(drop)
         if (result.stored) scene.__dungeonInventoryStats?.(target.state.healthPotions)
         else scene.updateHealthBar?.(target.bar, target.state.x, target.state.y - 42, target.state.hp, target.state.maxHp)
