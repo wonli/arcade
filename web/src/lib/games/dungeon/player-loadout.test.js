@@ -9,12 +9,12 @@ import {
   setModifierLayer,
 } from './player-loadout.js'
 
-test('canonical equipment weapon wins over compatibility mirrors', () => {
+test('canonical equipment weapon is the only weapon source', () => {
   const canonical = { type: 'weapon.canonical', archetype: 'staff', rarity: 'rare', damage: 11, affixes: [] }
   const legacy = { type: 'weapon.legacy', archetype: 'sword', rarity: 'common', damage: 1, affixes: [] }
-  const state = { equipment: { weapon: canonical }, equippedWeapon: legacy, weapon: legacy.type }
 
-  assert.equal(currentWeapon(state), canonical)
+  assert.equal(currentWeapon({ equipment: { weapon: canonical }, equippedWeapon: legacy, weapon: legacy.type }), canonical)
+  assert.equal(currentWeapon({ equippedWeapon: legacy, weapon: legacy.type }), null)
 })
 
 test('equipment replacement preserves non-equipment modifier layers', () => {
@@ -38,33 +38,36 @@ test('equipment replacement preserves non-equipment modifier layers', () => {
   assert.equal(currentEffects(next).lifeSteal, 0.08)
 })
 
-test('modifier layer updates keep the legacy effects mirror synchronized', () => {
-  const state = setModifierLayer({ effects: {} }, 'temporary', { attackSpeed: 0.2, skillHaste: 0.1 })
+test('modifier layer updates keep only canonical modifier state', () => {
+  const state = setModifierLayer({}, 'temporary', { attackSpeed: 0.2, skillHaste: 0.1 })
   const withPassive = setModifierLayer(state, 'passive', { skillRadius: 0.25 })
 
-  assert.equal(withPassive.effects.attackSpeed, 0.2)
-  assert.equal(withPassive.effects.skillHaste, 0.1)
-  assert.equal(withPassive.effects.skillRadius, 0.25)
-  assert.deepEqual(withPassive.effects, currentEffects(withPassive))
+  assert.equal('effects' in withPassive, false)
+  assert.equal(currentEffects(withPassive).attackSpeed, 0.2)
+  assert.equal(currentEffects(withPassive).skillHaste, 0.1)
+  assert.equal(currentEffects(withPassive).skillRadius, 0.25)
 
   const cleared = clearModifierLayer(withPassive, 'temporary')
-  assert.equal(cleared.effects.attackSpeed, undefined)
-  assert.equal(cleared.effects.skillHaste, undefined)
-  assert.equal(cleared.effects.skillRadius, 0.25)
-  assert.deepEqual(cleared.effects, currentEffects(cleared))
+  assert.equal('effects' in cleared, false)
+  assert.equal(currentEffects(cleared).attackSpeed, undefined)
+  assert.equal(currentEffects(cleared).skillHaste, undefined)
+  assert.equal(currentEffects(cleared).skillRadius, 0.25)
 })
 
-test('compatibility mirrors are derived from canonical equipment state', () => {
+test('equipment application emits no legacy mirrors', () => {
   const weapon = {
     type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'epic', damage: 13,
     affixes: [{ id: 'skill_haste', tier: 2, value: 0.2 }],
   }
   const next = applyEquipmentState({}, weapon, { skillHaste: 0.2 })
 
-  assert.equal(next.equippedWeapon.type, next.equipment.weapon.type)
-  assert.equal(next.weapon, next.equipment.weapon.type)
-  assert.equal(next.weaponRarity, next.equipment.weapon.rarity)
-  assert.equal(next.weaponDamage, next.equipment.weapon.damage)
-  assert.deepEqual(next.weaponAffixes, next.equipment.weapon.affixes)
-  assert.deepEqual(next.effects, currentEffects(next))
+  assert.deepEqual(next.equipment.weapon, weapon)
+  assert.deepEqual(next.modifiers.equipment, { skillHaste: 0.2 })
+  for (const key of ['equippedWeapon', 'weapon', 'weaponRarity', 'weaponDamage', 'weaponAffixes', 'effects']) {
+    assert.equal(key in next, false, `${key} mirror should not exist`)
+  }
+})
+
+test('legacy effects are not treated as modifier source', () => {
+  assert.deepEqual(currentEffects({ effects: { attackSpeed: 0.9 } }), {})
 })
