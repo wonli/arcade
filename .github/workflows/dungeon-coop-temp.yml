@@ -1,0 +1,41 @@
+name: Dungeon Coop Temporary CI
+
+on:
+  push:
+    branches:
+      - feat/dungeon-coop-websocket
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dungeon-coop-temp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build web
+        run: npm run build
