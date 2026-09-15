@@ -2,6 +2,7 @@ import { placePlayerAtRoomSpawn, roomAnchor } from './room-anchors.js'
 import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
+import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { growPlayerLegendaryForRoom } from './legendary-growth.js'
 import { currentWeapon } from './player-loadout.js'
@@ -138,8 +139,10 @@ export function installInfiniteDungeon(scene, {
 
   scene.floor = progress.floor
   const enemyPresentation = installEnemyPresentationRuntime(scene)
+  const portalPresentation = installPortalPresentationRuntime(scene)
 
   const originalOpenPortal = scene.openPortal.bind(scene)
+  const originalDestroyPortal = scene.destroyPortal.bind(scene)
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
 
@@ -184,19 +187,15 @@ export function installInfiniteDungeon(scene, {
   }
 
   const openInfinitePortal = () => {
-    if (scene.portal || player.dead) return
+    if (scene.portal || player.dead) return scene.portal
     const { x, y } = roomAnchor(scene.__roomGeometry, 'exit')
-    const glow = scene.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
-    const ring = scene.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
-    const core = scene.add.circle(x, y, 16, 0x70ff9f, 0.42).setDepth(10)
-    scene.tweens.add({ targets: glow, scale: 1.3, alpha: 0.18, duration: 850, yoyo: true, repeat: -1 })
-    scene.tweens.add({ targets: ring, scale: 1.12, alpha: 0.62, duration: 620, yoyo: true, repeat: -1 })
-    scene.tweens.add({ targets: core, alpha: 0.72, duration: 420, yoyo: true, repeat: -1 })
-    scene.portal = { x, y, glow, ring, core, unlockAt: scene.time.now + 500 }
-    onEvent({ type: 'portal', floor: progress.floor, chapter: progress.chapter })
+    const result = portalPresentation?.ensure({ x, y, unlockAt: (scene.time?.now ?? 0) + 500 })
+    if (result?.created) onEvent({ type: 'portal', floor: progress.floor, chapter: progress.chapter })
+    return result?.portal ?? null
   }
 
   scene.openPortal = openInfinitePortal
+  scene.destroyPortal = () => portalPresentation?.remove() ?? originalDestroyPortal()
 
   scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
     const next = promoteEquipment(item, progress.floor, fortuneActive, random)
@@ -353,6 +352,7 @@ export function installInfiniteDungeon(scene, {
   scene.events?.once?.('shutdown', () => {
     destroyRest()
     scene.openPortal = originalOpenPortal
+    scene.destroyPortal = originalDestroyPortal
   })
 
   return {
