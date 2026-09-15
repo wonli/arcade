@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installPickupInteraction, prepareDropItem, resolveDropPosition, weaponDamageForFloor } from './pickup-runtime.js'
@@ -65,7 +66,7 @@ test('drops are moved off blocked terrain to a reachable nearby point', () => {
     water: [],
     bridges: [],
   }
-  const scene = { playerState: { x: 48, y: 90 }, __dungeonSpatial: { getGeometry: () => geometry } }
+  const scene = attachLegacyTestPlayer({ playerState: { x: 48, y: 90 }, __dungeonSpatial: { getGeometry: () => geometry } })
   const safe = resolveDropPosition(scene, 120, 90)
   assert.notDeepEqual(safe, { x: 120, y: 90 })
   assert.ok(safe.x < 92 || safe.x > 148 || safe.y < 62 || safe.y > 118)
@@ -82,7 +83,7 @@ test('collision-safe loot on a disconnected island is relocated to the player re
     bridges: [],
   }
   const player = { x: 64, y: 96 }
-  const scene = { playerState: player, __dungeonSpatial: { getGeometry: () => geometry } }
+  const scene = attachLegacyTestPlayer({ playerState: player, __dungeonSpatial: { getGeometry: () => geometry } })
   const requested = { x: 240, y: 96 }
   assert.equal(hasRoute(geometry, player, requested, { cellSize: 16, actorRadius: 18 }), false)
   const safe = resolveDropPosition(scene, requested.x, requested.y)
@@ -93,10 +94,10 @@ test('collision-safe loot on a disconnected island is relocated to the player re
 
 test('auto potion consumes one stored potion at thirty percent health', () => {
   const scene = runtimeScene({ x: 0, y: 0, hp: 30, maxHp: 100, healthPotions: 2 })
-  const runtime = installPickupInteraction(scene)
+  const runtime = installPickupInteraction(attachLegacyTestPlayer(scene))
   assert.equal(runtime.autoUseHealthPotion(), true)
-  assert.equal(scene.playerState.hp, 60)
-  assert.equal(scene.playerState.healthPotions, 1)
+  assert.equal(scene.localPlayer.state.hp, 60)
+  assert.equal(scene.localPlayer.state.healthPotions, 1)
   assert.equal(runtime.autoUseHealthPotion(), false)
 })
 
@@ -111,7 +112,7 @@ test('ground weapon uses the same rarity and archetype texture as equipped weapo
   }
   scene.textures = { exists: (key) => key === 'dungeon-held-weapon-dagger-rare' }
   scene.add = { image(x, y, textureKey) { return { x, y, textureKey, scaleX: 1, scaleY: 1, setDepth() { return this }, setScale(value) { this.scaleX = value; this.scaleY = value; return this }, setY(value) { this.y = value } } } }
-  installPickupInteraction(scene)
+  installPickupInteraction(attachLegacyTestPlayer(scene))
   scene.spawnDrop(10, 20, { type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'rare', damage: 22, affixes: [] })
   assert.equal(scene.drops[0].visual.textureKey, 'dungeon-held-weapon-dagger-rare')
   assert.equal(oldVisual.destroyed, true)
@@ -122,7 +123,7 @@ test('destroying a drop kills permanent tweens for all of its visuals', () => {
   const scene = runtimeScene()
   const killed = []
   scene.tweens = { killTweensOf(target) { killed.push(target) } }
-  installPickupInteraction(scene)
+  installPickupInteraction(attachLegacyTestPlayer(scene))
   const visual = {}
   const glow = {}
   const label = {}
@@ -162,21 +163,21 @@ test('equipping a selected named weapon never changes texture after its visual i
     updateDrops() {
       const drop = this.drops[0]
       if (!drop) return
-      this.playerState.weapon = drop.item.type
-      this.playerState.weaponRarity = drop.item.rarity
-      this.playerState.weaponDamage = drop.item.damage
-      this.playerState.weaponAffixes = drop.item.affixes ?? []
-      this.playerState.equippedWeapon = drop.item
+      this.localPlayer.state.weapon = drop.item.type
+      this.localPlayer.state.weaponRarity = drop.item.rarity
+      this.localPlayer.state.weaponDamage = drop.item.damage
+      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
+      this.localPlayer.state.equippedWeapon = drop.item
       this.destroyDrop(drop)
       this.drops.splice(0, 1)
     },
     clearDrops() { this.drops = [] },
   }
-  installPickupInteraction(scene)
+  installPickupInteraction(attachLegacyTestPlayer(scene))
   scene.spawnDrop(0, 0, candidate)
   scene.updateDrops()
   assert.doesNotThrow(() => onDown())
-  assert.equal(scene.playerState.weapon, candidate.type)
+  assert.equal(scene.localPlayer.state.weapon, candidate.type)
 })
 
 test('equipping with E leaves the previous weapon on the ground', () => {
@@ -193,20 +194,20 @@ test('equipping with E leaves the previous weapon on the ground', () => {
     updateDrops() {
       const drop = this.drops[0]
       if (!drop) return
-      this.playerState.weapon = drop.item.type
-      this.playerState.weaponRarity = drop.item.rarity
-      this.playerState.weaponDamage = drop.item.damage
-      this.playerState.weaponAffixes = drop.item.affixes ?? []
-      this.playerState.equippedWeapon = drop.item
+      this.localPlayer.state.weapon = drop.item.type
+      this.localPlayer.state.weaponRarity = drop.item.rarity
+      this.localPlayer.state.weaponDamage = drop.item.damage
+      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
+      this.localPlayer.state.equippedWeapon = drop.item
       this.drops.splice(0, 1)
     },
     clearDrops() { this.drops = [] },
   }
-  installPickupInteraction(scene, { random: sequence([0.5, 0.9, 0.5]) })
+  installPickupInteraction(attachLegacyTestPlayer(scene), { random: sequence([0.5, 0.9, 0.5]) })
   scene.spawnDrop(0, 0, candidate)
   scene.updateDrops()
   onDown()
-  assert.equal(scene.playerState.weaponRarity, 'epic')
+  assert.equal(scene.localPlayer.state.weaponRarity, 'epic')
   assert.equal(scene.drops.length, 1)
   assert.equal(scene.drops[0].item.rarity, 'rare')
   assert.equal(scene.drops[0].item.damage, 22)

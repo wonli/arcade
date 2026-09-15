@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonSfx, DUNGEON_SFX } from './sfx-runtime.js'
@@ -24,8 +25,8 @@ function sceneFixture() {
     skillReadyAt: 0,
     updatePlayer() {},
     slash() {},
-    healPlayer(amount) { this.playerState.hp = Math.min(this.playerState.maxHp, this.playerState.hp + amount) },
-    trySkill(fired = false) { if (fired) this.skillReadyAt += 4200 },
+    healPlayer(amount) { this.localPlayer.state.hp = Math.min(this.localPlayer.state.maxHp, this.localPlayer.state.hp + amount) },
+    trySkill(fired = false) { if (fired) this.localPlayer.skillReadyAt += 4200 },
     events: { once() {} },
   }
 }
@@ -42,15 +43,15 @@ test('maps the four authored wav files to dungeon actions', () => {
 test('plays movement as a loop and stops it when movement ends', () => {
   FakeAudio.instances = []
   const scene = sceneFixture()
-  installDungeonSfx(scene, { windowImpl: { Audio: FakeAudio } })
-  scene.playerMoving = true
+  installDungeonSfx(attachLegacyTestPlayer(scene), { windowImpl: { Audio: FakeAudio } })
+  scene.localPlayer.moving = true
   scene.updatePlayer()
   const move = FakeAudio.instances.find((audio) => audio.src === DUNGEON_SFX.move)
   assert.equal(move.loop, true)
   assert.equal(move.playCalls, 1)
   scene.updatePlayer()
   assert.equal(move.playCalls, 1)
-  scene.playerMoving = false
+  scene.localPlayer.moving = false
   scene.updatePlayer()
   assert.equal(move.pauseCalls, 1)
   assert.equal(move.currentTime, 0)
@@ -59,7 +60,7 @@ test('plays movement as a loop and stops it when movement ends', () => {
 test('plays attack heal and skill only when those actions really happen', () => {
   FakeAudio.instances = []
   const scene = sceneFixture()
-  installDungeonSfx(scene, { windowImpl: { Audio: FakeAudio } })
+  installDungeonSfx(attachLegacyTestPlayer(scene), { windowImpl: { Audio: FakeAudio } })
   scene.slash({ hp: 10 })
   scene.healPlayer(20)
   scene.healPlayer(0)

@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonEditorRuntime } from './editor-runtime.js'
@@ -46,14 +47,14 @@ function fakeScene() {
 
 test('sandbox disables floor progression', () => {
   const { scene, calls } = fakeScene()
-  installDungeonEditorRuntime(scene)
+  installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   scene.checkFloorClear()
   assert.equal(calls.floor, 0)
 })
 
 test('can place a real spawned enemy at a chosen point', () => {
   const { scene } = fakeScene()
-  const runtime = installDungeonEditorRuntime(scene)
+  const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   const enemy = runtime.spawnEnemyAt(44, 55)
   assert.equal(scene.enemies[0], enemy)
   assert.deepEqual([enemy.x, enemy.y], [44, 55])
@@ -71,7 +72,7 @@ test('manual placement relocates a monster out of solid geometry', () => {
     spawnPoints: [{ x: 120, y: 120 }],
     spawn: { x: 20, y: 20 },
   }
-  const runtime = installDungeonEditorRuntime(scene)
+  const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   const enemy = runtime.spawnEnemyAt(50, 50)
   assert.notDeepEqual([enemy.x, enemy.y], [50, 50])
   assert.deepEqual([enemy.visual.x, enemy.visual.y], [enemy.x, enemy.y])
@@ -79,7 +80,7 @@ test('manual placement relocates a monster out of solid geometry', () => {
 
 test('AI can be paused and resumed', () => {
   const { scene, calls } = fakeScene()
-  const runtime = installDungeonEditorRuntime(scene)
+  const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   runtime.setAiEnabled(false)
   scene.updateEnemies(1, 0.016)
   assert.equal(calls.ai, 0)
@@ -90,7 +91,7 @@ test('AI can be paused and resumed', () => {
 
 test('player and enemies can be made invincible without replacing entities', () => {
   const { scene, calls } = fakeScene()
-  const runtime = installDungeonEditorRuntime(scene)
+  const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   const enemy = scene.spawnEnemy()
   runtime.setPlayerInvincible(true)
   scene.hitPlayer(9)
@@ -104,10 +105,10 @@ test('player and enemies can be made invincible without replacing entities', () 
 
 test('equip weapon uses the real equipment derivation and refreshes visuals', () => {
   const { scene, calls } = fakeScene()
-  const runtime = installDungeonEditorRuntime(scene)
+  const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   runtime.equipWeapon({ type: 'weapon.kings_ruin', rarity: 'legendary', archetype: 'sword', damage: 7, affixes: [] })
-  assert.equal(scene.playerState.weapon, 'weapon.kings_ruin')
-  assert.equal(scene.playerState.weaponRarity, 'legendary')
-  assert.equal(scene.playerState.damage, 17)
+  assert.equal(scene.localPlayer.state.weapon, 'weapon.kings_ruin')
+  assert.equal(scene.localPlayer.state.weaponRarity, 'legendary')
+  assert.equal(scene.localPlayer.state.damage, 17)
   assert.equal(calls.sync, 1)
 })

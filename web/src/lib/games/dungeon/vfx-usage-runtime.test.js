@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -30,13 +31,13 @@ test('world vfx translates loot, heal, portal, rest, equip, floor clear and elit
     },
   }
 
-  installDungeonWorldVfx(scene)
+  installDungeonWorldVfx(attachLegacyTestPlayer(scene))
   scene.spawnDrop(120, 140, { type: 'weapon.dungeon_blade', rarity: 'rare' })
   scene.pickupBurst(120, 140, { type: 'consumable.health_potion' }, 20)
   scene.portal = { x: 480, y: 500 }
   scene.enemies = [{ x: 600, y: 300, hp: 40, elite: true }]
   scene.floorCleared = true
-  scene.playerState.weaponDamage = 9
+  scene.localPlayer.state.weaponDamage = 9
   update()
 
   assert.ok(calls.some(([kind]) => kind === 'sparkle'))
@@ -57,7 +58,7 @@ test('no-op pickup does not emit heal vfx', () => {
     __dungeonVfx: { sparkle() {}, heal(...args) { heals.push(args) } },
     events: { on() {}, off() {}, once() {} },
   }
-  installDungeonWorldVfx(scene)
+  installDungeonWorldVfx(attachLegacyTestPlayer(scene))
   scene.pickupBurst(1, 2, { type: 'consumable.health_potion' }, 0)
   assert.equal(heals.length, 0)
 })

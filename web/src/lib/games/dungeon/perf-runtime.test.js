@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createPerfMonitor, installDungeonPerf, perfEnabledFromSearch } from './perf-runtime.js'
@@ -58,7 +59,7 @@ test('installDungeonPerf wraps hot paths and can restore them', () => {
     },
   }
   const originalUpdate = scene.update
-  const api = installDungeonPerf(scene, { enabled: true, now: () => clock, log: (line) => logs.push(line) })
+  const api = installDungeonPerf(attachLegacyTestPlayer(scene), { enabled: true, now: () => clock, log: (line) => logs.push(line) })
   scene.update(0, 40)
   scene.drawArena()
   api.flush()

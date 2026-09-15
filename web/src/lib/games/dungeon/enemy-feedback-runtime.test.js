@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -63,7 +64,7 @@ test('runtime hit reaction moves only the visual, not authoritative enemy coordi
   const visual = { x: 120, y: 100, scaleX: 2, scaleY: 2, setPosition(x, y) { this.x = x; this.y = y; return this }, setScale(x, y) { this.scaleX = x; this.scaleY = y; return this } }
   const scene = { tweens: { add(config) { tween = config; return config } }, events: { once() {} } }
   const enemy = { x: 120, y: 100, visual }
-  installDungeonEnemyFeedback(scene).hit(enemy, { x: 100, y: 100 }, { damage: 30 })
+  installDungeonEnemyFeedback(attachLegacyTestPlayer(scene)).hit(enemy, { x: 100, y: 100 }, { damage: 30 })
   assert.equal(enemy.x, 120)
   assert.equal(enemy.y, 100)
   assert.ok(tween.x > enemy.x)
@@ -75,7 +76,7 @@ test('death keeps sprite visible while scheduling bounded fade and shrink', () =
   const visual = { visible: false, scaleX: 2, scaleY: 2, setVisible(value) { this.visible = value; return this } }
   const scene = { tweens: { add(config) { tween = config; return config } }, events: { once() {} } }
   const enemy = { x: 120, y: 100, visual, elite: false, boss: false }
-  installDungeonEnemyFeedback(scene).death(enemy)
+  installDungeonEnemyFeedback(attachLegacyTestPlayer(scene)).death(enemy)
   assert.equal(visual.visible, true)
   assert.equal(tween.alpha, 0)
   assert.ok(tween.duration >= 180 && tween.duration <= 300)
@@ -100,7 +101,7 @@ test('boss wrappers add bounded warnings and delegate gameplay exactly once', ()
     time: { delayedCall() {} },
     events: { once() {} },
   }
-  const runtime = installDungeonEnemyFeedback(scene)
+  const runtime = installDungeonEnemyFeedback(attachLegacyTestPlayer(scene))
   const visual = { scaleX: 2, scaleY: 2, x: 100, y: 100, setScale() { return this }, setPosition() { return this } }
   const enemy = { x: 100, y: 100, phase: 2, hp: 100, nextChargeAt: 99, nextShockwaveAt: 88, visual }
   scene.bossCharge(enemy)
@@ -126,7 +127,7 @@ test('phase two and boss player-hit presentation do not mutate gameplay state', 
   }
   const visual = { scaleX: 2, scaleY: 2 }
   const enemy = { hp: 100, maxHp: 100, phase: 2, nextChargeAt: 500, x: 120, y: 90, visual }
-  const runtime = installDungeonEnemyFeedback(scene)
+  const runtime = installDungeonEnemyFeedback(attachLegacyTestPlayer(scene))
   runtime.phaseTwo(enemy)
   runtime.playerHit({ boss: true, damage: 24, x: 120, y: 90 })
   assert.equal(enemy.hp, 100)

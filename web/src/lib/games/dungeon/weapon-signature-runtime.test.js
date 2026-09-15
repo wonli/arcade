@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponSignatures } from './weapon-signature-runtime.js'
@@ -20,7 +21,7 @@ function signatureScene(signature = 'storm_palm') {
     },
     __dungeonWeaponVfx: { nova() {} },
   }
-  const runtime = installDungeonWeaponSignatures(scene)
+  const runtime = installDungeonWeaponSignatures(attachLegacyTestPlayer(scene))
   return { scene, runtime, hits, lightning }
 }
 
@@ -54,7 +55,7 @@ test('Storm Palm renders one resource lightning segment for the primary and each
   runtime.onStaffHit(primary, 20)
 
   assert.equal(lightning.length, 3)
-  assert.equal(lightning[0].from, scene.playerState)
+  assert.equal(lightning[0].from, scene.localPlayer.state)
   assert.equal(lightning[0].to, primary)
   assert.equal(lightning[1].from, primary)
   assert.equal(lightning[1].to, first)

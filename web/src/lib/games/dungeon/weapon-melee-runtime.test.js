@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponMelee, meleeBehavior } from './weapon-melee-runtime.js'
@@ -34,7 +35,7 @@ test('spear damages a lined-up secondary target without marking it direct or pro
   const behind = { id: 'behind', x: 205, y: 100, hp: 100 }
   const off = { id: 'off', x: 180, y: 160, hp: 100 }
   const { scene, damageCalls } = sceneFor('spear', [primary, behind, off])
-  installDungeonWeaponMelee(scene)
+  installDungeonWeaponMelee(attachLegacyTestPlayer(scene))
   scene.slash(primary)
   assert.equal(damageCalls[0].enemy, 'primary')
   assert.equal(damageCalls.some((call) => call.enemy === 'behind' && call.context?.source === 'weapon_thrust'), true)
@@ -46,7 +47,7 @@ test('greatsword cleaves targets in front but not behind', () => {
   const side = { id: 'side', x: 155, y: 145, hp: 100 }
   const behind = { id: 'behind', x: 50, y: 100, hp: 100 }
   const { scene, damageCalls } = sceneFor('greatsword', [primary, side, behind])
-  installDungeonWeaponMelee(scene)
+  installDungeonWeaponMelee(attachLegacyTestPlayer(scene))
   scene.slash(primary)
   assert.equal(damageCalls.some((call) => call.enemy === 'side' && call.context?.source === 'weapon_cleave'), true)
   assert.equal(damageCalls.some((call) => call.enemy === 'behind'), false)
@@ -55,7 +56,7 @@ test('greatsword cleaves targets in front but not behind', () => {
 test('axe increases direct weapon knockback beyond its incoming heavy hit', () => {
   const primary = { id: 'primary', x: 160, y: 100, hp: 100 }
   const { scene, damageCalls } = sceneFor('axe', [primary])
-  installDungeonWeaponMelee(scene)
+  installDungeonWeaponMelee(attachLegacyTestPlayer(scene))
   scene.slash(primary)
   assert.equal(damageCalls.length, 1)
   assert.ok(damageCalls[0].knockback > 22)

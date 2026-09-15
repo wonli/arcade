@@ -180,7 +180,7 @@ export function setWeaponVisualSelected(scene, visual, item, selected) {
 }
 
 function equippedItem(scene) {
-  if (!scene?.playerState?.weapon) return null
+  if (!scene?.localPlayer?.state?.weapon) return null
   return scene.localPlayer.state.equippedWeapon ?? {
     type: scene.localPlayer.state.weapon,
     rarity: scene.localPlayer.state.weaponRarity ?? 'common',

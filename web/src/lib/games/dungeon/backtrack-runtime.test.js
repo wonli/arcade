@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonBacktracking, safeRestorePosition } from './backtrack-runtime.js'
@@ -79,7 +80,7 @@ function makeScene() {
 
 test('retreat restores previous cleared floor and its dropped equipment', () => {
   const { scene, getInternalFloor } = makeScene()
-  const runtime = installDungeonBacktracking(scene)
+  const runtime = installDungeonBacktracking(attachLegacyTestPlayer(scene))
   scene.advanceFloor()
   assert.equal(scene.floor, 2)
   assert.equal(getInternalFloor(), 2)
@@ -92,7 +93,7 @@ test('retreat restores previous cleared floor and its dropped equipment', () => 
 
 test('forward portal from backtracked floor returns to cached deeper floor without advancing twice', () => {
   const { scene, getInternalFloor } = makeScene()
-  const runtime = installDungeonBacktracking(scene)
+  const runtime = installDungeonBacktracking(attachLegacyTestPlayer(scene))
   scene.advanceFloor()
   runtime.retreat()
   scene.advanceFloor()
@@ -103,12 +104,12 @@ test('forward portal from backtracked floor returns to cached deeper floor witho
 
 test('back portal requires three continuous seconds and transitions without confirmation', () => {
   const { scene, update } = makeScene()
-  installDungeonBacktracking(scene)
+  installDungeonBacktracking(attachLegacyTestPlayer(scene))
   scene.advanceFloor()
 
   scene.time.now = 2000
-  scene.playerState.x = 120
-  scene.playerState.y = 184
+  scene.localPlayer.state.x = 120
+  scene.localPlayer.state.y = 184
   update()
   assert.equal(scene.floor, 2)
 
@@ -124,20 +125,20 @@ test('back portal requires three continuous seconds and transitions without conf
 
 test('running through the back portal resets the countdown instead of changing floors', () => {
   const { scene, update } = makeScene()
-  installDungeonBacktracking(scene)
+  installDungeonBacktracking(attachLegacyTestPlayer(scene))
   scene.advanceFloor()
 
   scene.time.now = 2000
-  scene.playerState.x = 120
-  scene.playerState.y = 184
+  scene.localPlayer.state.x = 120
+  scene.localPlayer.state.y = 184
   update()
 
   scene.time.now = 3200
-  scene.playerState.x = 220
+  scene.localPlayer.state.x = 220
   update()
 
   scene.time.now = 6000
-  scene.playerState.x = 120
+  scene.localPlayer.state.x = 120
   update()
   assert.equal(scene.floor, 2)
 
@@ -152,7 +153,7 @@ test('running through the back portal resets the countdown instead of changing f
 
 test('forward portal uses the same three-second dwell behavior', () => {
   const { scene } = makeScene()
-  installDungeonBacktracking(scene)
+  installDungeonBacktracking(attachLegacyTestPlayer(scene))
 
   scene.time.now = 1000
   scene.updatePortal(1000)
@@ -163,11 +164,11 @@ test('forward portal uses the same three-second dwell behavior', () => {
   assert.equal(scene.floor, 1)
   assert.equal(scene.portal.countdownLabel.text, '2')
 
-  scene.playerState.x = 700
+  scene.localPlayer.state.x = 700
   scene.updatePortal(2800)
   assert.equal(scene.portal.countdownLabel, null)
 
-  scene.playerState.x = 800
+  scene.localPlayer.state.x = 800
   scene.updatePortal(5000)
   assert.equal(scene.floor, 1)
   scene.updatePortal(8000)

@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -40,7 +41,7 @@ function bowScene() {
   return {
     scene,
     hits,
-    runtime: installDungeonWeaponProjectiles(scene, { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) }),
+    runtime: installDungeonWeaponProjectiles(attachLegacyTestPlayer(scene), { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) }),
     update: (...args) => update(...args),
   }
 }
@@ -82,7 +83,7 @@ test('Arcane Nova deterministically augments every staff signature without hitti
   const primary = { id: 'primary', x: 40, y: 0, hp: 1000 }
   const nearby = { id: 'nearby', x: 88, y: 0, hp: 1000 }
   scene.enemies = [primary, nearby]
-  const runtime = installDungeonWeaponSignatures(scene)
+  const runtime = installDungeonWeaponSignatures(attachLegacyTestPlayer(scene))
 
   runtime.onStaffHit(primary, 20)
   runtime.onStaffHit(primary, 20)

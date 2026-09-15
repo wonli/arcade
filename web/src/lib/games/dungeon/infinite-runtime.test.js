@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -50,24 +51,24 @@ test('player runtime baseline follows floor progression without compounding twic
       equippedWeapon: null,
     },
   }
-  scalePlayerForProgress(scene, { floor: 1, chapter: 1 })
-  assert.equal(scene.playerState.maxHp, 100)
-  assert.equal(scene.playerState.damage, 10)
+  scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 1, chapter: 1 })
+  assert.equal(scene.localPlayer.state.maxHp, 100)
+  assert.equal(scene.localPlayer.state.damage, 10)
 
-  scalePlayerForProgress(scene, { floor: 20, chapter: 4 })
-  const deep = { maxHp: scene.playerState.maxHp, damage: scene.playerState.damage }
+  scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 20, chapter: 4 })
+  const deep = { maxHp: scene.localPlayer.state.maxHp, damage: scene.localPlayer.state.damage }
   assert.ok(deep.maxHp >= 270)
   assert.ok(deep.damage >= 30)
-  assert.equal(scene.playerState.hp, deep.maxHp)
+  assert.equal(scene.localPlayer.state.hp, deep.maxHp)
 
-  scalePlayerForProgress(scene, { floor: 20, chapter: 4 })
-  assert.equal(scene.playerState.maxHp, deep.maxHp)
-  assert.equal(scene.playerState.damage, deep.damage)
+  scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 20, chapter: 4 })
+  assert.equal(scene.localPlayer.state.maxHp, deep.maxHp)
+  assert.equal(scene.localPlayer.state.damage, deep.damage)
 
-  scene.playerState.baseStats = { ...scene.playerState.baseStats, damage: scene.playerState.baseStats.damage + 1 }
-  scene.playerState.damage += 1
-  scalePlayerForProgress(scene, { floor: 21, chapter: 4 })
-  assert.equal(scene.playerState.damage, 33)
-  scalePlayerForProgress(scene, { floor: 22, chapter: 4 })
-  assert.equal(scene.playerState.damage, 34)
+  scene.localPlayer.state.baseStats = { ...scene.localPlayer.state.baseStats, damage: scene.localPlayer.state.baseStats.damage + 1 }
+  scene.localPlayer.state.damage += 1
+  scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 21, chapter: 4 })
+  assert.equal(scene.localPlayer.state.damage, 33)
+  scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 22, chapter: 4 })
+  assert.equal(scene.localPlayer.state.damage, 34)
 })

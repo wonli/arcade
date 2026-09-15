@@ -1,7 +1,7 @@
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
 function equippedItem(scene) {
-  if (!scene?.playerState?.weapon) return null
+  if (!scene?.localPlayer?.state?.weapon) return null
   return scene.localPlayer.state.equippedWeapon ?? {
     type: scene.localPlayer.state.weapon,
     rarity: scene.localPlayer.state.weaponRarity ?? 'common',
@@ -21,7 +21,7 @@ function signature(item) {
 }
 
 function point(scene, anchor) {
-  return anchor?.() ?? { x: scene?.playerState?.x ?? 0, y: scene?.playerState?.y ?? 0 }
+  return anchor?.() ?? { x: scene?.localPlayer?.state?.x ?? 0, y: scene?.localPlayer?.state?.y ?? 0 }
 }
 
 function rotate(entries, offset = 0) {

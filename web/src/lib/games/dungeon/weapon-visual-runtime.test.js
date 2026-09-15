@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWeaponVisual, installDungeonWeaponVisuals, weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
@@ -84,6 +85,6 @@ test('runtime uses archetype swing duration and follows the player', () => {
     add: { image(x, y, key) { const object = { x, y, key, visible: true, angle: 0, depth: 0, flipX: false, setOrigin() { return this }, setScale() { return this }, setVisible(value) { this.visible = value; return this }, setPosition(nx, ny) { this.x = nx; this.y = ny; return this }, setAngle(value) { this.angle = value; return this }, setFlipX(value) { this.flipX = value; return this }, setDepth(value) { this.depth = value; return this }, destroy() {} }; created.push(object); return object } },
     load: { image() {}, once() {}, start() {} }, events: { on(event, handler) { if (event === 'update') update = handler }, off() {}, once() {} },
   }
-  const runtime = installDungeonWeaponVisuals(scene); update(); assert.match(created[0].key, /dagger-rare$/); assert.ok(created[0].x < scene.playerState.x)
-  const tip = runtime.swing(); assert.equal(delayed, 110); assert.ok(tip.x > scene.playerState.x)
+  const runtime = installDungeonWeaponVisuals(attachLegacyTestPlayer(scene)); update(); assert.match(created[0].key, /dagger-rare$/); assert.ok(created[0].x < scene.localPlayer.state.x)
+  const tip = runtime.swing(); assert.equal(delayed, 110); assert.ok(tip.x > scene.localPlayer.state.x)
 })

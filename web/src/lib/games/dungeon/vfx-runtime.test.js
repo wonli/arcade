@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -92,7 +93,7 @@ test('combat VFX never draw Phaser geometry and only instantiate loaded VFX text
     },
   }
 
-  const vfx = installDungeonVfx(scene, combatManifest)
+  const vfx = installDungeonVfx(attachLegacyTestPlayer(scene), combatManifest)
   vfx.beam({ start: { x: 0, y: 0 }, end: { x: 100, y: 0 }, width: 28 })
   vfx.lightning({ x: 0, y: 0 }, { x: 80, y: 20 }, { primary: true })
   vfx.whirlwind({ center: { x: 20, y: 30 }, radius: 90 })

@@ -39,7 +39,7 @@ export function progressSnapshot(progress, fortunePending = false, fortuneActive
 }
 
 export function scalePlayerForProgress(scene, progress) {
-  const player = scene?.playerState
+  const player = scene?.localPlayer?.state
   if (!player) return null
   const floor = Math.max(1, Math.floor(progress?.floor || 1))
   if (scene.__dungeonPlayerScaledFloor === floor) return player

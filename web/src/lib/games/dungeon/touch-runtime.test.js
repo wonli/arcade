@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { joystickVector, installDungeonTouchInput } from './touch-runtime.js'
@@ -21,7 +22,7 @@ test('touch movement merges with keyboard for one update then restores key state
     input: { keyboard: { addKey() { return null } } },
     events: { once() {} },
   }
-  const touch = installDungeonTouchInput(scene)
+  const touch = installDungeonTouchInput(attachLegacyTestPlayer(scene))
   touch.setMove(0.8, -0.6)
   scene.updatePlayer(0.016)
   assert.deepEqual(observed, { A: false, D: true, W: true, S: false })
@@ -38,7 +39,7 @@ test('install clears stale keyboard state left behind by a destroyed run', () =>
     input: { keyboard: { resetKeys() { resetCalls++ }, addKey() { return null } } },
     events: { once() {} },
   }
-  installDungeonTouchInput(scene)
+  installDungeonTouchInput(attachLegacyTestPlayer(scene))
   assert.equal(resetCalls, 1)
   assert.equal(scene.keys.A.isDown, false)
   assert.equal(scene.keys.W.isDown, false)
@@ -56,7 +57,7 @@ test('skill and interact reuse existing scene input paths', () => {
     input: { keyboard: { addKey(name) { return name === 'E' ? eKey : null } } },
     events: { once() {} },
   }
-  const touch = installDungeonTouchInput(scene)
+  const touch = installDungeonTouchInput(attachLegacyTestPlayer(scene))
   touch.triggerSkill()
   scene.trySkill(100)
   touch.triggerInteract()
@@ -75,7 +76,7 @@ test('touch audio cannot restart after the scene is dead', () => {
     input: { keyboard: { addKey() { return null } } },
     events: { once() {} },
   }
-  const touch = installDungeonTouchInput(scene)
+  const touch = installDungeonTouchInput(attachLegacyTestPlayer(scene))
   touch.setMove(1, 0)
   assert.equal(starts, 0)
 })
@@ -91,7 +92,7 @@ test('shutdown restores wrapped scene methods', () => {
     input: { keyboard: { addKey() { return null } } },
     events: { once(event, fn) { if (event === 'shutdown') shutdown = fn } },
   }
-  installDungeonTouchInput(scene)
+  installDungeonTouchInput(attachLegacyTestPlayer(scene))
   assert.notEqual(scene.updatePlayer, originalUpdate)
   assert.notEqual(scene.trySkill, originalSkill)
   shutdown()

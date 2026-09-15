@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -15,14 +16,14 @@ test('player facing runtime corrects the side sprite after scene animation sync'
   const scene = {
     playerFacing: 'right',
     player: { setFlipX(value) { flips.push(value) } },
-    syncPlayerAnimation() { this.player.setFlipX(this.playerFacing === 'left') },
+    syncPlayerAnimation() { this.localPlayer.actor.setFlipX(this.localPlayer.facing === 'left') },
     events: { once() {} },
   }
 
-  installDungeonPlayerFacing(scene)
+  installDungeonPlayerFacing(attachLegacyTestPlayer(scene))
   assert.deepEqual(flips, [false, true])
 
-  scene.playerFacing = 'left'
+  scene.localPlayer.facing = 'left'
   scene.syncPlayerAnimation()
   assert.deepEqual(flips.slice(-2), [true, false])
 })

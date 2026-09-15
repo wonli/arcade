@@ -89,7 +89,7 @@ export function resolveDropPosition(scene, x, y) {
   const requested = { x: Number(x) || 0, y: Number(y) || 0 }
   if (!geometry) return requested
 
-  const player = scene?.playerState
+  const player = scene?.localPlayer?.state
   if (!player) return requested
   const grid = dropNavGrid(scene, geometry)
 
@@ -111,7 +111,7 @@ export function resolveDropPosition(scene, x, y) {
 }
 
 function currentWeapon(scene) {
-  if (!scene?.playerState?.weapon) return null
+  if (!scene?.localPlayer?.state?.weapon) return null
   const equipped = scene.localPlayer.state.equippedWeapon
   if (equipped) return { ...equipped, affixes: [...(equipped.affixes ?? [])] }
   return {
