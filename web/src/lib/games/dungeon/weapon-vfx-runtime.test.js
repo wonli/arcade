@@ -1,6 +1,7 @@
 import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { PlayerEntity } from './player-entity.js'
 import { installDungeonWeaponVfx, weaponParticleCandidates } from './weapon-vfx-runtime.js'
 
 function sceneFor(item) {
@@ -169,4 +170,27 @@ test('staff arcane nova layers aura, explosion and sparkle at the impact point',
   assert.ok(calls.some(([kind, x, y]) => kind === 'aura' && x === 70 && y === 80))
   assert.ok(calls.some(([kind, x, y, options]) => kind === 'impact' && x === 70 && y === 80 && options.explosion === true))
   assert.ok(calls.some(([kind, x, y]) => kind === 'sparkle' && x === 70 && y === 80))
+})
+
+test('weapon vfx runtime is isolated per PlayerEntity', () => {
+  const { scene } = sceneFor({ type: 'weapon.local', rarity: 'common', vfxTheme: 'storm' })
+  attachLegacyTestPlayer(scene)
+  const remote = new PlayerEntity({
+    id: 'remote',
+    state: {
+      x: 80,
+      y: 90,
+      weapon: 'weapon.remote',
+      weaponRarity: 'common',
+      equippedWeapon: { type: 'weapon.remote', rarity: 'common', vfxTheme: 'storm' },
+    },
+  })
+
+  const localRuntime = installDungeonWeaponVfx(scene, { player: scene.localPlayer })
+  const remoteRuntime = installDungeonWeaponVfx(scene, { player: remote })
+
+  assert.notEqual(localRuntime, remoteRuntime)
+  assert.equal(scene.localPlayer.runtime.weaponVfx, localRuntime)
+  assert.equal(remote.runtime.weaponVfx, remoteRuntime)
+  assert.equal(scene.__dungeonWeaponVfx, localRuntime)
 })
