@@ -6,12 +6,13 @@ export function roomAnchor(geometry, kind) {
   return kind === 'exit' ? { x: 480, y: 600 - 48 * 1.7 } : { x: 480, y: 300 }
 }
 
-export function placePlayerAtRoomSpawn(scene) {
+export function placePlayerAtRoomSpawn(scene, player = scene?.localPlayer) {
+  if (!scene || !player) return
   const { x, y } = roomAnchor(scene.__roomGeometry, 'spawn')
-  scene.localPlayer.state.x = x
-  scene.localPlayer.state.y = y
-  scene.localPlayer.actor?.setPosition?.(x, y)
-  scene.updateHealthBar?.(scene.localPlayer.bar, x, y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
+  player.state.x = x
+  player.state.y = y
+  player.actor?.setPosition?.(x, y)
+  scene.updateHealthBar?.(player.bar, x, y - 42, player.state.hp, player.state.maxHp)
 }
 
 export function safeEnemySpawn(geometry, desired, radius = 15) {
