@@ -1,5 +1,6 @@
 import { placePlayerAtRoomSpawn, roomAnchor, safeEnemySpawn } from './room-anchors.js'
 import { createDungeonAmbient } from './ambient.js'
+import { attachLocalPlayerEntity } from './player-entity.js'
 import { affixSummary } from './affixes.js'
 import {
   applyPickup,
@@ -150,23 +151,24 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
   class DungeonScene extends Phaser.Scene {
     constructor() {
       super('Dungeon')
-      this.playerState = {
-        x: WIDTH / 2,
-        y: HEIGHT / 2,
-        hp: BASE_STATS.maxHp,
-        ...BASE_STATS,
-        baseStats: { ...BASE_STATS },
-        critMultiplier: 2,
-        weapon: null,
-        weaponRarity: null,
-        weaponDamage: 0,
-        weaponAffixes: [],
-        effects: {},
-        hasteUntil: 0,
-      }
-      this.playerFacing = 'down'
-      this.playerMoving = false
-      this.playerAttacking = false
+      attachLocalPlayerEntity(this, {
+        id: 'local',
+        state: {
+          x: WIDTH / 2,
+          y: HEIGHT / 2,
+          hp: BASE_STATS.maxHp,
+          ...BASE_STATS,
+          baseStats: { ...BASE_STATS },
+          critMultiplier: 2,
+          weapon: null,
+          weaponRarity: null,
+          weaponDamage: 0,
+          weaponAffixes: [],
+          effects: {},
+          hasteUntil: 0,
+        },
+        facing: 'down',
+      })
       this.enemies = []
       this.enemyProjectiles = []
       this.drops = []
@@ -178,10 +180,6 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.floor = 1
       this.floorCleared = false
       this.runComplete = false
-      this.lastAttackAt = 0
-      this.skillReadyAt = 0
-      this.lastContactAt = 0
-      this.dead = false
       this.ambient = createDungeonAmbient()
     }
 
