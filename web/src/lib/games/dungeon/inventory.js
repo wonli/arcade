@@ -21,15 +21,25 @@ export function storeHealthPotion(state = {}) {
   }
 }
 
+function healthPotionHealing(state = {}, healRatio = HEALTH_POTION_HEAL_RATIO) {
+  const hp = Number(state.hp ?? 0)
+  const maxHp = Number(state.maxHp ?? hp)
+  const ratio = healRatio > 1 ? HEALTH_POTION_HEAL_RATIO : Math.max(0, healRatio)
+  const heal = Math.max(1, Math.round(maxHp * ratio))
+  const nextHp = Math.min(maxHp, hp + heal)
+  return { hp: nextHp, maxHp, healed: Math.max(0, nextHp - hp) }
+}
+
 export function pickupHealthPotion(state = {}) {
   const hp = Number(state.hp ?? 0)
   const maxHp = Number(state.maxHp ?? hp)
   const healthPotions = Number(state.healthPotions ?? 0)
 
   if (healthPotionPickupMode({ hp, maxHp }) === 'consume') {
+    const healing = healthPotionHealing({ hp, maxHp })
     return {
-      state: { ...state, hp: maxHp, maxHp, healthPotions },
-      healed: Math.max(0, maxHp - hp),
+      state: { ...state, hp: healing.hp, maxHp, healthPotions },
+      healed: healing.healed,
       stored: false,
     }
   }
@@ -48,15 +58,13 @@ export function useStoredHealthPotion(state = {}, healRatio = HEALTH_POTION_HEAL
   if (healthPotions <= 0 || hp <= 0 || hp >= maxHp) {
     return { ...state, hp, maxHp, healthPotions, healed: 0, used: false }
   }
-  const ratio = healRatio > 1 ? HEALTH_POTION_HEAL_RATIO : Math.max(0, healRatio)
-  const heal = Math.max(1, Math.round(maxHp * ratio))
-  const nextHp = Math.min(maxHp, hp + heal)
+  const healing = healthPotionHealing({ hp, maxHp }, healRatio)
   return {
     ...state,
-    hp: nextHp,
+    hp: healing.hp,
     maxHp,
     healthPotions: healthPotions - 1,
-    healed: nextHp - hp,
+    healed: healing.healed,
     used: true,
   }
 }
