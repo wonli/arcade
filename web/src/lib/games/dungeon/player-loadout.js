@@ -3,19 +3,8 @@ function cloneWeapon(weapon) {
   return { ...weapon, affixes: [...(weapon.affixes ?? [])] }
 }
 
-function legacyWeapon(state = {}) {
-  if (!state.weapon) return null
-  return {
-    type: state.weapon,
-    archetype: state.weaponArchetype,
-    rarity: state.weaponRarity ?? null,
-    damage: state.weaponDamage ?? 0,
-    affixes: [...(state.weaponAffixes ?? [])],
-  }
-}
-
 export function currentWeapon(state = {}) {
-  return state.equipment?.weapon ?? state.equippedWeapon ?? legacyWeapon(state)
+  return state.equipment?.weapon ?? null
 }
 
 export function composeModifiers(modifiers = {}) {
@@ -31,8 +20,7 @@ export function composeModifiers(modifiers = {}) {
 }
 
 export function currentEffects(state = {}) {
-  if (state.modifiers && typeof state.modifiers === 'object') return composeModifiers(state.modifiers)
-  return { ...(state.effects ?? {}) }
+  return composeModifiers(state.modifiers ?? {})
 }
 
 export function setModifierLayer(current = {}, layer, values = {}) {
@@ -41,22 +29,14 @@ export function setModifierLayer(current = {}, layer, values = {}) {
     ...(current.modifiers ?? {}),
     [layer]: { ...values },
   }
-  return {
-    ...current,
-    modifiers,
-    effects: composeModifiers(modifiers),
-  }
+  return { ...current, modifiers }
 }
 
 export function clearModifierLayer(current = {}, layer) {
   if (!layer || typeof layer !== 'string') throw new TypeError('Modifier layer is required')
   const modifiers = { ...(current.modifiers ?? {}) }
   delete modifiers[layer]
-  return {
-    ...current,
-    modifiers,
-    effects: composeModifiers(modifiers),
-  }
+  return { ...current, modifiers }
 }
 
 export function applyEquipmentState(current = {}, weapon = null, equipmentEffects = {}) {
@@ -67,13 +47,9 @@ export function applyEquipmentState(current = {}, weapon = null, equipmentEffect
     weapon: canonicalWeapon,
   }
 
-  return {
-    ...withModifiers,
-    equipment,
-    equippedWeapon: cloneWeapon(canonicalWeapon),
-    weapon: canonicalWeapon?.type ?? null,
-    weaponRarity: canonicalWeapon?.rarity ?? null,
-    weaponDamage: canonicalWeapon?.damage ?? 0,
-    weaponAffixes: canonicalWeapon ? [...(canonicalWeapon.affixes ?? [])] : [],
+  const next = { ...withModifiers, equipment }
+  for (const key of ['equippedWeapon', 'weapon', 'weaponRarity', 'weaponDamage', 'weaponAffixes', 'effects']) {
+    delete next[key]
   }
+  return next
 }
