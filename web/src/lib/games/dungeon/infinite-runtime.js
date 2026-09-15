@@ -142,7 +142,6 @@ export function installInfiniteDungeon(scene, {
   const portalPresentation = installPortalPresentationRuntime(scene)
 
   const originalOpenPortal = scene.openPortal.bind(scene)
-  const originalDestroyPortal = scene.destroyPortal.bind(scene)
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
 
@@ -195,7 +194,6 @@ export function installInfiniteDungeon(scene, {
   }
 
   scene.openPortal = openInfinitePortal
-  scene.destroyPortal = () => portalPresentation?.remove() ?? originalDestroyPortal()
 
   scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
     const next = promoteEquipment(item, progress.floor, fortuneActive, random)
@@ -351,14 +349,15 @@ export function installInfiniteDungeon(scene, {
 
   scene.events?.once?.('shutdown', () => {
     destroyRest()
+    enemyPresentation?.clearAll()
     scene.openPortal = originalOpenPortal
-    scene.destroyPortal = originalDestroyPortal
   })
 
   return {
     getProgress: snapshot,
     destroy() {
       destroyRest()
+      enemyPresentation?.clearAll()
     },
   }
 }
