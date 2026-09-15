@@ -12,13 +12,15 @@ function actor(archetype) {
     damage: 20,
     critChance: 0,
     critMultiplier: 2,
-    effects: {},
-    equippedWeapon: {
-      type: staff ? 'weapon.arcane_spire' : bow ? 'weapon.tempest_bow' : 'weapon.test',
-      archetype,
-      rarity: 'rare',
-      vfxTheme: staff ? 'arcane' : 'storm',
-      vfxVariant: staff || bow ? 1 : 0,
+    modifiers: {},
+    equipment: {
+      weapon: {
+        type: staff ? 'weapon.arcane_spire' : bow ? 'weapon.tempest_bow' : 'weapon.test',
+        archetype,
+        rarity: 'rare',
+        vfxTheme: staff ? 'arcane' : 'storm',
+        vfxVariant: staff || bow ? 1 : 0,
+      },
     },
   }
 }
