@@ -36,10 +36,8 @@ const PROFILES = {
 }
 
 export function weaponArchetype(itemOrPlayer = null) {
-  const source = itemOrPlayer?.equipment || itemOrPlayer?.equippedWeapon || itemOrPlayer?.weapon
-    ? currentWeapon(itemOrPlayer)
-    : itemOrPlayer
-  const archetype = source?.archetype ?? source?.weaponArchetype
+  const source = itemOrPlayer?.equipment ? currentWeapon(itemOrPlayer) : itemOrPlayer
+  const archetype = source?.archetype
   return PROFILES[archetype] ? archetype : 'sword'
 }
 
