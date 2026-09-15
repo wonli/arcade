@@ -5,7 +5,7 @@ import { createPlayerEntity } from './player-entity.js'
 import { installDungeonEnemyFeedback } from './enemy-feedback-runtime.js'
 
 function player(id, x, y) {
-  return createPlayerEntity({ id, state: { x, y, hp: 100, maxHp: 100, effects: {} } })
+  return createPlayerEntity({ id, state: { x, y, hp: 100, maxHp: 100, modifiers: {} } })
 }
 
 test('enemy feedback keeps boss target bound to the explicit PlayerEntity', () => {
