@@ -34,5 +34,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Mirror audit
+        shell: bash
+        run: |
+          echo '=== effects ==='
+          grep -RIn --exclude-dir=assets --include='*.js' --include='*.svelte' -E '\b(state|playerState|player\.state)\.effects\b|\beffects[[:space:]]*:' web/src/lib/games/dungeon web/src/lib/components 2>/dev/null || true
+          echo '=== weapon mirrors ==='
+          grep -RIn --exclude-dir=assets --include='*.js' --include='*.svelte' -E '\b(equippedWeapon|weaponRarity|weaponDamage|weaponAffixes|weaponArchetype)\b|\.state\.weapon\b|\bplayerState\.weapon\b' web/src/lib/games/dungeon web/src/lib/components 2>/dev/null || true
+
       - name: Test
         run: make test
