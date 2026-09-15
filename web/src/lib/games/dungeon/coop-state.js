@@ -73,6 +73,12 @@ export function createDungeonCoopSnapshot(scene, progress = {}, { sequence = 0, 
       y: Number(drop.y) || 0,
       item: clone(drop.item ?? null),
     })),
+    chests: (scene?.__dungeonSpatial?.getChests?.() ?? []).filter(Boolean).map((chest) => ({
+      id: chest.id,
+      x: Number(chest.x) || 0,
+      y: Number(chest.y) || 0,
+      opened: Boolean(chest.opened),
+    })),
     portal: scene?.portal ? {
       x: Number(scene.portal.x) || 0,
       y: Number(scene.portal.y) || 0,
