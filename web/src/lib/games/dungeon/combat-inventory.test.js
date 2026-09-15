@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 
 import { applyPickup } from './combat.js'
 
-test('health potion pickup heals a damaged player to full without storing it', () => {
+test('health potion pickup heals a damaged player by thirty percent without storing it', () => {
   const state = { hp: 40, maxHp: 100, healthPotions: 2 }
   const next = applyPickup(state, { type: 'consumable.health_potion', rarity: 'common', heal: 28 })
 
-  assert.equal(next.hp, 100)
+  assert.equal(next.hp, 70)
   assert.equal(next.maxHp, 100)
   assert.equal(next.healthPotions, 2)
 })
