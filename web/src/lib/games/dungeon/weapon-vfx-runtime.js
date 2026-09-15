@@ -1,12 +1,8 @@
+import { currentWeapon } from './player-loadout.js'
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
 function equippedItem(player) {
-  if (!player?.state?.weapon) return null
-  return player.state.equippedWeapon ?? {
-    type: player.state.weapon,
-    rarity: player.state.weaponRarity ?? 'common',
-    vfxTheme: player.state.weaponVfxTheme,
-  }
+  return currentWeapon(player?.state)
 }
 
 function signature(item) {
