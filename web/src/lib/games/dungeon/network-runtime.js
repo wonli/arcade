@@ -2,6 +2,9 @@ import { getPlayerSkillReadyAt } from './player-entity.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
 import { despawnRemotePlayer, spawnRemotePlayer } from './remote-player-runtime.js'
+import { placePlayerAtRoomSpawn } from './room-anchors.js'
+import { normalizeRunSeed } from './world-seed.js'
+import { createDungeonWorldRuntime } from './world-runtime.js'
 
 function syncRemotePresentation(scene, player) {
   player.actor?.setPosition?.(player.state.x, player.state.y)
@@ -35,12 +38,18 @@ function wireCommand(command = {}) {
   return next
 }
 
+export function dungeonSceneReadyForNetwork(scene) {
+  return Boolean(scene?.localPlayer?.actor && scene?.players instanceof Map && scene?.time)
+}
+
 export function createDungeonNetworkRuntime({
   socket,
   scene,
   roomId,
   localPlayerId,
   hostId,
+  runSeed = roomId,
+  playerSlot = null,
   snapshotInterval = 50,
   onFact = () => {},
   onError = () => {},
@@ -53,9 +62,15 @@ export function createDungeonNetworkRuntime({
   const normalizedRoomId = String(roomId ?? '').trim().toUpperCase()
   const normalizedLocalId = String(localPlayerId ?? scene.localPlayer.id ?? '').trim()
   const normalizedHostId = String(hostId ?? '').trim()
+  const normalizedRunSeed = normalizeRunSeed(runSeed || normalizedRoomId)
   if (!normalizedRoomId) throw new TypeError('Dungeon room id is required')
   if (!normalizedLocalId) throw new TypeError('Local player id is required')
   bindLocalPlayerId(scene, normalizedLocalId)
+
+  if (Number.isInteger(playerSlot) && playerSlot >= 0) {
+    scene.__dungeonPlayerSlot = playerSlot
+    placePlayerAtRoomSpawn(scene, scene.localPlayer, playerSlot)
+  }
 
   const topic = `room:${normalizedRoomId}`
   const isHost = normalizedHostId !== '' && normalizedLocalId === normalizedHostId
@@ -66,6 +81,9 @@ export function createDungeonNetworkRuntime({
   let mirrorsInstalled = false
   let originalAutoAttack = null
   let originalTrySkill = null
+  let factSequence = 0
+  let factQueue = Promise.resolve(null)
+  let worldRuntime = null
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -100,17 +118,25 @@ export function createDungeonNetworkRuntime({
     }
   }
 
-  async function sendFact(fact) {
+  function sendFact(fact) {
     if (!isHost) throw new Error('Only the Dungeon room host may publish facts')
-    try {
-      return await socket.request('dungeon.fact', {
-        roomId: normalizedRoomId,
-        fact,
-      })
-    } catch (error) {
-      reportError(error)
-      return null
+    const envelope = {
+      ...fact,
+      runSeed: normalizedRunSeed,
+      sequence: ++factSequence,
     }
+    factQueue = factQueue.then(async () => {
+      try {
+        return await socket.request('dungeon.fact', {
+          roomId: normalizedRoomId,
+          fact: envelope,
+        })
+      } catch (error) {
+        reportError(error)
+        return null
+      }
+    })
+    return factQueue
   }
 
   function applyRemoteSnapshot(playerId, snapshot) {
@@ -146,8 +172,10 @@ export function createDungeonNetworkRuntime({
     }
 
     if (payload.type === 'dungeon.fact') {
-      onFact(payload.fact, { playerId: sourcePlayerId })
-      return payload.fact ?? null
+      if (isHost || sourcePlayerId !== normalizedHostId) return null
+      const applied = worldRuntime?.applyFact(payload.fact) ?? payload.fact ?? null
+      onFact(payload.fact, { playerId: sourcePlayerId, applied })
+      return applied
     }
 
     return null
@@ -195,6 +223,14 @@ export function createDungeonNetworkRuntime({
   function start() {
     if (started) return api
     started = true
+    worldRuntime = createDungeonWorldRuntime(scene, {
+      runSeed: normalizedRunSeed,
+      isHost,
+      publishFact: sendFact,
+      sendCommand,
+      onError: reportError,
+    })
+    worldRuntime.start()
     unsubscribe = socket.subscribe(topic, handleMessage)
     installLocalCommandMirrors()
     timer = setIntervalImpl(() => { void flushSnapshot() }, snapshotInterval)
@@ -210,6 +246,8 @@ export function createDungeonNetworkRuntime({
     unsubscribe?.()
     unsubscribe = () => {}
     restoreLocalCommandMirrors()
+    worldRuntime?.stop()
+    worldRuntime = null
     for (const player of [...scene.players.values()]) {
       if (player !== scene.localPlayer) despawnRemotePlayer(scene, player)
     }
@@ -218,6 +256,7 @@ export function createDungeonNetworkRuntime({
 
   const api = {
     roomId: normalizedRoomId,
+    runSeed: normalizedRunSeed,
     localPlayerId: normalizedLocalId,
     hostId: normalizedHostId,
     isHost,
@@ -228,6 +267,7 @@ export function createDungeonNetworkRuntime({
     installLocalCommandMirrors,
     start,
     stop,
+    world: () => worldRuntime,
   }
   return api
 }
