@@ -41,6 +41,16 @@ export function nextGuestInput(input = {}, sequence = 0, pending = {}) {
   })
 }
 
+export function simulateAuthoritativeRemotePlayer(scene, player, input, time, dt) {
+  if (!scene || !player || player.dead || (player.state?.hp ?? 0) <= 0 || scene.dead || scene.runComplete) return false
+  scene.updatePlayer?.(dt, player, input)
+  scene.__dungeonPickupRuntime?.updatePlayer?.(player, input)
+  if (input?.interact) scene.__dungeonSpatial?.interactPlayer?.(player)
+  scene.autoAttack?.(time, player)
+  scene.trySkill?.(time, player, input)
+  return true
+}
+
 function destroyPortalMirror(scene) {
   const portal = scene.__coopPortalMirror
   portal?.glow?.destroy?.()
@@ -72,6 +82,13 @@ function applyPortalSnapshot(scene, snapshot) {
   portal.core?.setPosition?.(portal.x, portal.y)
 }
 
+function syncPlayerSnapshotPresentation(playerRuntime, player, snapshot, previousAttackAt = 0) {
+  if (!player || !snapshot) return
+  playerRuntime.updatePlayerVisual(player)
+  const attackAdvanced = Number(snapshot.lastAttackAt) > Number(previousAttackAt || 0)
+  playerRuntime.syncAnimation(player, snapshot.attacking || attackAdvanced ? 'attack' : null)
+}
+
 export function installDungeonCoop(scene, {
   role,
   localPlayerId,
@@ -89,7 +106,10 @@ export function installDungeonCoop(scene, {
 
   playerRuntime.setLocalPlayerId(localPlayerId)
   const localPlayer = playerRuntime.localPlayer
-  const remotePlayer = playerRuntime.addPlayer({ id: remotePlayerId })
+  const remotePlayer = playerRuntime.addPlayer({
+    id: remotePlayerId,
+    label: role === 'host' ? 'P2' : 'P1',
+  })
   let remoteInput = normalizeDungeonInput()
   let inputSequence = 0
   let snapshotSequence = 0
@@ -118,7 +138,9 @@ export function installDungeonCoop(scene, {
     scene.destroyPortal?.()
     scene.updateEnemies = () => {}
     scene.updateEnemyProjectiles = () => {}
-    scene.updateDrops = () => {}
+    // Keep the exact same drop animation on the guest, but never run local
+    // pickup/equipment mutation against the mirrored authoritative world.
+    scene.updateDrops = () => scene.__dungeonPickupRuntime?.updateVisuals?.()
     scene.updatePortal = () => {}
     scene.autoAttack = () => {}
     scene.trySkill = () => {}
@@ -129,12 +151,7 @@ export function installDungeonCoop(scene, {
     const dt = Math.min(Number(delta) || 0, 40) / 1000
     const consumed = consumeRemoteInput(remoteInput)
     remoteInput = consumed.remaining
-    if (remotePlayer && !remotePlayer.dead) {
-      scene.updatePlayer?.(dt, remotePlayer, consumed.current)
-      scene.__dungeonPickupRuntime?.updatePlayer?.(remotePlayer, consumed.current)
-      scene.autoAttack?.(time, remotePlayer)
-      scene.trySkill?.(time, remotePlayer, consumed.current)
-    }
+    simulateAuthoritativeRemotePlayer(scene, remotePlayer, consumed.current, time, dt)
 
     if (time - lastSnapshotSentAt < SNAPSHOT_INTERVAL_MS) return
     lastSnapshotSentAt = time
@@ -181,6 +198,7 @@ export function installDungeonCoop(scene, {
     if (role !== 'guest' || !snapshot || Number(snapshot.sequence) <= lastSnapshotSequence) return false
     lastSnapshotSequence = Number(snapshot.sequence) || lastSnapshotSequence
 
+    const geometryChanged = Boolean(snapshot.geometry)
     if (snapshot.geometry) {
       scene.__dungeonSpatial?.refreshRoom?.({ geometry: snapshot.geometry })
     }
@@ -193,18 +211,23 @@ export function installDungeonCoop(scene, {
     const localSnapshot = players.find((player) => player?.id === localPlayerId)
     const remoteSnapshot = players.find((player) => player?.id === remotePlayerId)
     if (localSnapshot) {
-      reconcilePredictedPlayer(localPlayer, localSnapshot)
-      playerRuntime.updatePlayerVisual(localPlayer)
+      const previousAttackAt = localPlayer.lastAttackAt
+      // Never interpolate across a geometry transition: the old position may be
+      // water or a wall in the new room. New-room coordinates are a hard reset.
+      if (geometryChanged) applyPlayerContextSnapshot(localPlayer, localSnapshot)
+      else reconcilePredictedPlayer(localPlayer, localSnapshot)
+      syncPlayerSnapshotPresentation(playerRuntime, localPlayer, localSnapshot, previousAttackAt)
       scene.emitStats?.()
     }
     if (remoteSnapshot && remotePlayer) {
+      const previousAttackAt = remotePlayer.lastAttackAt
       applyPlayerContextSnapshot(remotePlayer, remoteSnapshot)
-      playerRuntime.updatePlayerVisual(remotePlayer)
-      playerRuntime.syncAnimation(remotePlayer)
+      syncPlayerSnapshotPresentation(playerRuntime, remotePlayer, remoteSnapshot, previousAttackAt)
     }
 
     applyEnemySnapshot(scene, snapshot.enemies ?? [])
     applyDropSnapshot(scene, snapshot.drops ?? [])
+    scene.__dungeonSpatial?.applyChestSnapshot?.(snapshot.chests ?? [])
     applyPortalSnapshot(scene, snapshot.portal ?? null)
 
     if (snapshot.dead) {
