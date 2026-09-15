@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
+import { currentWeapon } from './player-loadout.js'
 
 test('rest offers recover temper and fortune', () => {
   assert.deepEqual(restChoices(), ['recover', 'temper', 'fortune'])
@@ -17,11 +18,13 @@ test('temper strengthens one eligible basic affix and re-derives stats', () => {
   const player = {
     hp: 100, maxHp: 100, damage: 19, critChance: 0.18, speed: 190,
     baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
-    equippedWeapon: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 5, affixes: [{ id: 'power', tier: 2, value: 0.2 }, { id: 'thunder', tier: 2, value: 0.3 }] },
+    equipment: { weapon: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 5, affixes: [{ id: 'power', tier: 2, value: 0.2 }, { id: 'thunder', tier: 2, value: 0.3 }] } },
+    modifiers: {},
   }
   const result = applyRestChoice(player, 'temper', () => 0)
-  assert.ok(result.playerState.equippedWeapon.affixes[0].value > 0.2)
-  assert.equal(result.playerState.equippedWeapon.affixes[1].value, 0.3)
+  const weapon = currentWeapon(result.playerState)
+  assert.ok(weapon.affixes[0].value > 0.2)
+  assert.equal(weapon.affixes[1].value, 0.3)
   assert.ok(result.playerState.damage > 18)
 })
 
@@ -29,17 +32,19 @@ test('temper falls back to base weapon damage when no basic affix exists', () =>
   const player = {
     hp: 100, maxHp: 100,
     baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
-    equippedWeapon: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 5, affixes: [{ id: 'thunder', tier: 2, value: 0.3 }] },
+    equipment: { weapon: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 5, affixes: [{ id: 'thunder', tier: 2, value: 0.3 }] } },
+    modifiers: {},
   }
   const result = applyRestChoice(player, 'temper', () => 0)
-  assert.equal(result.playerState.weaponDamage, 6)
+  assert.equal(currentWeapon(result.playerState).damage, 6)
 })
 
 test('temper still grants value before the first weapon is found', () => {
   const player = {
     hp: 100, maxHp: 100, damage: 10,
     baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
-    equippedWeapon: null,
+    equipment: { weapon: null },
+    modifiers: {},
   }
   const result = applyRestChoice(player, 'temper', () => 0)
   assert.equal(result.playerState.baseStats.damage, 11)
