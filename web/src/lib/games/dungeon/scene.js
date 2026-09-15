@@ -4,6 +4,7 @@ import { attachLocalPlayerEntity } from './player-entity.js'
 import { castPlayerSkill } from './player-skill-runtime.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { affixSummary } from './affixes.js'
 import {
   applyPickup,
