@@ -14,13 +14,22 @@ export function installPortalPresentationRuntime(scene) {
   if (!scene || typeof scene !== 'object') return null
   if (scene.__dungeonPortalPresentation) return scene.__dungeonPortalPresentation
 
+  const originalDestroyPortalMethod = scene.destroyPortal
+  const originalDestroyPortal = typeof originalDestroyPortalMethod === 'function'
+    ? originalDestroyPortalMethod.bind(scene)
+    : null
+
   const remove = () => {
     const portal = scene.portal
     if (!portal) return null
-    for (const object of [portal.glow, portal.ring, portal.core]) {
-      killTween(scene, object)
-      object?.destroy?.()
+    for (const object of [portal.glow, portal.ring, portal.core]) killTween(scene, object)
+
+    if (originalDestroyPortal) originalDestroyPortal()
+    else {
+      for (const object of [portal.glow, portal.ring, portal.core]) object?.destroy?.()
+      scene.portal = null
     }
+
     scene.portal = null
     return portal
   }
@@ -59,11 +68,14 @@ export function installPortalPresentationRuntime(scene) {
 
   let api = null
   const restore = () => {
+    remove()
+    if (scene.destroyPortal === remove) scene.destroyPortal = originalDestroyPortalMethod
     if (scene.__dungeonPortalPresentation === api) scene.__dungeonPortalPresentation = null
   }
 
   api = { ensure, remove, sync: () => syncPortal(scene.portal), restore }
   scene.__dungeonPortalPresentation = api
+  scene.destroyPortal = remove
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
   return api
