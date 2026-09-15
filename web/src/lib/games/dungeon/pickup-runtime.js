@@ -130,11 +130,12 @@ function killDropTweens(scene, drop) {
 
 function syncGroundWeaponVisual(scene, drop, position) {
   const visual = createWeaponVisual(scene, drop?.item, position.x, position.y)
-  if (!visual) return
+  if (!visual) return null
   visual?.setDepth?.(15)
   killTween(scene, drop.visual)
   drop.visual?.destroy?.()
   drop.visual = visual
+  return visual
 }
 
 function syncGroundWeaponLabel(drop, locale) {
@@ -202,19 +203,67 @@ export function installPickupInteraction(scene, {
     emitStats: () => { if (player === scene.localPlayer) originalEmitStats() },
   })
   const key = scene.input?.keyboard?.addKey?.('E')
-  let selected = null
+  let selectedKey = null
+  let localDropSequence = 0
   let pickupIntentHandler = null
+
+  const selectionKey = (drop) => {
+    if (!drop) return null
+    if (!drop.__dungeonPickupSelectionKey) {
+      const id = String(drop.id ?? '').trim()
+      drop.__dungeonPickupSelectionKey = id ? `id:${id}` : `local:${++localDropSequence}`
+    }
+    return drop.__dungeonPickupSelectionKey
+  }
+
+  const dropBySelectionKey = (value) => (scene.drops ?? []).find((drop) => drop && selectionKey(drop) === value) ?? null
+  const selectedDrop = () => selectedKey ? dropBySelectionKey(selectedKey) : null
+
+  const applySelectionArt = (drop, active) => {
+    if (!drop?.visual || !drop?.item?.type?.startsWith?.('weapon.')) return
+    setWeaponVisualSelected(scene, drop.visual, drop.item, active)
+  }
+
+  const publish = (next) => {
+    const nextKey = next ? selectionKey(next) : null
+    if (selectedKey === nextKey) return
+    const previous = selectedDrop()
+    applySelectionArt(previous, false)
+    selectedKey = nextKey
+    applySelectionArt(next, true)
+    onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
+  }
+
+  const destroyOwnedDrop = (drop) => {
+    if (!drop) return null
+    if (selectedKey && selectionKey(drop) === selectedKey) publish(null)
+    killDropTweens(scene, drop)
+    originalDestroyDrop?.(drop)
+    return drop
+  }
+
+  const removeOwnedDropById = (id) => {
+    const normalized = String(id ?? '').trim()
+    if (!normalized) return null
+    const drop = (scene.drops ?? []).find((candidate) => String(candidate?.id ?? '') === normalized) ?? null
+    if (!drop) return null
+    destroyOwnedDrop(drop)
+    scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
+    return drop
+  }
+
+  const clearOwnedDrops = () => {
+    publish(null)
+    for (const drop of [...(scene.drops ?? [])]) destroyOwnedDrop(drop)
+    scene.drops = []
+  }
 
   scene.emitStats = function emitStatsWithInventory(now) {
     originalEmitStats(now)
   }
 
-  if (originalDestroyDrop) {
-    scene.destroyDrop = function destroyDropWithoutTweenLeaks(drop) {
-      killDropTweens(scene, drop)
-      return originalDestroyDrop(drop)
-    }
-  }
+  if (originalDestroyDrop) scene.destroyDrop = destroyOwnedDrop
+  scene.clearDrops = clearOwnedDrops
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
     const position = resolveDropPosition(scene, x, y, player)
@@ -240,6 +289,8 @@ export function installPickupInteraction(scene, {
   const api = {
     inventory,
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
+    removeById: removeOwnedDropById,
+    clearAll: clearOwnedDrops,
     useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
     autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
     setPickupIntentHandler(handler = null) {
@@ -254,27 +305,14 @@ export function installPickupInteraction(scene, {
   }
   scene.__dungeonPickupRuntime = api
 
-  const applySelectionArt = (drop, active) => {
-    if (!drop?.visual || !drop?.item?.type?.startsWith?.('weapon.')) return
-    setWeaponVisualSelected(scene, drop.visual, drop.item, active)
-  }
-
-  const publish = (next) => {
-    if (selected === next) return
-    applySelectionArt(selected, false)
-    selected = next
-    applySelectionArt(selected, true)
-    onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
-  }
-
   const interceptPickup = (target, drop) => {
     if (typeof pickupIntentHandler !== 'function') return false
     return pickupIntentHandler(target, drop) === true
   }
 
   const equipSelected = () => {
-    const candidate = selected
-    if (!candidate || !scene.drops?.includes(candidate)) return
+    const candidate = selectedDrop()
+    if (!candidate) return
     const distance = Math.hypot(candidate.x - player.state.x, candidate.y - player.state.y)
     if (distance > 34) return
     if (interceptPickup(player, candidate)) {
@@ -343,11 +381,6 @@ export function installPickupInteraction(scene, {
   const autoPotionUpdate = () => inventory?.autoUseHealthPotion?.()
   scene.events?.on?.('update', autoPotionUpdate)
 
-  scene.clearDrops = function clearDropsWithSelectionReset() {
-    publish(null)
-    originalClearDrops()
-  }
-
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
     scene.events?.off?.('update', autoPotionUpdate)
@@ -356,6 +389,7 @@ export function installPickupInteraction(scene, {
     scene.__dungeonDropNavGrid = null
     scene.__pickupInteractionInstalled = false
     if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop
+    scene.clearDrops = originalClearDrops
     inventory?.restore?.()
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
