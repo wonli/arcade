@@ -1,5 +1,6 @@
 import { lootMotion } from './combat-feel.js'
 import { applyPlayerContextSnapshot, normalizeDungeonInput } from './player-context.js'
+import { installDungeonPlayerInteractions } from './player-interaction-runtime.js'
 import {
   applyDropSnapshot,
   applyEnemySnapshot,
@@ -33,7 +34,7 @@ export function simulateAuthoritativeRemotePlayer(scene, player, input, time, dt
   if (!scene || !player || player.dead || (player.state?.hp ?? 0) <= 0 || scene.dead || scene.runComplete) return false
   scene.updatePlayer?.(dt, player, input)
   scene.__dungeonPickupRuntime?.updatePlayer?.(player, input)
-  if (input?.interact) scene.__dungeonCoopChest?.interactPlayer?.(player)
+  if (input?.interact) scene.__dungeonPlayerInteractions?.interactPlayer?.(player)
   scene.autoAttack?.(time, player)
   scene.trySkill?.(time, player, input)
   return true
@@ -51,11 +52,13 @@ function updateMirroredDropVisuals(scene) {
 }
 
 function actorUsesTexture(actor) { return actor?.getData?.('usesTexture') === true }
+
 function refreshRemoteActorVisual(scene, playerRuntime, player) {
   if (!player || actorUsesTexture(player.actor) || !actorUsesTexture(scene.player)) return false
   const next = scene.makeActor?.(player.state.x, player.state.y, 'player')?.setDepth?.(19) ?? null
   if (!next || !actorUsesTexture(next)) { next?.destroy?.(); return false }
-  player.actor?.destroy?.(); player.actor = next
+  player.actor?.destroy?.()
+  player.actor = next
   if (player.dead) player.actor?.setAlpha?.(0.38)
   playerRuntime.updatePlayerVisual(player)
   playerRuntime.syncAnimation(player, player.attacking ? 'attack' : null)
@@ -90,12 +93,23 @@ function syncPlayerSnapshotPresentation(playerRuntime, player, snapshot, previou
   playerRuntime.syncAnimation(player, snapshot.attacking || attackAdvanced ? 'attack' : null)
 }
 
-export function installDungeonCoop(scene, { role, localPlayerId, remotePlayerId, sendInput = () => {}, sendState = () => {}, getProgress = () => ({}), onProgress = () => {}, onGameOver = () => {} } = {}) {
+export function installDungeonCoop(scene, {
+  role,
+  localPlayerId,
+  remotePlayerId,
+  sendInput = () => {},
+  sendState = () => {},
+  getProgress = () => ({}),
+  onProgress = () => {},
+  onEvent = () => {},
+  onGameOver = () => {},
+} = {}) {
   if (!scene || scene.__dungeonCoop) return scene?.__dungeonCoop ?? null
   const playerRuntime = scene.__dungeonPlayerRuntime
   if (!playerRuntime) throw new Error('Dungeon co-op requires installDungeonAttackRuntime before installDungeonCoop')
   if (role !== 'host' && role !== 'guest') throw new Error(`invalid Dungeon co-op role: ${role}`)
 
+  installDungeonPlayerInteractions(scene, { getProgress, onEvent })
   playerRuntime.setLocalPlayerId(localPlayerId)
   const localPlayer = playerRuntime.localPlayer
   const remotePlayer = playerRuntime.addPlayer({ id: remotePlayerId })
@@ -169,7 +183,10 @@ export function installDungeonCoop(scene, { role, localPlayerId, remotePlayerId,
       applyPlayerContextSnapshot(remotePlayer, remoteSnapshot); refreshRemoteActorVisual(scene, playerRuntime, remotePlayer); syncPlayerSnapshotPresentation(playerRuntime, remotePlayer, remoteSnapshot, previousAttackAt)
     }
 
-    applyEnemySnapshot(scene, snapshot.enemies ?? []); applyDropSnapshot(scene, snapshot.drops ?? []); scene.__dungeonCoopChest?.applySnapshot?.(snapshot.chests ?? []); applyPortalSnapshot(scene, snapshot.portal ?? null)
+    applyEnemySnapshot(scene, snapshot.enemies ?? [])
+    applyDropSnapshot(scene, snapshot.drops ?? [])
+    scene.__dungeonPlayerInteractions?.applySnapshot?.(snapshot.chests ?? [])
+    applyPortalSnapshot(scene, snapshot.portal ?? null)
     if (snapshot.dead) { scene.dead = true; onGameOver(snapshot) }
     return true
   }
