@@ -17,6 +17,7 @@
   import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { installDungeonCoop } from '$lib/games/dungeon/coop-runtime.js'
   import { dungeonRoomRole } from '$lib/games/dungeon/coop-state.js'
+  import { rngFor } from '$lib/games/dungeon/deterministic-rng.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
@@ -57,6 +58,7 @@
     : ''
 
   const rarityName = (rarity) => ({ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' }[rarity] ?? '')
+  const dungeonSeed = () => `room:${roomCode}`
 
   function applyRoom(next) {
     if (!next || next.type || next.game !== 'dungeon') return
@@ -66,6 +68,12 @@
       role = 'host'
       coopRuntime.peerDisconnected?.()
       eventText = 'P2 disconnected · continuing solo'
+      return
+    }
+    if (game && coopRuntime?.role === 'guest' && next.players?.length < 2) {
+      touchInput?.stopMove()
+      ready = false
+      error = 'Host disconnected · this co-op run has ended'
       return
     }
 
@@ -191,8 +199,8 @@
       label: (key) => key,
     })
 
-    // Spatial owns local chest opening. Guest must send interact intent to Host,
-    // but must keep later PickupRuntime E listeners for the ground-item UI.
+    // Spatial owns local chest mutation. Guest keeps the Key itself so
+    // PlayerRuntime can still send interact intent; only the chest callback is removed.
     if (before && interactionKey?.listeners) {
       for (const listener of interactionKey.listeners('down')) {
         if (!before.has(listener)) interactionKey.off?.('down', listener)
@@ -212,6 +220,7 @@
     try {
       const { Phaser, assets, vfxManifest } = await loadGameResources()
       if (!mounted) return
+      const runSeed = dungeonSeed()
 
       const runGame = createDungeonGame({
         Phaser,
@@ -256,8 +265,7 @@
           hudRuntime?.update?.()
         }
 
-        installSpatialForRole(scene)
-
+        // Same runtime stack as solo. Host/Guest only differ in authority.
         pickupRuntime = installPickupInteraction(scene, {
           authority: role === 'host',
           getLocale: () => 'en',
@@ -266,7 +274,7 @@
 
         scene.__infiniteDungeon = installInfiniteDungeon(scene, {
           authority: role === 'host',
-          initialProgress: role === 'guest' ? progress : null,
+          random: rngFor(runSeed, 1, 'progression', 'run'),
           onProgress(next) {
             progress = next
             hudRuntime?.update?.()
@@ -280,6 +288,7 @@
           }[key] ?? key),
         })
 
+        installSpatialForRole(scene)
         installDungeonAttackRuntime(scene)
 
         if (role === 'host') {
@@ -302,7 +311,7 @@
 
         coopRuntime = installDungeonCoop(scene, {
           role,
-          runSeed: roomCode,
+          runSeed,
           localPlayerId: localId,
           remotePlayerId: remoteId,
           sendInput,
@@ -318,6 +327,7 @@
             touchInput?.stopMove()
           },
           onProtocolError(cause) {
+            ready = false
             error = cause?.message ?? 'Dungeon synchronization failed'
           },
         })
@@ -336,6 +346,7 @@
           onDetails: () => {},
         })
 
+        pendingEvents.sort((a, b) => (Number(a?.eventSeq) || 0) - (Number(b?.eventSeq) || 0))
         for (const event of pendingEvents) coopRuntime.receiveEvent(event)
         pendingEvents = []
         if (pendingSync) {
