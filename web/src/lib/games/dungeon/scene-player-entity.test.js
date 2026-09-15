@@ -33,7 +33,7 @@ function otherPlayer(overrides = {}) {
       damage: 12,
       critChance: 0,
       critMultiplier: 2,
-      effects: {},
+      modifiers: {},
       hasteUntil: 0,
       ...overrides,
     },
