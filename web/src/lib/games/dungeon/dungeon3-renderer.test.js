@@ -12,7 +12,7 @@ test('tile plan places coasts on land, feet over water, and preserves full autho
   assert.ok(tiles.some(t=>t.layer==='path' && t.tileset==='plates'))
   assert.ok(tiles.some(t=>t.layer==='floor' && t.tileset==='walls_floor'))
   assert.ok(tiles.some(t=>t.featureKind==='door' && t.tileset==='doors'))
-  assert.ok(tiles.some(t=>t.featureKind==='statue' && t.tileset==='Statue_fire'))
+  assert.equal(tiles.some(t=>t.tileset==='Statue_fire'), false, 'Statue_fire is reserved for the dedicated rest room')
   for (const t of tiles) {
     assert.equal(t.x%16,0); assert.equal(t.y%16,0)
     const set = dungeon3Rules.tilesets[t.tileset]

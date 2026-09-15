@@ -57,12 +57,12 @@ test('authored walls frame the rooms and props are denser with complete multi-ti
   assert.ok([...scales].some(size => size.split('x').map(Number).some(value => value >= 64)), `expected complete multi-tile props, saw ${[...scales]}`)
 })
 
-test('room connections keep a generous walkable throat and expose doors and landmarks', () => {
+test('room connections keep a generous walkable throat and expose doors without rest-room statues', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })
     assert.ok(g.bridges.every(bridge => (bridge.orientation === 'horizontal' ? bridge.height : bridge.width) >= 64), `seed ${seed}: narrow bridge throat`)
     assert.ok(g.doors.length > 0 && g.doors.every(d => g.walls.some(w => w.id === d.wallId)), `seed ${seed}: doors must belong to walls`)
-    assert.ok(g.decorations.some(entry => entry.kind === 'statue'), `seed ${seed}: missing statue landmark`)
+    assert.equal(g.decorations.some(entry => entry.kind === 'statue'), false, `seed ${seed}: rest-room statue leaked into ordinary geometry`)
     for (const door of g.doors) assert.equal(door.role, 'alcove', `seed ${seed}: closed doors must not seal bridge connections`)
   }
 })
