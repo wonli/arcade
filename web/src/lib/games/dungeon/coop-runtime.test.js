@@ -46,7 +46,7 @@ test('host remote player uses the same movement pickup interaction attack and sk
     runComplete: false,
     updatePlayer(dt, target, intent) { calls.push(['move', dt, target.id, intent]) },
     __dungeonPickupRuntime: { updatePlayer(target, intent) { calls.push(['pickup', target.id, intent]) } },
-    __dungeonSpatial: { interactPlayer(target) { calls.push(['interact', target.id]) } },
+    __dungeonCoopChest: { interactPlayer(target) { calls.push(['interact', target.id]) } },
     autoAttack(time, target) { calls.push(['attack', time, target.id]) },
     trySkill(time, target, intent) { calls.push(['skill', time, target.id, intent]) },
   }
