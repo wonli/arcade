@@ -1,6 +1,7 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
-import { healthPotionPickupMode, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
+import { healthPotionPickupMode, shouldAutoUseHealthPotion, storeHealthPotion, useStoredHealthPotion } from './inventory.js'
+import { currentWeapon as currentPlayerWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
 import { weaponIdentityLabel } from './presentation.js'
@@ -111,16 +112,8 @@ export function resolveDropPosition(scene, x, y, player = scene?.localPlayer) {
 }
 
 function currentWeapon(player) {
-  const state = player?.state
-  if (!state?.weapon) return null
-  const equipped = state.equippedWeapon
-  if (equipped) return { ...equipped, affixes: [...(equipped.affixes ?? [])] }
-  return {
-    type: state.weapon,
-    rarity: state.weaponRarity ?? null,
-    damage: state.weaponDamage ?? 0,
-    affixes: [...(state.weaponAffixes ?? [])],
-  }
+  const equipped = currentPlayerWeapon(player?.state)
+  return equipped ? { ...equipped, affixes: [...(equipped.affixes ?? [])] } : null
 }
 
 function killTween(scene, target) {
@@ -158,7 +151,9 @@ export function installPickupInteraction(scene, {
   getLocale = () => 'en',
   player = scene?.localPlayer,
 } = {}) {
-  if (!scene || !player || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
+  if (!scene || !player) return null
+  if (player.runtime?.inventory) return player.runtime.inventory
+  if (scene.__pickupInteractionInstalled) return scene.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
   player.state.healthPotions ??= 0
 
@@ -228,6 +223,8 @@ export function installPickupInteraction(scene, {
     },
     getHealthPotions() { return player.state.healthPotions ?? 0 },
   }
+  player.runtime ??= {}
+  player.runtime.inventory = api
   scene.__dungeonPickupRuntime = api
 
   const applySelectionArt = (drop, active) => {
@@ -284,7 +281,7 @@ export function installPickupInteraction(scene, {
       const potion = drop.item?.type === 'consumable.health_potion'
       const nearby = Math.hypot((drop.x ?? 0) - target.state.x, (drop.y ?? 0) - target.state.y) <= 34
       if (potion && nearby && healthPotionPickupMode(target.state) === 'store') {
-        target.state.healthPotions = (target.state.healthPotions ?? 0) + 1
+        target.state.healthPotions = storeHealthPotion(target.state).healthPotions
         scene.destroyDrop?.(drop)
         scene.__dungeonInventoryStats?.(target.state.healthPotions)
         scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
@@ -313,7 +310,9 @@ export function installPickupInteraction(scene, {
     scene.events?.off?.('update', autoPotionUpdate)
     publish(null)
     scene.__dungeonDropNavGrid = null
+    scene.__pickupInteractionInstalled = false
     if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop
+    if (player.runtime?.inventory === api) delete player.runtime.inventory
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
 
