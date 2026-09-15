@@ -35,7 +35,7 @@ func TestDungeonRequiresExactlyTwoPlayers(t *testing.T) {
 	}
 }
 
-func TestDungeonRelayAuthorizesMembersAndReservesWorldStateForHost(t *testing.T) {
+func TestDungeonPeerIdentifiesMembersAndHostWithoutServerSimulation(t *testing.T) {
 	s := NewService()
 	r, err := s.Create("dungeon", 2)
 	if err != nil {
@@ -47,16 +47,17 @@ func TestDungeonRelayAuthorizesMembersAndReservesWorldStateForHost(t *testing.T)
 	if err := s.Join(r.ID, "guest", "Guest"); err != nil {
 		t.Fatal(err)
 	}
-	if !s.CanRelayDungeon(r.ID, "guest", false) {
-		t.Fatal("guest input should be allowed")
+
+	if isHost, ok := s.DungeonPeer(r.ID, "guest"); !ok || isHost {
+		t.Fatalf("guest peer = host:%v ok:%v, want host:false ok:true", isHost, ok)
 	}
-	if s.CanRelayDungeon(r.ID, "guest", true) {
-		t.Fatal("guest must not publish authoritative state")
+	if isHost, ok := s.DungeonPeer(r.ID, "host"); !ok || !isHost {
+		t.Fatalf("host peer = host:%v ok:%v, want host:true ok:true", isHost, ok)
 	}
-	if !s.CanRelayDungeon(r.ID, "host", true) {
-		t.Fatal("host state should be allowed")
+	if isHost, ok := s.DungeonPeer(r.ID, "intruder"); ok || isHost {
+		t.Fatalf("intruder peer = host:%v ok:%v, want host:false ok:false", isHost, ok)
 	}
-	if s.CanRelayDungeon(r.ID, "intruder", false) {
-		t.Fatal("outsider relay should be rejected")
+	if isHost, ok := s.DungeonPeer("MISSING", "host"); ok || isHost {
+		t.Fatalf("missing room peer = host:%v ok:%v, want host:false ok:false", isHost, ok)
 	}
 }
