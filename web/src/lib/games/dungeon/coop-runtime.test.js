@@ -33,11 +33,21 @@ test('guest packet sequence increases and pending actions survive the 20Hz send 
   assert.equal(packet.interact, true)
 })
 
-test('co-op runtime no longer contains mirror renderers or geometry snapshots', () => {
+test('co-op runtime uses semantic facts and deterministic world instead of mirror renderers', () => {
   const source = readFileSync(new URL('./coop-runtime.js', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /applyDropSnapshot|applyEnemySnapshot|__coopPortalMirror|snapshot\.geometry/)
-  assert.match(source, /generateDungeonGeometry/)
+  assert.doesNotMatch(source, /applyDropSnapshot|applyEnemySnapshot|__coopPortalMirror|snapshot\.geometry|updateMirroredDropVisuals/)
+  assert.match(source, /installDeterministicCoopWorld/)
   assert.match(source, /spawnExact/)
   assert.match(source, /drop\.spawn/)
+  assert.match(source, /player\.attack/)
+  assert.match(source, /enemy\.hit/)
   assert.match(source, /dungeonPlayerRuntime/)
+})
+
+test('host floor changes re-place both role slots before publishing the next floor', () => {
+  const source = readFileSync(new URL('./coop-runtime.js', import.meta.url), 'utf8')
+  const floorBranch = source.match(/if \(scene\.floor !== lastFloor\) \{([\s\S]*?)\n    \}/)?.[1] ?? ''
+  assert.match(floorBranch, /placePlayers\(\)/)
+  assert.match(floorBranch, /emitEvent\('floor\.start'/)
+  assert.ok(floorBranch.indexOf('placePlayers()') < floorBranch.indexOf("emitEvent('floor.start'"))
 })
