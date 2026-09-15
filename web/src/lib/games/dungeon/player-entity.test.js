@@ -31,6 +31,7 @@ test('player entity keeps gameplay and presentation state together without scene
   assert.equal(player.dead, false)
   assert.equal(player.actor, null)
   assert.equal(player.bar, null)
+  assert.deepEqual(player.runtime, {})
 })
 
 test('two players never share mutable gameplay state', () => {
@@ -65,6 +66,18 @@ test('runtime combat timestamps and presentation refs are independent per player
   assert.equal(p2.attacking, false)
   assert.equal(p2.actor, null)
   assert.equal(p2.facing, 'left')
+})
+
+test('gameplay runtime namespaces are owned by each player', () => {
+  const p1 = createPlayerEntity({ id: 'p1', state: baseState(100) })
+  const p2 = createPlayerEntity({ id: 'p2', state: baseState(200) })
+
+  p1.runtime.weapon = { visual: { id: 'p1-weapon' } }
+  p1.runtime.inventory = { selectedDrop: 'drop-1' }
+
+  assert.equal(p1.runtime.weapon.visual.id, 'p1-weapon')
+  assert.equal(p1.runtime.inventory.selectedDrop, 'drop-1')
+  assert.deepEqual(p2.runtime, {})
 })
 
 test('scene player registry can hold multiple independent entities while the single-player pointer stays unchanged', () => {
