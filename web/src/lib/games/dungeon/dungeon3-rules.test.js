@@ -1,17 +1,30 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dungeon3Rules } from './dungeon3-rules.js'
 import { extractDungeon3Rules, sourcePath } from '../../../../../scripts/extract-dungeon3-rules.mjs'
 
-test('Dungeon3 compiled rules reproduce from the checked-in TMX', () => {
+const sourceAvailable = existsSync(sourcePath)
+const localSourceOnly = sourceAvailable ? false : 'Dungeon3.tmx lives under gitignored web/static/assets and is only available in local asset workspaces'
+
+test('Dungeon3 compiled rules keep reproducible source provenance in the repository artifact', () => {
+  assert.equal(dungeon3Rules.version, 1)
+  assert.equal(dungeon3Rules.provenance.source, 'Tiled_files/Dungeon3.tmx')
+  assert.match(dungeon3Rules.provenance.sha256, /^[a-f0-9]{64}$/)
+  assert.equal(dungeon3Rules.provenance.tileWidth, 16)
+  assert.equal(dungeon3Rules.provenance.tileHeight, 16)
+})
+
+test('Dungeon3 compiled rules reproduce from the local source TMX', { skip: localSourceOnly }, () => {
   assert.deepEqual(dungeon3Rules, extractDungeon3Rules(readFileSync(sourcePath, 'utf8')))
 })
+
 test('coast tiles describe land above water with a separate south cliff foot', () => {
   assert.equal(dungeon3Rules.water.body.tileId, 871)
   assert.deepEqual(['nw','n','ne','w','center','e','sw','s','se'].map(k=>dungeon3Rules.water.coast[k].tileId), [175,176,177,204,205,206,233,234,235])
   assert.deepEqual(dungeon3Rules.water.southFoot.map(t=>t.tileId), [262,263,264])
 })
+
 test('motifs retain complete multi-tile geometry, flips and source coordinates', () => {
   for (const group of Object.values(dungeon3Rules.motifs)) for (const motif of group) {
     assert.ok(motif.cells.length)
@@ -29,7 +42,7 @@ test('motifs retain complete multi-tile geometry, flips and source coordinates',
   assert.ok(dungeon3Rules.tilesets.Water_coasts_animation.animations['175'].length > 1)
 })
 
-test('dark floor and shoreline motifs retain authored spatial evidence', async () => {
+test('dark floor and shoreline motifs retain authored spatial evidence', { skip: localSourceOnly }, async () => {
   const { parseTiledMap } = await import('./tiled-map.js')
   const map = parseTiledMap(readFileSync(sourcePath, 'utf8'))
   function at(layerName, x, y) {
