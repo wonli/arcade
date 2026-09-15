@@ -137,9 +137,10 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     source = projectile.source,
   } = {}) => {
     if (!target || target.hp <= 0) return false
-    scene.damageEnemy?.(target, damage, projectile.critical, projectile.knockback, { direct, canProc, source }, player)
-    if (heal) scene.healPlayer?.(healFromHit(player.state, damage, projectile.critical, { direct: true }), player)
-    if (canProc) scene.applyWeaponProcs?.(target, damage, projectile.critical, player)
+    const attacker = projectile.attacker ?? player
+    scene.damageEnemy?.(target, damage, projectile.critical, projectile.knockback, { direct, canProc, source }, attacker)
+    if (heal) scene.healPlayer?.(healFromHit(attacker.state, damage, projectile.critical, { direct: true }), attacker)
+    if (canProc) scene.applyWeaponProcs?.(target, damage, projectile.critical, attacker)
     scene.__dungeonWeaponVfx?.impact?.(target.x, target.y, { critical: projectile.critical })
     if (projectile.archetype === 'staff' && direct && canProc && source === 'weapon') {
       signatures?.onStaffHit?.(target, damage)
@@ -217,6 +218,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
 
     projectiles.push({
       ...spec,
+      attacker: player,
       x: start.x,
       y: start.y,
       vx: (dx / distance) * spec.speed,
@@ -373,6 +375,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
 
   scene.events?.on?.('update', update)
 
+  let api = null
   const restore = () => {
     scene.events?.off?.('update', update)
     for (const projectile of projectiles) destroyProjectile(projectile)
@@ -380,12 +383,15 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     signatures?.restore?.()
     scene.slash = originalSlash
     if (originalVfxSlash && scene.__dungeonVfx) scene.__dungeonVfx.slash = originalVfxSlash
-    scene.__dungeonWeaponProjectiles = null
+    if (player.runtime?.weaponProjectiles === api) delete player.runtime.weaponProjectiles
+    if (scene.__dungeonWeaponProjectiles === api) scene.__dungeonWeaponProjectiles = null
   }
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { fire, volley: (...args) => volley(...args), update, restore, count: () => projectiles.length }
+  api = { fire, volley: (...args) => volley(...args), update, restore, count: () => projectiles.length }
+  player.runtime ??= {}
+  player.runtime.weaponProjectiles = api
   scene.__dungeonWeaponProjectiles = api
   return api
 }
