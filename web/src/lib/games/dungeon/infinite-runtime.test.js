@@ -2,6 +2,7 @@ import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { createPlayerEntity } from './player-entity.js'
 import { encounterPlan, lootPromotionChance, progressSnapshot, scalePlayerForProgress } from './infinite-runtime.js'
 
 test('encounter plans distinguish combat elite rest and boss rooms', () => {
@@ -71,4 +72,22 @@ test('player runtime baseline follows floor progression without compounding twic
   assert.equal(scene.localPlayer.state.damage, 33)
   scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 22, chapter: 4 })
   assert.equal(scene.localPlayer.state.damage, 34)
+})
+
+test('progression mutates the explicitly supplied PlayerEntity only', () => {
+  const local = createPlayerEntity({
+    id: 'local',
+    state: { hp: 100, maxHp: 100, damage: 10, critChance: 0.18, speed: 190, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 } },
+  })
+  const target = createPlayerEntity({
+    id: 'target',
+    state: { hp: 100, maxHp: 100, damage: 10, critChance: 0.18, speed: 190, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 } },
+  })
+  const scene = { localPlayer: local }
+
+  scalePlayerForProgress(scene, { floor: 20, chapter: 4 }, target)
+
+  assert.equal(local.state.damage, 10)
+  assert.ok(target.state.damage >= 30)
+  assert.ok(target.state.maxHp >= 270)
 })
