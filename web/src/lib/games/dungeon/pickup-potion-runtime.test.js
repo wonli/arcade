@@ -23,17 +23,17 @@ function sceneFixture(state) {
   return { scene, bursts }
 }
 
-test('pickup runtime consumes a ground potion to fully heal a damaged player', () => {
+test('pickup runtime consumes a ground potion for thirty percent healing when damaged', () => {
   const { scene, bursts } = sceneFixture({ hp: 40, maxHp: 100, healthPotions: 2 })
   installPickupInteraction(scene)
   scene.drops = [{ x: 0, y: 0, item: { type: 'consumable.health_potion', rarity: 'common' } }]
 
   scene.updateDrops(scene.localPlayer)
 
-  assert.equal(scene.localPlayer.state.hp, 100)
+  assert.equal(scene.localPlayer.state.hp, 70)
   assert.equal(scene.localPlayer.state.healthPotions, 2)
   assert.equal(scene.drops.length, 0)
-  assert.equal(bursts.at(-1)?.healed, 60)
+  assert.equal(bursts.at(-1)?.healed, 30)
 })
 
 test('pickup runtime stores a ground potion when the player is already full health', () => {
