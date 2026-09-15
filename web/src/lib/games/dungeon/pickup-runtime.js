@@ -145,6 +145,44 @@ function syncGroundWeaponLabel(drop, locale) {
   drop.label.setText(drop.__weaponDetailText ? `${identity}\n${drop.__weaponDetailText}` : identity)
 }
 
+export function installPlayerInventoryRuntime(scene, player, { emitStats = () => {} } = {}) {
+  if (!scene || !player) return null
+  player.runtime ??= {}
+  if (player.runtime.inventory) return player.runtime.inventory
+  player.state.healthPotions ??= 0
+
+  const useHealthPotion = () => {
+    const next = useStoredHealthPotion(player.state)
+    if (!next.used) return false
+    player.state.hp = next.hp
+    player.state.healthPotions = next.healthPotions
+    scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
+    scene.pickupBurst?.(player.state.x, player.state.y, { type: 'consumable.health_potion' }, next.healed)
+    scene.__dungeonInventoryStats?.(player.state.healthPotions)
+    emitStats()
+    return true
+  }
+
+  const autoUseHealthPotion = () => {
+    if (player.dead || scene.runComplete || !shouldAutoUseHealthPotion(player.state)) return false
+    return useHealthPotion()
+  }
+
+  let api = null
+  const restore = () => {
+    if (player.runtime?.inventory === api) delete player.runtime.inventory
+  }
+
+  api = {
+    useHealthPotion,
+    autoUseHealthPotion,
+    getHealthPotions: () => player.state.healthPotions ?? 0,
+    restore,
+  }
+  player.runtime.inventory = api
+  return api
+}
+
 export function installPickupInteraction(scene, {
   onSelection = () => {},
   random = Math.random,
@@ -152,16 +190,17 @@ export function installPickupInteraction(scene, {
   player = scene?.localPlayer,
 } = {}) {
   if (!scene || !player) return null
-  if (player.runtime?.inventory) return player.runtime.inventory
   if (scene.__pickupInteractionInstalled) return scene.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
-  player.state.healthPotions ??= 0
 
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalUpdateDrops = scene.updateDrops.bind(scene)
   const originalDestroyDrop = scene.destroyDrop?.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
   const originalEmitStats = scene.emitStats.bind(scene)
+  const inventory = installPlayerInventoryRuntime(scene, player, {
+    emitStats: () => { if (player === scene.localPlayer) originalEmitStats() },
+  })
   const key = scene.input?.keyboard?.addKey?.('E')
   let selected = null
 
@@ -197,34 +236,16 @@ export function installPickupInteraction(scene, {
 
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
 
-  const useHealthPotion = () => {
-    const next = useStoredHealthPotion(player.state)
-    if (!next.used) return false
-    player.state.hp = next.hp
-    player.state.healthPotions = next.healthPotions
-    scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
-    scene.pickupBurst?.(player.state.x, player.state.y, { type: 'consumable.health_potion' }, next.healed)
-    scene.__dungeonInventoryStats?.(player.state.healthPotions)
-    if (player === scene.localPlayer) originalEmitStats()
-    return true
-  }
-
-  const autoUseHealthPotion = () => {
-    if (player.dead || scene.runComplete || !shouldAutoUseHealthPotion(player.state)) return false
-    return useHealthPotion()
-  }
-
   const api = {
+    inventory,
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
-    useHealthPotion,
-    autoUseHealthPotion,
+    useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
+    autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
     refreshLabels() {
       for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
     },
-    getHealthPotions() { return player.state.healthPotions ?? 0 },
+    getHealthPotions: () => inventory?.getHealthPotions?.() ?? 0,
   }
-  player.runtime ??= {}
-  player.runtime.inventory = api
   scene.__dungeonPickupRuntime = api
 
   const applySelectionArt = (drop, active) => {
@@ -299,7 +320,7 @@ export function installPickupInteraction(scene, {
     if (target === player) publish(nearestConfirmableDrop(target.state, confirmDrops, 34))
   }
 
-  const autoPotionUpdate = () => autoUseHealthPotion()
+  const autoPotionUpdate = () => inventory?.autoUseHealthPotion?.()
   scene.events?.on?.('update', autoPotionUpdate)
 
   scene.clearDrops = function clearDropsWithSelectionReset() {
@@ -314,7 +335,7 @@ export function installPickupInteraction(scene, {
     scene.__dungeonDropNavGrid = null
     scene.__pickupInteractionInstalled = false
     if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop
-    if (player.runtime?.inventory === api) delete player.runtime.inventory
+    inventory?.restore?.()
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
   })
 
