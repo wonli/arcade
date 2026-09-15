@@ -4,11 +4,8 @@ on:
   push:
     branches: [ci/dungeon-player-entity-cleanup]
 
-permissions:
-  contents: write
-
 jobs:
-  migrate-tests:
+  boundary-red:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,70 +14,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.27.x
-      - name: Upgrade legacy Dungeon test scenes to PlayerEntity fixtures
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path('web/src/lib/games/dungeon')
-          helper_import = "import { attachLegacyTestPlayer } from './test/player-fixture.js'\n"
-          expr = r'[_$A-Za-z][_$A-Za-z0-9]*(?:\.[_$A-Za-z][_$A-Za-z0-9]*)*'
-          installer = re.compile(rf'\b(install[A-Z][A-Za-z0-9_]*)\(({expr})(?=[,)])')
-          scaler = re.compile(rf'\b(scalePlayerForProgress)\(({expr})(?=[,)])')
-          alias_replacements = [
-              ('.playerState', '.localPlayer.state'),
-              ('.playerBar', '.localPlayer.bar'),
-              ('.playerFacing', '.localPlayer.facing'),
-              ('.playerMoving', '.localPlayer.moving'),
-              ('.playerAttacking', '.localPlayer.attacking'),
-              ('.lastAttackAt', '.localPlayer.lastAttackAt'),
-              ('.skillReadyAt', '.localPlayer.skillReadyAt'),
-              ('.lastContactAt', '.localPlayer.lastContactAt'),
-          ]
-
-          for path in sorted(root.glob('*.test.js')):
-              if path.name in {'player-entity.test.js', 'scene-player-entity.test.js', 'player-entity-boundary.test.js'}:
-                  continue
-              text = path.read_text()
-              before = text
-              used_helper = False
-
-              def wrap_installer(match):
-                  nonlocal_used[0] = True
-                  return f"{match.group(1)}(attachLegacyTestPlayer({match.group(2)})"
-
-              nonlocal_used = [False]
-              text = installer.sub(wrap_installer, text)
-              text = scaler.sub(wrap_installer, text)
-              used_helper = nonlocal_used[0]
-
-              if used_helper:
-                  for old, new in alias_replacements:
-                      text = text.replace(old, new)
-                  text = text.replace('scene.dead', 'scene.localPlayer.dead')
-                  text = text.replace('scene.player', 'scene.localPlayer.actor')
-                  text = text.replace('this.player', 'this.localPlayer.actor')
-                  if helper_import not in text:
-                      text = helper_import + text
-
-              if path.name == 'room-anchors.test.js':
-                  for old, new in alias_replacements:
-                      text = text.replace(old, new)
-                  text = text.replace('scene.player', 'scene.localPlayer.actor')
-
-              if text != before:
-                  path.write_text(text)
-          PY
-      - name: Run full regression
-        run: make test
-      - name: Commit fixture migration
-        run: |
-          git config user.name ideaa
-          git config user.email ideaa@qq.com
-          git add web/src/lib/games/dungeon
-          git commit -m 'test(dungeon): migrate fixtures to PlayerEntity'
-          git push origin HEAD:feat/dungeon-coop-foundation
+      - name: Run PlayerEntity boundary test
+        working-directory: web
+        run: node --test src/lib/games/dungeon/player-entity-boundary.test.js
