@@ -49,9 +49,16 @@ export function normalizeCoopEvent(event = {}) {
   }
 
   for (const key of ['runSeed', 'playerId', 'enemyId', 'dropId', 'chestId', 'sourceId', 'reason', 'archetype']) copyString(key)
-  for (const key of ['floor', 'x', 'y', 'unlockAt', 'spawnIndex']) copyNumber(key)
+  for (const key of ['floor', 'x', 'y', 'unlockAt', 'spawnIndex', 'healed']) copyNumber(key)
   for (const key of ['elite', 'boss']) copyBoolean(key)
   for (const key of ['item', 'patch', 'progress']) copyData(key)
+
+  // Existing scene.spawnEnemy({ elite:true }) means “spawn the boss profile”.
+  // InfiniteDungeon creates ordinary elite mobs by spawning a normal archetype
+  // first, then applying elite scaling/tint afterwards. On the replica, the
+  // spawn mode therefore follows `boss`; the final elite presentation is still
+  // carried in `patch.elite`.
+  if (normalized.type === 'enemy.spawn' && event.boss != null) normalized.elite = Boolean(event.boss)
 
   return normalized
 }
