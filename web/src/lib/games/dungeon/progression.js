@@ -1,3 +1,19 @@
+import { createSeededRandom, keyedSeed, normalizeRunSeed } from './world-seed.js'
+
+let pinnedProgressionRunSeed = null
+
+export function setProgressionRunSeed(runSeed = null) {
+  const value = String(runSeed ?? '').trim()
+  pinnedProgressionRunSeed = value ? normalizeRunSeed(value) : null
+  return pinnedProgressionRunSeed
+}
+
+function chapterRandom(chapter, random) {
+  if (!pinnedProgressionRunSeed) return random
+  const normalizedChapter = Math.max(1, Math.floor(Number(chapter) || 1))
+  return createSeededRandom(keyedSeed(pinnedProgressionRunSeed, normalizedChapter, 'chapter-plan'))
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
@@ -8,7 +24,8 @@ function pickRandom(items, random) {
 }
 
 export function createChapterPlan(chapter = 1, random = Math.random) {
-  const length = 4 + Math.floor(random() * 5)
+  const roll = chapterRandom(chapter, random)
+  const length = 4 + Math.floor(roll() * 5)
   const plan = Array.from({ length }, () => 'combat')
   plan[length - 1] = 'boss'
 
@@ -16,7 +33,7 @@ export function createChapterPlan(chapter = 1, random = Math.random) {
   const eliteCandidates = Array.from({ length: Math.max(0, length - 2) }, (_, index) => index + 1)
 
   for (let i = 0; i < eliteTarget && eliteCandidates.length; i++) {
-    const chosen = pickRandom(eliteCandidates, random)
+    const chosen = pickRandom(eliteCandidates, roll)
     if (chosen == null) break
     plan[chosen] = 'elite'
     eliteCandidates.splice(eliteCandidates.indexOf(chosen), 1)
@@ -26,8 +43,8 @@ export function createChapterPlan(chapter = 1, random = Math.random) {
   for (let i = 1; i < length - 2; i++) {
     if (plan[i] === 'combat') restCandidates.push(i)
   }
-  if (random() < 0.65 && restCandidates.length) {
-    const index = pickRandom(restCandidates, random)
+  if (roll() < 0.65 && restCandidates.length) {
+    const index = pickRandom(restCandidates, roll)
     if (index != null) plan[index] = 'rest'
   }
 
@@ -35,8 +52,8 @@ export function createChapterPlan(chapter = 1, random = Math.random) {
   for (let i = 1; i < length - 2; i++) {
     if (plan[i] === 'combat') treasureCandidates.push(i)
   }
-  if (treasureCandidates.length && random() < 0.55) {
-    const index = pickRandom(treasureCandidates, random)
+  if (treasureCandidates.length && roll() < 0.55) {
+    const index = pickRandom(treasureCandidates, roll)
     if (index != null) plan[index] = 'treasure'
   }
 
