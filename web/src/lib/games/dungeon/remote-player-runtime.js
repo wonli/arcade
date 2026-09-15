@@ -12,7 +12,8 @@ function restorePlayerRuntime(player) {
 }
 
 function copyLocalPlayerVisual(scene, x, y) {
-  const local = scene.localPlayer?.actor
+  const localPlayer = scene.localPlayer
+  const local = localPlayer?.actor
   const key = local?.texture?.key
   if (!key || !scene.add?.sprite) return null
   const frame = local.frame?.name ?? 0

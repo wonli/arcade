@@ -49,7 +49,8 @@ function syncLocalPlayerLabel(player) {
 }
 
 export function dungeonSceneReadyForNetwork(scene) {
-  return Boolean(scene?.localPlayer?.actor && scene?.players instanceof Map && scene?.time)
+  const localPlayer = scene?.localPlayer
+  return Boolean(localPlayer?.actor && scene?.players instanceof Map && scene?.time)
 }
 
 export function createDungeonNetworkRuntime({
