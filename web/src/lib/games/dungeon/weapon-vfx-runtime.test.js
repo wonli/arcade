@@ -24,9 +24,8 @@ function sceneFor(item) {
     playerState: {
       x: 20,
       y: 30,
-      weapon: item.type,
-      weaponRarity: item.rarity,
-      equippedWeapon: item,
+      equipment: { weapon: item },
+      modifiers: {},
     },
     __dungeonVfx: vfx,
     textures: { exists: () => true },
@@ -180,9 +179,8 @@ test('weapon vfx runtime is isolated per PlayerEntity', () => {
     state: {
       x: 80,
       y: 90,
-      weapon: 'weapon.remote',
-      weaponRarity: 'common',
-      equippedWeapon: { type: 'weapon.remote', rarity: 'common', vfxTheme: 'storm' },
+      equipment: { weapon: { type: 'weapon.remote', rarity: 'common', vfxTheme: 'storm' } },
+      modifiers: {},
     },
   })
 
