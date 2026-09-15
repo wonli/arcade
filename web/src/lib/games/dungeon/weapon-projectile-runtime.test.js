@@ -133,6 +133,17 @@ test('ranged slash delays damage until projectile reaches target', () => {
   assert.equal(runtime.count(), 0)
 })
 
+test('projectiles carry their attacker and runtime ownership explicitly', () => {
+  const { scene, runtime } = rangedScene('bow')
+  const target = { x: 80, y: 0, hp: 100, hitRadius: 10 }
+  scene.enemies = [target]
+
+  const projectile = scene.slash(target)
+
+  assert.equal(projectile.attacker, scene.localPlayer)
+  assert.equal(scene.localPlayer.runtime.weaponProjectiles, runtime)
+})
+
 test('every fourth primary bow launch is a deterministic Power Shot with 160 percent primary damage', () => {
   const { scene, hits, update } = rangedScene('bow')
   const target = { id: 'target', x: 40, y: 0, hp: 1000, hitRadius: 10 }
