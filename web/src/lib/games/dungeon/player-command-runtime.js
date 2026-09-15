@@ -20,11 +20,11 @@ function resolvePlayer(scene, command) {
   return { player, playerId }
 }
 
-function resolveTarget(scene, targetId) {
-  if (targetId == null || String(targetId) === '') return { target: null }
-  const id = String(targetId)
-  const target = (scene.enemies ?? []).find((enemy) => String(enemy?.id ?? '') === id && enemy?.hp > 0)
-  return target ? { target } : { error: 'target-not-found' }
+function commandTime(scene, command) {
+  const supplied = Number(command?.time)
+  if (Number.isFinite(supplied)) return supplied
+  const now = Number(scene?.time?.now)
+  return Number.isFinite(now) ? now : 0
 }
 
 function validateCommand(scene, command) {
@@ -35,11 +35,8 @@ function validateCommand(scene, command) {
   const resolved = resolvePlayer(scene, command)
   if (resolved.error) return resolved
 
-  if (type === 'attack') {
-    const target = resolveTarget(scene, command.targetId)
-    if (target.error) return target
-    return { ...resolved, type, target: target.target }
-  }
+  if (type === 'attack') return { ...resolved, type }
+
   if (type === 'skill') {
     const skillId = String(command.skillId ?? '')
     if (!skillId) return { error: 'skill-required' }
@@ -65,18 +62,20 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
   }
 
   if (type === 'attack') {
-    if (validated.target) {
-      if (typeof scene.slash !== 'function') {
-        return result(command, { accepted: true, playerId, reason: 'attack-unavailable' })
-      }
-      const value = scene.slash(validated.target, player)
-      return result(command, { accepted: true, applied: true, playerId, result: value })
-    }
     if (typeof scene.autoAttack !== 'function') {
       return result(command, { accepted: true, playerId, reason: 'attack-unavailable' })
     }
-    const value = scene.autoAttack(Number(command.time) || scene.time?.now || 0, player)
-    return result(command, { accepted: true, applied: true, playerId, result: value })
+
+    const beforeAttackAt = player.lastAttackAt
+    const value = scene.autoAttack(commandTime(scene, command), player)
+    const applied = player.lastAttackAt !== beforeAttackAt
+    return result(command, {
+      accepted: true,
+      applied,
+      playerId,
+      result: value,
+      ...(applied ? {} : { reason: 'attack-not-applied' }),
+    })
   }
 
   if (type === 'skill') {
@@ -84,7 +83,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
       scene,
       player,
       validated.skillId,
-      Number(command.time) || scene.time?.now || 0,
+      commandTime(scene, command),
     )
     return result(command, {
       accepted: true,
@@ -99,6 +98,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
   if (typeof pickup !== 'function') {
     return result(command, { accepted: true, playerId, reason: 'pickup-unavailable' })
   }
+
   const value = pickup(player, validated.dropId)
   const applied = value === true || Boolean(value?.picked)
   return result(command, {
