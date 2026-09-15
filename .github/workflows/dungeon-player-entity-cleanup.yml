@@ -29,10 +29,7 @@ jobs:
           for name in ['infinite-runtime.js', 'pickup-runtime.js', 'weapon-vfx-runtime.js', 'weapon-visual-runtime.js']:
               path = root / name
               text = path.read_text()
-              next_text = text.replace('scene?.playerState', 'scene?.localPlayer?.state')
-              if next_text == text:
-                  print(f'no optional playerState replacement in {name}')
-              path.write_text(next_text)
+              path.write_text(text.replace('scene?.playerState', 'scene?.localPlayer?.state'))
           PY
       - name: Upgrade legacy Dungeon test scenes to PlayerEntity fixtures
         run: |
@@ -69,6 +66,17 @@ jobs:
 
               text = installer.sub(wrap, text)
               text = scaler.sub(wrap, text)
+
+              if path.name == 'pickup-runtime.test.js':
+                  text = text.replace(
+                      "  const scene = { playerState: { x: 48, y: 90 }, __dungeonSpatial: { getGeometry: () => geometry } }\n",
+                      "  const scene = attachLegacyTestPlayer({ playerState: { x: 48, y: 90 }, __dungeonSpatial: { getGeometry: () => geometry } })\n",
+                  )
+                  text = text.replace(
+                      "  const scene = { playerState: player, __dungeonSpatial: { getGeometry: () => geometry } }\n",
+                      "  const scene = attachLegacyTestPlayer({ playerState: player, __dungeonSpatial: { getGeometry: () => geometry } })\n",
+                  )
+                  used_helper[0] = True
 
               if used_helper[0]:
                   for old, new in alias_replacements:
