@@ -1,10 +1,10 @@
 import { enemyBehaviorStep, enemyIntentProfile } from './enemy-behavior.js'
 import { installDungeonGameplayPass } from './gameplay-pass-runtime.js'
 
-function distanceToPlayer(scene, enemy) {
+function distanceToPlayer(player, enemy) {
   return Math.hypot(
-    (scene.localPlayer.state?.x ?? 0) - enemy.x,
-    (scene.localPlayer.state?.y ?? 0) - enemy.y,
+    (player.state?.x ?? 0) - enemy.x,
+    (player.state?.y ?? 0) - enemy.y,
   )
 }
 
@@ -32,22 +32,22 @@ function cue(scene, enemy, kind) {
   if (profile.flash) enemy.visual.setTintFill?.(0xbfffee)
 }
 
-export function installDungeonEnemyBehaviors(scene) {
-  if (!scene || scene.__dungeonEnemyBehaviors) return scene?.__dungeonEnemyBehaviors ?? null
+export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonEnemyBehaviors) return scene?.__dungeonEnemyBehaviors ?? null
 
-  installDungeonGameplayPass(scene)
+  installDungeonGameplayPass(scene, { player })
 
   const originalMove = scene.moveEnemyTowardPlayer?.bind(scene)
   const originalRanged = scene.updateRangedEnemy?.bind(scene)
   if (!originalMove) return null
 
-  const approach = (enemy, time, dt) => originalMove(enemy, time, dt)
+  const approach = (enemy, time, dt, target = player) => originalMove(enemy, time, dt, target)
 
-  const update = (enemy, time, dt) => {
+  const update = (enemy, time, dt, target = player) => {
     if (!enemy || enemy.hp <= 0) return
 
-    const dx = (scene.localPlayer.state?.x ?? 0) - enemy.x
-    const dy = (scene.localPlayer.state?.y ?? 0) - enemy.y
+    const dx = (target.state?.x ?? 0) - enemy.x
+    const dy = (target.state?.y ?? 0) - enemy.y
     const distance = Math.hypot(dx, dy) || 1
 
     if ((enemy.archetype === 'fast' || enemy.archetype === 'brute') && enemy.nextSpecialAt == null) {
@@ -68,12 +68,12 @@ export function installDungeonEnemyBehaviors(scene) {
     if (enemy.archetype === 'fast' && time < (enemy.dashUntil ?? 0)) {
       enemy.x += (enemy.dashVx ?? 0) * dt
       enemy.y += (enemy.dashVy ?? 0) * dt
-      scene.syncEnemyVisual?.(enemy, time, dx, distance)
+      scene.syncEnemyVisual?.(enemy, time, dx, distance, target)
       return
     }
 
     if (enemy.archetype === 'brute' && time < (enemy.specialLockedUntil ?? 0)) {
-      scene.syncEnemyVisual?.(enemy, time, dx, distance)
+      scene.syncEnemyVisual?.(enemy, time, dx, distance, target)
       return
     }
 
@@ -86,7 +86,7 @@ export function installDungeonEnemyBehaviors(scene) {
       enemy.nextSpecialAt = enemy.dashUntil + step.cooldownMs
       enemy.x += enemy.dashVx * dt
       enemy.y += enemy.dashVy * dt
-      scene.syncEnemyVisual?.(enemy, time, dx, distance)
+      scene.syncEnemyVisual?.(enemy, time, dx, distance, target)
       return
     }
 
@@ -111,13 +111,13 @@ export function installDungeonEnemyBehaviors(scene) {
       }
 
       scene.time?.delayedCall?.(step.durationMs, () => {
-        if (enemy.hp <= 0 || scene.localPlayer.dead) return
-        if (distanceToPlayer(scene, enemy) <= step.radius) {
-          scene.hitPlayer?.(enemy.contactDamage + 4)
+        if (enemy.hp <= 0 || target.dead) return
+        if (distanceToPlayer(target, enemy) <= step.radius) {
+          scene.hitPlayer?.(enemy.contactDamage + 4, target)
         }
       })
 
-      scene.syncEnemyVisual?.(enemy, time, dx, distance)
+      scene.syncEnemyVisual?.(enemy, time, dx, distance, target)
       return
     }
 
@@ -125,25 +125,25 @@ export function installDungeonEnemyBehaviors(scene) {
       const sign = step.sign || 1
       enemy.x += (-dy / distance) * enemy.speed * step.speedMultiplier * sign * dt
       enemy.y += (dx / distance) * enemy.speed * step.speedMultiplier * sign * dt
-      scene.syncEnemyVisual?.(enemy, time, dx, distance)
+      scene.syncEnemyVisual?.(enemy, time, dx, distance, target)
       return
     }
 
-    approach(enemy, time, dt)
+    approach(enemy, time, dt, target)
   }
 
-  scene.moveEnemyTowardPlayer = function tacticalEnemyMovement(enemy, time, dt) {
-    if (enemy?.boss || enemy?.archetype === 'ranged') return originalMove(enemy, time, dt)
-    return update(enemy, time, dt)
+  scene.moveEnemyTowardPlayer = function tacticalEnemyMovement(enemy, time, dt, target = player) {
+    if (enemy?.boss || enemy?.archetype === 'ranged') return originalMove(enemy, time, dt, target)
+    return update(enemy, time, dt, target)
   }
 
   if (originalRanged) {
-    scene.updateRangedEnemy = function rangedWithIntent(enemy, time, dt) {
+    scene.updateRangedEnemy = function rangedWithIntent(enemy, time, dt, target = player) {
       const lead = enemyIntentProfile('ranged').leadMs
       if ((enemy.nextProjectileAt ?? Infinity) - time <= lead && (enemy.nextProjectileAt ?? 0) > time) {
         cue(scene, enemy, 'ranged')
       }
-      return originalRanged(enemy, time, dt)
+      return originalRanged(enemy, time, dt, target)
     }
   }
 
