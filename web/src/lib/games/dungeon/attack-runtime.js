@@ -10,6 +10,7 @@ import { installDungeonPlayerFacing } from './player-facing-runtime.js'
 import { installDungeonEnemyFeedback } from './enemy-feedback-runtime.js'
 import { installDungeonEnemyBehaviors } from './enemy-behavior-runtime.js'
 import { weaponGroupSkill } from './weapon-skill.js'
+import { weaponProfile } from './weapon-profile.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -93,11 +94,13 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   scene.slash = function spatialSlash(target, attacker = player) {
     if (!target || target.hp <= 0 || !attacker) return
 
-    const bladeTip = attacker === player
-      ? (scene.__dungeonWeaponVisuals?.swing?.() ?? attacker.state)
-      : attacker.state
-    scene.__dungeonVfx?.slash?.(bladeTip, target, false)
-    originalSlash(target, attacker)
+    const weaponVisuals = attacker.runtime?.weaponVisuals
+      ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
+    const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
+    if (weaponProfile(attacker.state).attackMode !== 'ranged') {
+      scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+    }
+    return originalSlash(target, attacker)
   }
 
   scene.damageEnemy = function spatialDamageEnemy(
