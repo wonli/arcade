@@ -18,9 +18,8 @@ function baseState(x) {
     speed: 190,
     critChance: 0.18,
     baseStats: { damage: 10, speed: 190, maxHp: 100 },
-    weapon: null,
-    weaponAffixes: [],
-    effects: {},
+    equipment: { weapon: null },
+    modifiers: {},
   }
 }
 
@@ -42,18 +41,20 @@ test('player entity keeps gameplay and presentation state together without scene
 
 test('two players never share mutable gameplay state', () => {
   const original = baseState(100)
+  original.equipment.weapon = { type: 'weapon.test', archetype: 'sword', rarity: 'rare', damage: 4, affixes: [] }
+  original.modifiers.passive = { poison: 0 }
   const p1 = createPlayerEntity({ id: 'p1', state: original })
   const p2 = createPlayerEntity({ id: 'p2', state: original })
 
   p1.state.x = 999
   p1.state.baseStats.damage = 77
-  p1.state.weaponAffixes.push({ id: 'crit', value: 0.2 })
-  p1.state.effects.poison = 1
+  p1.state.equipment.weapon.affixes.push({ id: 'crit', value: 0.2 })
+  p1.state.modifiers.passive.poison = 1
 
   assert.equal(p2.state.x, 100)
   assert.equal(p2.state.baseStats.damage, 10)
-  assert.deepEqual(p2.state.weaponAffixes, [])
-  assert.deepEqual(p2.state.effects, {})
+  assert.deepEqual(p2.state.equipment.weapon.affixes, [])
+  assert.deepEqual(p2.state.modifiers.passive, { poison: 0 })
   assert.equal(original.x, 100)
   assert.equal(original.baseStats.damage, 10)
 })
@@ -84,7 +85,7 @@ test('runtime combat timestamps and presentation refs are independent per player
   assert.equal(p2.facing, 'left')
 })
 
-test('skill cooldowns are isolated by player and skill id while primary keeps legacy compatibility', () => {
+test('skill cooldowns are isolated by player and skill id while primary keeps accessor compatibility', () => {
   const p1 = createPlayerEntity({ id: 'p1', state: baseState(100) })
   const p2 = createPlayerEntity({ id: 'p2', state: baseState(200) })
 
