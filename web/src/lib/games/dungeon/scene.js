@@ -213,8 +213,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     create() {
       this.drawArena()
       this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE')
-      this.player = this.makeActor(this.playerState.x, this.playerState.y, 'player').setDepth(20)
-      this.playerBar = this.createHealthBar(this.playerState.x, this.playerState.y - 42, 54, 6, 0x55e879)
+      this.localPlayer.actor = this.makeActor(this.localPlayer.state.x, this.localPlayer.state.y, 'player').setDepth(20)
+      this.localPlayer.bar = this.createHealthBar(this.localPlayer.state.x, this.localPlayer.state.y - 42, 54, 6, 0x55e879)
       this.setupPlayerAnimations()
       this.syncPlayerAnimation()
       this.startFloor(true)
@@ -320,7 +320,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     setupPlayerAnimations() {
-      if (assets.player?.source !== 'rpg-main-character' || !this.player?.anims) return
+      if (assets.player?.source !== 'rpg-main-character' || !this.localPlayer.actor?.anims) return
       for (const direction of ['down', 'up', 'side']) {
         for (const action of ['idle', 'walk', 'attack']) {
           const asset = assets.player[direction]?.[action]
@@ -329,20 +329,20 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
           this.anims.create({ key, frames: this.anims.generateFrameNumbers(key, { start: 0, end: asset.frames - 1 }), frameRate: action === 'attack' ? 10 : action === 'walk' ? 8 : 4, repeat: action === 'attack' ? 0 : -1 })
         }
       }
-      this.player.on('animationcomplete', (animation) => {
+      this.localPlayer.actor.on('animationcomplete', (animation) => {
         if (!animation?.key?.endsWith('-attack')) return
-        this.playerAttacking = false
+        this.localPlayer.attacking = false
         this.syncPlayerAnimation()
       })
     }
 
     syncPlayerAnimation(forceAction = null) {
-      if (assets.player?.source !== 'rpg-main-character' || !this.player?.anims) return
-      const action = forceAction || (this.playerMoving ? 'walk' : 'idle')
-      const sheetDirection = this.playerFacing === 'up' ? 'up' : this.playerFacing === 'down' ? 'down' : 'side'
+      if (assets.player?.source !== 'rpg-main-character' || !this.localPlayer.actor?.anims) return
+      const action = forceAction || (this.localPlayer.moving ? 'walk' : 'idle')
+      const sheetDirection = this.localPlayer.facing === 'up' ? 'up' : this.localPlayer.facing === 'down' ? 'down' : 'side'
       const key = `dungeon-player-${sheetDirection}-${action}`
-      this.player.setFlipX?.(this.playerFacing === 'left')
-      if (this.anims.exists(key) && this.player.anims.currentAnim?.key !== key) this.player.play(key, true)
+      this.localPlayer.actor.setFlipX?.(this.localPlayer.facing === 'left')
+      if (this.anims.exists(key) && this.localPlayer.actor.anims.currentAnim?.key !== key) this.localPlayer.actor.play(key, true)
     }
 
     makeActor(x, y, kind, enemyType = 'skeleton') {
@@ -443,7 +443,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     update(time, delta) {
-      if (this.dead || this.runComplete) return
+      if (this.localPlayer.dead || this.runComplete) return
       const dt = Math.min(delta, 40) / 1000
       this.updatePlayer(dt)
       this.updateEnemies(time, dt)
@@ -460,19 +460,19 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (this.keys.D.isDown) dx += 1
       if (this.keys.W.isDown) dy -= 1
       if (this.keys.S.isDown) dy += 1
-      this.playerFacing = directionFromInput(dx, dy, this.playerFacing)
-      this.playerMoving = Boolean(dx || dy)
-      const hurtBoost = (this.playerState.hasteUntil ?? 0) > this.time.now ? 1 + (this.playerState.effects?.hurtHaste ?? 0) : 1
+      this.localPlayer.facing = directionFromInput(dx, dy, this.localPlayer.facing)
+      this.localPlayer.moving = Boolean(dx || dy)
+      const hurtBoost = (this.localPlayer.state.hasteUntil ?? 0) > this.time.now ? 1 + (this.localPlayer.state.effects?.hurtHaste ?? 0) : 1
       if (dx || dy) {
         const length = Math.hypot(dx, dy) || 1
-        this.playerState.x += (dx / length) * this.playerState.speed * hurtBoost * dt
-        this.playerState.y += (dy / length) * this.playerState.speed * hurtBoost * dt
+        this.localPlayer.state.x += (dx / length) * this.localPlayer.state.speed * hurtBoost * dt
+        this.localPlayer.state.y += (dy / length) * this.localPlayer.state.speed * hurtBoost * dt
       }
-      this.playerState.x = Phaser.Math.Clamp(this.playerState.x, TILE + 18, WIDTH - TILE - 18)
-      this.playerState.y = Phaser.Math.Clamp(this.playerState.y, TILE + 18, HEIGHT - TILE - 18)
-      this.player.setPosition(this.playerState.x, this.playerState.y)
-      this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
-      if (!this.playerAttacking) this.syncPlayerAnimation()
+      this.localPlayer.state.x = Phaser.Math.Clamp(this.localPlayer.state.x, TILE + 18, WIDTH - TILE - 18)
+      this.localPlayer.state.y = Phaser.Math.Clamp(this.localPlayer.state.y, TILE + 18, HEIGHT - TILE - 18)
+      this.localPlayer.actor.setPosition(this.localPlayer.state.x, this.localPlayer.state.y)
+      this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
+      if (!this.localPlayer.attacking) this.syncPlayerAnimation()
     }
 
     updateEnemies(time, dt) {
@@ -485,8 +485,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     moveEnemyTowardPlayer(enemy, time, dt) {
-      const dx = this.playerState.x - enemy.x
-      const dy = this.playerState.y - enemy.y
+      const dx = this.localPlayer.state.x - enemy.x
+      const dy = this.localPlayer.state.y - enemy.y
       const distance = Math.hypot(dx, dy) || 1
       enemy.x += (dx / distance) * enemy.speed * dt
       enemy.y += (dy / distance) * enemy.speed * dt
@@ -494,8 +494,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     updateRangedEnemy(enemy, time, dt) {
-      const dx = this.playerState.x - enemy.x
-      const dy = this.playerState.y - enemy.y
+      const dx = this.localPlayer.state.x - enemy.x
+      const dy = this.localPlayer.state.y - enemy.y
       const distance = Math.hypot(dx, dy) || 1
       const preferred = enemy.preferredRange || 180
 
@@ -513,8 +513,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
       enemy.x = Phaser.Math.Clamp(enemy.x, 66, WIDTH - 66)
       enemy.y = Phaser.Math.Clamp(enemy.y, 66, HEIGHT - 66)
-      const nextDx = this.playerState.x - enemy.x
-      const nextDy = this.playerState.y - enemy.y
+      const nextDx = this.localPlayer.state.x - enemy.x
+      const nextDy = this.localPlayer.state.y - enemy.y
       const nextDistance = Math.hypot(nextDx, nextDy) || 1
       this.syncEnemyVisual(enemy, time, nextDx, nextDistance)
 
@@ -525,8 +525,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     fireEnemyProjectile(enemy) {
-      const dx = this.playerState.x - enemy.x
-      const dy = this.playerState.y - enemy.y
+      const dx = this.localPlayer.state.x - enemy.x
+      const dy = this.localPlayer.state.y - enemy.y
       const distance = Math.hypot(dx, dy) || 1
       const speed = enemy.projectileSpeed || 260
       const visual = this.add.circle(enemy.x, enemy.y - 4, 7, 0x70f2ce, 0.92).setStrokeStyle(2, 0xd6fff3, 0.9).setDepth(24)
@@ -552,7 +552,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         projectile.visual?.setPosition(projectile.x, projectile.y)
         projectile.glow?.setPosition(projectile.x, projectile.y)
 
-        const hit = Math.hypot(projectile.x - this.playerState.x, projectile.y - this.playerState.y) <= 20
+        const hit = Math.hypot(projectile.x - this.localPlayer.state.x, projectile.y - this.localPlayer.state.y) <= 20
         const expired = projectile.life <= 0 || projectile.x < 42 || projectile.x > WIDTH - 42 || projectile.y < 42 || projectile.y > HEIGHT - 42
         if (!hit && !expired) continue
 
@@ -586,9 +586,9 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         enemy.y += enemy.chargeVy * dt
         enemy.x = Phaser.Math.Clamp(enemy.x, 68, WIDTH - 68)
         enemy.y = Phaser.Math.Clamp(enemy.y, 68, HEIGHT - 68)
-        const distance = Math.hypot(this.playerState.x - enemy.x, this.playerState.y - enemy.y)
+        const distance = Math.hypot(this.localPlayer.state.x - enemy.x, this.localPlayer.state.y - enemy.y)
         this.syncEnemyVisual(enemy, time, enemy.chargeVx, distance)
-        if (distance < 42 && time - this.lastContactAt > 420) this.hitPlayer(enemy.contactDamage + 8)
+        if (distance < 42 && time - this.localPlayer.lastContactAt > 420) this.hitPlayer(enemy.contactDamage + 8)
         return
       }
 
@@ -615,29 +615,29 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       else if (enemy.tint) enemy.visual.setTint?.(enemy.tint)
       else enemy.visual.clearTint?.()
       const contactRadius = enemy.boss ? 42 : 30 + Math.max(0, enemy.scale - 1) * 12
-      if (distance < contactRadius && time - this.lastContactAt > 420) this.hitPlayer(enemy.contactDamage)
+      if (distance < contactRadius && time - this.localPlayer.lastContactAt > 420) this.hitPlayer(enemy.contactDamage)
     }
 
     hitPlayer(damage) {
-      this.lastContactAt = this.time.now
-      this.playerState.hp = Math.max(0, this.playerState.hp - damage)
-      if ((this.playerState.effects?.hurtHaste ?? 0) > 0) this.playerState.hasteUntil = this.time.now + 1800
-      this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
+      this.localPlayer.lastContactAt = this.time.now
+      this.localPlayer.state.hp = Math.max(0, this.localPlayer.state.hp - damage)
+      if ((this.localPlayer.state.effects?.hurtHaste ?? 0) > 0) this.localPlayer.state.hasteUntil = this.time.now + 1800
+      this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
       this.flashPlayer()
       this.emitStats()
-      if (this.playerState.hp <= 0) this.gameOver()
+      if (this.localPlayer.state.hp <= 0) this.gameOver()
     }
 
     bossCharge(enemy) {
-      const dx = this.playerState.x - enemy.x
-      const dy = this.playerState.y - enemy.y
+      const dx = this.localPlayer.state.x - enemy.x
+      const dy = this.localPlayer.state.y - enemy.y
       const distance = Math.hypot(dx, dy) || 1
       const line = this.add.rectangle(enemy.x + dx / 2, enemy.y + dy / 2, distance, 7, 0xff665e, 0.26).setOrigin(0.5).setRotation(Math.atan2(dy, dx)).setDepth(24)
       this.tweens.add({ targets: line, alpha: 0.72, duration: 320, yoyo: true, onComplete: () => line.destroy() })
       this.time.delayedCall(420, () => {
-        if (enemy.hp <= 0 || this.dead) return
-        const nextDx = this.playerState.x - enemy.x
-        const nextDy = this.playerState.y - enemy.y
+        if (enemy.hp <= 0 || this.localPlayer.dead) return
+        const nextDx = this.localPlayer.state.x - enemy.x
+        const nextDy = this.localPlayer.state.y - enemy.y
         const nextDistance = Math.hypot(nextDx, nextDy) || 1
         const speed = enemy.phase === 2 ? 430 : 360
         enemy.chargeVx = (nextDx / nextDistance) * speed
@@ -649,7 +649,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     bossShockwave(enemy) {
       const telegraph = this.add.circle(enemy.x, enemy.y, 34, 0xff8a63, 0.08).setStrokeStyle(4, 0xff8a63, 0.72).setDepth(23)
       this.tweens.add({ targets: telegraph, radius: 120, alpha: 0.5, duration: 560, onComplete: () => {
-        const distance = Math.hypot(this.playerState.x - enemy.x, this.playerState.y - enemy.y)
+        const distance = Math.hypot(this.localPlayer.state.x - enemy.x, this.localPlayer.state.y - enemy.y)
         const ring = this.add.circle(enemy.x, enemy.y, 120, 0xff665e, 0.04).setStrokeStyle(7, 0xff665e, 0.9).setDepth(25)
         this.tweens.add({ targets: ring, radius: 168, alpha: 0, duration: 320, onComplete: () => ring.destroy() })
         telegraph.destroy()
@@ -658,23 +658,23 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     autoAttack(time) {
-      if (time - this.lastAttackAt < attackInterval(this.playerState, time)) return
-      const target = nearestTarget(this.playerState, this.enemies)
-      if (!target || Math.hypot(target.x - this.playerState.x, target.y - this.playerState.y) > 165) return
-      this.lastAttackAt = time
+      if (time - this.localPlayer.lastAttackAt < attackInterval(this.localPlayer.state, time)) return
+      const target = nearestTarget(this.localPlayer.state, this.enemies)
+      if (!target || Math.hypot(target.x - this.localPlayer.state.x, target.y - this.localPlayer.state.y) > 165) return
+      this.localPlayer.lastAttackAt = time
       this.slash(target)
     }
 
     trySkill(time) {
-      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || time < this.skillReadyAt) return
-      const profile = skillProfile(this.playerState)
-      this.skillReadyAt = time + profile.cooldown
-      const ring = this.add.circle(this.playerState.x, this.playerState.y, 20, 0xc1ff56, 0.1).setStrokeStyle(4, 0xc1ff56, 0.9)
+      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || time < this.localPlayer.skillReadyAt) return
+      const profile = skillProfile(this.localPlayer.state)
+      this.localPlayer.skillReadyAt = time + profile.cooldown
+      const ring = this.add.circle(this.localPlayer.state.x, this.localPlayer.state.y, 20, 0xc1ff56, 0.1).setStrokeStyle(4, 0xc1ff56, 0.9)
       this.tweens.add({ targets: ring, radius: profile.radius, alpha: 0, duration: 320, onComplete: () => ring.destroy() })
       let hits = 0
       for (const enemy of this.enemies) {
-        if (enemy.hp > 0 && Math.hypot(enemy.x - this.playerState.x, enemy.y - this.playerState.y) <= profile.radius) {
-          this.damageEnemy(enemy, Math.round(this.playerState.damage * 1.6), true, 28, { direct: false, canProc: false, source: 'skill' })
+        if (enemy.hp > 0 && Math.hypot(enemy.x - this.localPlayer.state.x, enemy.y - this.localPlayer.state.y) <= profile.radius) {
+          this.damageEnemy(enemy, Math.round(this.localPlayer.state.damage * 1.6), true, 28, { direct: false, canProc: false, source: 'skill' })
           hits++
         }
       }
@@ -684,29 +684,29 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     slash(target) {
-      const dx = target.x - this.playerState.x
-      const dy = target.y - this.playerState.y
-      this.playerFacing = directionFromInput(dx, dy, this.playerFacing)
+      const dx = target.x - this.localPlayer.state.x
+      const dy = target.y - this.localPlayer.state.y
+      this.localPlayer.facing = directionFromInput(dx, dy, this.localPlayer.facing)
       if (assets.player?.source === 'rpg-main-character') {
-        this.playerAttacking = true
+        this.localPlayer.attacking = true
         this.syncPlayerAnimation('attack')
       }
-      const result = rollDamage(this.playerState)
-      const damage = modifiedDamage(this.playerState, target, result.damage)
+      const result = rollDamage(this.localPlayer.state)
+      const damage = modifiedDamage(this.localPlayer.state, target, result.damage)
       const angle = Math.atan2(dy, dx)
-      const slash = this.add.arc(this.playerState.x + Math.cos(angle) * 34, this.playerState.y + Math.sin(angle) * 34, 34, -55, 55, false, result.critical ? 0xffdd6e : 0xeafbc9, 0.85).setAngle(Phaser.Math.RadToDeg(angle)).setDepth(30)
+      const slash = this.add.arc(this.localPlayer.state.x + Math.cos(angle) * 34, this.localPlayer.state.y + Math.sin(angle) * 34, 34, -55, 55, false, result.critical ? 0xffdd6e : 0xeafbc9, 0.85).setAngle(Phaser.Math.RadToDeg(angle)).setDepth(30)
       this.tweens.add({ targets: slash, alpha: 0, scale: 1.35, duration: 140, onComplete: () => slash.destroy() })
       this.damageEnemy(target, damage, result.critical, result.critical ? 34 : 22, { direct: true, canProc: true, source: 'weapon' })
-      this.healPlayer(healFromHit(this.playerState, damage, result.critical, { direct: true }))
+      this.healPlayer(healFromHit(this.localPlayer.state, damage, result.critical, { direct: true }))
       this.applyWeaponProcs(target, damage, result.critical)
     }
 
     healPlayer(amount) {
-      if (amount <= 0 || this.playerState.hp <= 0) return
-      const before = this.playerState.hp
-      this.playerState.hp = Math.min(this.playerState.maxHp, this.playerState.hp + amount)
-      if (this.playerState.hp !== before) {
-        this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
+      if (amount <= 0 || this.localPlayer.state.hp <= 0) return
+      const before = this.localPlayer.state.hp
+      this.localPlayer.state.hp = Math.min(this.localPlayer.state.maxHp, this.localPlayer.state.hp + amount)
+      if (this.localPlayer.state.hp !== before) {
+        this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
         this.emitStats()
       }
     }
@@ -720,7 +720,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     applyWeaponProcs(primary, damage, critical) {
-      const effects = this.playerState.effects ?? {}
+      const effects = this.localPlayer.state.effects ?? {}
       if (primary.hp > 0 && effects.piercing > 0 && Math.random() < effects.piercing) {
         const target = secondaryTarget(primary, this.enemies, 145)
         if (target) {
@@ -749,11 +749,11 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       }
       if (effects.whirlwind > 0 && Math.random() < effects.whirlwind) {
         const radius = 105
-        const ring = this.add.circle(this.playerState.x, this.playerState.y, 24, 0xfff0a8, 0.05).setStrokeStyle(4, 0xffdd75, 0.9).setDepth(31)
+        const ring = this.add.circle(this.localPlayer.state.x, this.localPlayer.state.y, 24, 0xfff0a8, 0.05).setStrokeStyle(4, 0xffdd75, 0.9).setDepth(31)
         this.tweens.add({ targets: ring, radius, alpha: 0, duration: 260, onComplete: () => ring.destroy() })
         for (const enemy of this.enemies) {
           if (enemy.hp <= 0 || enemy === primary) continue
-          if (Math.hypot(enemy.x - this.playerState.x, enemy.y - this.playerState.y) <= radius) {
+          if (Math.hypot(enemy.x - this.localPlayer.state.x, enemy.y - this.localPlayer.state.y) <= radius) {
             this.damageEnemy(enemy, Math.max(1, Math.round(damage * 0.5)), false, 16, { direct: false, canProc: false, source: 'whirlwind' })
           }
         }
@@ -764,8 +764,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (enemy.hp <= 0) return
       enemy.hp = Math.max(0, enemy.hp - damage)
       enemy.hitUntil = this.time.now + 90
-      const dx = enemy.x - this.playerState.x
-      const dy = enemy.y - this.playerState.y
+      const dx = enemy.x - this.localPlayer.state.x
+      const dy = enemy.y - this.localPlayer.state.y
       const distance = Math.hypot(dx, dy) || 1
       const effectiveKnockback = enemy.boss ? knockback * 0.2 : knockback
       enemy.x += (dx / distance) * effectiveKnockback
@@ -790,12 +790,12 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const deathColor = enemy.boss ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : enemy.archetype === 'ranged' ? 0x70f2ce : 0xa980ff
       this.deathBurst(enemy.x, enemy.y, deathColor)
 
-      const corpseBurst = this.playerState.effects?.corpseBurst ?? 0
+      const corpseBurst = this.localPlayer.state.effects?.corpseBurst ?? 0
       if (corpseBurst > 0 && context.source !== 'corpse_burst') {
         const radius = 110
         const burst = this.add.circle(enemy.x, enemy.y, 18, 0xff8f68, 0.18).setStrokeStyle(3, 0xffb08c, 0.9).setDepth(27)
         this.tweens.add({ targets: burst, radius, alpha: 0, duration: 260, onComplete: () => burst.destroy() })
-        const burstDamage = Math.max(1, Math.round(this.playerState.damage * corpseBurst))
+        const burstDamage = Math.max(1, Math.round(this.localPlayer.state.damage * corpseBurst))
         for (const target of this.enemies) {
           if (target === enemy || target.hp <= 0) continue
           if (Math.hypot(target.x - enemy.x, target.y - enemy.y) <= radius) {
@@ -819,7 +819,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     checkFloorClear() {
-      if (this.floorCleared || this.dead || this.runComplete) return
+      if (this.floorCleared || this.localPlayer.dead || this.runComplete) return
       const living = this.enemies.filter((enemy) => enemy.hp > 0).length
       const outcome = floorOutcome(this.floor, living)
       if (outcome === 'combat') return
@@ -886,14 +886,14 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     updateDrops() {
       for (let i = this.drops.length - 1; i >= 0; i--) {
         const drop = this.drops[i]
-        if (Math.hypot(drop.x - this.playerState.x, drop.y - this.playerState.y) > 34) continue
-        const beforeHp = this.playerState.hp
-        this.playerState = applyPickup(this.playerState, drop.item, this.playerState.baseStats)
+        if (Math.hypot(drop.x - this.localPlayer.state.x, drop.y - this.localPlayer.state.y) > 34) continue
+        const beforeHp = this.localPlayer.state.hp
+        this.localPlayer.state = applyPickup(this.localPlayer.state, drop.item, this.localPlayer.state.baseStats)
         this.destroyDrop(drop)
         this.drops.splice(i, 1)
-        const healed = Math.max(0, this.playerState.hp - beforeHp)
+        const healed = Math.max(0, this.localPlayer.state.hp - beforeHp)
         this.pickupBurst(drop.x, drop.y, drop.item, healed)
-        this.updateHealthBar(this.playerBar, this.playerState.x, this.playerState.y - 42, this.playerState.hp, this.playerState.maxHp)
+        this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
         onEvent({ type: 'pickup', item: drop.item, healed })
         this.emitStats()
       }
@@ -927,7 +927,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     openPortal() {
-      if (this.portal || this.dead || this.runComplete || this.floor >= 5) return
+      if (this.portal || this.localPlayer.dead || this.runComplete || this.floor >= 5) return
       const { x, y } = roomAnchor(this.__roomGeometry, 'exit')
       const glow = this.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
       const ring = this.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
@@ -941,7 +941,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     updatePortal(time) {
       if (!this.portal || time < this.portal.unlockAt) return
-      if (Math.hypot(this.portal.x - this.playerState.x, this.portal.y - this.playerState.y) > 38) return
+      if (Math.hypot(this.portal.x - this.localPlayer.state.x, this.portal.y - this.localPlayer.state.y) > 38) return
       this.advanceFloor()
     }
 
@@ -954,10 +954,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     advanceFloor() {
-      if (this.floor >= 5 || this.dead || this.runComplete) return
+      if (this.floor >= 5 || this.localPlayer.dead || this.runComplete) return
       this.destroyPortal()
       this.floor++
-      this.lastContactAt = this.time.now
+      this.localPlayer.lastContactAt = this.time.now
       this.startFloor(false)
     }
 
@@ -967,15 +967,15 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     flashPlayer() {
-      if (this.player.setTintFill) {
-        this.player.setTintFill(0xff5f6d)
-        this.time.delayedCall(90, () => this.player.clearTint?.())
+      if (this.localPlayer.actor.setTintFill) {
+        this.localPlayer.actor.setTintFill(0xff5f6d)
+        this.time.delayedCall(90, () => this.localPlayer.actor.clearTint?.())
       }
       this.cameras.main.shake(70, 0.003)
     }
 
     completeRun() {
-      if (this.runComplete || this.dead) return
+      if (this.runComplete || this.localPlayer.dead) return
       this.runComplete = true
       this.destroyPortal()
       this.clearEnemyProjectiles()
@@ -988,7 +988,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     gameOver() {
-      this.dead = true
+      this.localPlayer.dead = true
       this.clearEnemyProjectiles()
       this.ambient.stop()
       this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x050607, 0.66).setDepth(80)
@@ -999,16 +999,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     emitStats(now = this.time?.now ?? 0) {
       onStats({
-        hp: this.playerState.hp,
-        maxHp: this.playerState.maxHp,
-        damage: this.playerState.damage,
+        hp: this.localPlayer.state.hp,
+        maxHp: this.localPlayer.state.maxHp,
+        damage: this.localPlayer.state.damage,
         kills: this.kills,
         floor: this.floor,
-        weapon: this.playerState.weapon,
-        weaponRarity: this.playerState.weaponRarity,
-        weaponDamage: this.playerState.weaponDamage ?? 0,
-        weaponAffixes: [...(this.playerState.weaponAffixes ?? [])],
-        skillCooldown: Math.max(0, this.skillReadyAt - now),
+        weapon: this.localPlayer.state.weapon,
+        weaponRarity: this.localPlayer.state.weaponRarity,
+        weaponDamage: this.localPlayer.state.weaponDamage ?? 0,
+        weaponAffixes: [...(this.localPlayer.state.weaponAffixes ?? [])],
+        skillCooldown: Math.max(0, this.localPlayer.skillReadyAt - now),
       })
     }
   }

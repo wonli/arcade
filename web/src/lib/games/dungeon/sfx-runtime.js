@@ -70,7 +70,7 @@ export function installDungeonSfx(scene, { windowImpl = globalThis.window } = {}
 
   scene.updatePlayer = function updatePlayerWithSfx(...args) {
     const result = originalUpdatePlayer(...args)
-    sfx.setMoving(scene.playerMoving)
+    sfx.setMoving(scene.localPlayer.moving)
     return result
   }
 
@@ -80,16 +80,16 @@ export function installDungeonSfx(scene, { windowImpl = globalThis.window } = {}
   }
 
   scene.healPlayer = function healPlayerWithSfx(...args) {
-    const before = scene.playerState?.hp ?? 0
+    const before = scene.localPlayer.state?.hp ?? 0
     const result = originalHealPlayer(...args)
-    if ((scene.playerState?.hp ?? 0) > before) sfx.play('heal')
+    if ((scene.localPlayer.state?.hp ?? 0) > before) sfx.play('heal')
     return result
   }
 
   scene.trySkill = function trySkillWithSfx(...args) {
-    const before = scene.skillReadyAt ?? 0
+    const before = scene.localPlayer.skillReadyAt ?? 0
     const result = originalTrySkill(...args)
-    if ((scene.skillReadyAt ?? 0) > before) sfx.play('skill')
+    if ((scene.localPlayer.skillReadyAt ?? 0) > before) sfx.play('skill')
     return result
   }
 

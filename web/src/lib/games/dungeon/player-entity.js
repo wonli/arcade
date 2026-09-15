@@ -25,29 +25,8 @@ export function createPlayerEntity(options) {
 }
 
 
-const SCENE_PLAYER_ALIASES = Object.freeze({
-  playerState: 'state',
-  player: 'actor',
-  playerBar: 'bar',
-  playerFacing: 'facing',
-  playerMoving: 'moving',
-  playerAttacking: 'attacking',
-  lastAttackAt: 'lastAttackAt',
-  skillReadyAt: 'skillReadyAt',
-  lastContactAt: 'lastContactAt',
-  dead: 'dead',
-})
-
 export function attachLocalPlayerEntity(scene, options = {}) {
   const player = createPlayerEntity({ id: 'local', ...options })
   scene.localPlayer = player
-  for (const [sceneKey, playerKey] of Object.entries(SCENE_PLAYER_ALIASES)) {
-    Object.defineProperty(scene, sceneKey, {
-      configurable: true,
-      enumerable: true,
-      get() { return this.localPlayer[playerKey] },
-      set(value) { this.localPlayer[playerKey] = value },
-    })
-  }
   return player
 }

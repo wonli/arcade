@@ -8,10 +8,10 @@ export function roomAnchor(geometry, kind) {
 
 export function placePlayerAtRoomSpawn(scene) {
   const { x, y } = roomAnchor(scene.__roomGeometry, 'spawn')
-  scene.playerState.x = x
-  scene.playerState.y = y
-  scene.player?.setPosition?.(x, y)
-  scene.updateHealthBar?.(scene.playerBar, x, y - 42, scene.playerState.hp, scene.playerState.maxHp)
+  scene.localPlayer.state.x = x
+  scene.localPlayer.state.y = y
+  scene.localPlayer.actor?.setPosition?.(x, y)
+  scene.updateHealthBar?.(scene.localPlayer.bar, x, y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
 }
 
 export function safeEnemySpawn(geometry, desired, radius = 15) {

@@ -192,8 +192,8 @@ export function createComparisonCard(
   }
 
   const syncPosition = () => {
-    if (!container || !scene.playerState) return
-    const position = comparisonCardPosition(scene.playerState, cardSize, {
+    if (!container || !scene.localPlayer.state) return
+    const position = comparisonCardPosition(scene.localPlayer.state, cardSize, {
       width: scene.scale?.width ?? 960,
       height: scene.scale?.height ?? 600,
     })

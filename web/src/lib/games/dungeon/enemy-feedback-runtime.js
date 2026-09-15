@@ -33,7 +33,7 @@ function baseScale(enemy) { return { x: Math.abs(enemy?.visual?.scaleX ?? enemy?
 
 function addChargeWarning(scene, enemy) {
   if (!scene?.add?.rectangle || !enemy) return
-  const profile = bossTelegraphProfile('charge', enemy), dx = (scene.playerState?.x ?? enemy.x) - enemy.x, dy = (scene.playerState?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1, rotation = Math.atan2(dy, dx), x = enemy.x + dx / 2, y = enemy.y + dy / 2
+  const profile = bossTelegraphProfile('charge', enemy), dx = (scene.localPlayer.state?.x ?? enemy.x) - enemy.x, dy = (scene.localPlayer.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1, rotation = Math.atan2(dy, dx), x = enemy.x + dx / 2, y = enemy.y + dy / 2
   const band = scene.add.rectangle(x, y, distance, profile.width, 0xff493f, profile.alpha).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(22)
   const core = scene.add.rectangle(x, y, distance, 2, 0xffd0a8, 0.82).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(23)
   scene.tweens?.add?.({ targets: band, alpha: profile.alpha * 1.7, duration: 210, yoyo: true, onComplete: () => band?.destroy?.() })
@@ -53,7 +53,7 @@ function addShockwaveWarning(scene, enemy) {
 
 function chargePose(scene, enemy) {
   if (!enemy?.visual) return
-  const profile = bossActionProfile('charge', enemy), scale = baseScale(enemy), dx = (scene.playerState?.x ?? enemy.x) - enemy.x, dy = (scene.playerState?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1
+  const profile = bossActionProfile('charge', enemy), scale = baseScale(enemy), dx = (scene.localPlayer.state?.x ?? enemy.x) - enemy.x, dy = (scene.localPlayer.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1
   scene.tweens?.add?.({ targets: enemy.visual, x: enemy.x - (dx / distance) * profile.recoilPx, y: enemy.y - (dy / distance) * profile.recoilPx, scaleX: scale.x * profile.gatherScaleX, scaleY: scale.y * profile.gatherScaleY, duration: profile.windupMs, ease: 'Quad.Out' })
   scene.time?.delayedCall?.(profile.windupMs, () => { if (enemy.hp <= 0 || enemy.visual?.active === false) return; enemy.visual.setPosition?.(enemy.x, enemy.y); scene.tweens?.add?.({ targets: enemy.visual, scaleX: scale.x * profile.releaseScaleX, scaleY: scale.y * profile.releaseScaleY, duration: profile.releaseMs, yoyo: true, onComplete: () => enemy.visual?.setScale?.(scale.x, scale.y) }) })
 }

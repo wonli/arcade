@@ -66,7 +66,7 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   const spawnAroundPlayer = (count = 4, radius = 110, options = {}) => {
     const total = Math.max(1, Math.min(24, Math.floor(Number(count) || 1)))
-    const center = scene.playerState ?? { x: 0, y: 0 }
+    const center = scene.localPlayer.state ?? { x: 0, y: 0 }
     const created = []
     for (let index = 0; index < total; index++) {
       const angle = (Math.PI * 2 * index) / total
@@ -93,15 +93,15 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   const equipWeapon = (item) => {
     if (!item?.type) return null
-    const baseStats = scene.playerState?.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
-    scene.playerState = {
-      ...applyPickup(scene.playerState ?? {}, item, baseStats),
+    const baseStats = scene.localPlayer.state?.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+    scene.localPlayer.state = {
+      ...applyPickup(scene.localPlayer.state ?? {}, item, baseStats),
       baseStats: { ...baseStats },
     }
     scene.__dungeonWeaponVisuals?.sync?.()
     scene.__dungeonWeaponVfx?.sync?.()
     scene.emitStats?.()
-    return scene.playerState.equippedWeapon
+    return scene.localPlayer.state.equippedWeapon
   }
 
   const restore = () => {

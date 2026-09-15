@@ -47,7 +47,7 @@ export function installDungeonWorldVfx(scene) {
   let lastPortal = null
   let restActive = false
   let lastFloorCleared = Boolean(scene.floorCleared)
-  let lastEquipment = equipmentSignature(scene.playerState)
+  let lastEquipment = equipmentSignature(scene.localPlayer.state)
   const presentedEnemies = new WeakSet()
 
   const stopRestFlame = () => {
@@ -99,10 +99,10 @@ export function installDungeonWorldVfx(scene) {
     if (isRest && !restActive) startRestFlame()
     else if (!isRest && restActive) stopRestFlame()
 
-    const nextEquipment = equipmentSignature(scene.playerState)
+    const nextEquipment = equipmentSignature(scene.localPlayer.state)
     if (lastEquipment && nextEquipment && nextEquipment !== lastEquipment) {
-      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
-        tint: RARITY_TINT[scene.playerState?.weaponRarity] ?? null,
+      scene.__dungeonVfx?.aura?.(scene.localPlayer.state?.x ?? 480, scene.localPlayer.state?.y ?? 300, {
+        tint: RARITY_TINT[scene.localPlayer.state?.weaponRarity] ?? null,
         seed: `equip:${nextEquipment}`,
       })
     }
@@ -110,7 +110,7 @@ export function installDungeonWorldVfx(scene) {
 
     const cleared = Boolean(scene.floorCleared)
     if (cleared && !lastFloorCleared) {
-      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
+      scene.__dungeonVfx?.aura?.(scene.localPlayer.state?.x ?? 480, scene.localPlayer.state?.y ?? 300, {
         width: 96,
         height: 96,
         alpha: 0.9,

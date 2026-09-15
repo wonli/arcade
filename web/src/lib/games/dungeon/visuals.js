@@ -19,12 +19,12 @@ export function installAffixVisuals(scene) {
   const originalHealPlayer = scene.healPlayer?.bind(scene)
   if (originalHealPlayer) {
     scene.healPlayer = (amount) => {
-      const before = scene.playerState?.hp ?? 0
+      const before = scene.localPlayer.state?.hp ?? 0
       originalHealPlayer(amount)
-      const healed = Math.max(0, (scene.playerState?.hp ?? 0) - before)
+      const healed = Math.max(0, (scene.localPlayer.state?.hp ?? 0) - before)
       if (healed > 0) {
         const cue = combatVisualCue('heal')
-        floatingText(scene, scene.playerState.x, scene.playerState.y - 44, `+${healed} HP`, cue.color, cue.duration, 13)
+        floatingText(scene, scene.localPlayer.state.x, scene.localPlayer.state.y - 44, `+${healed} HP`, cue.color, cue.duration, 13)
       }
     }
   }

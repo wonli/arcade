@@ -60,7 +60,7 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
       const burst = enemy.phase === 2 ? 5 : 3
       for (let i = 0; i < burst; i++) {
         scene.time?.delayedCall?.(i * 95, () => {
-          if (enemy.hp <= 0 || scene.dead) return
+          if (enemy.hp <= 0 || scene.localPlayer.dead) return
           if ((scene.enemyProjectiles?.length ?? 0) >= 20) return
           originalProjectile?.(enemy)
         })
@@ -79,22 +79,22 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
         scene.clearEnemyProjectiles?.()
         scene.floorCleared = true
         scene.spawnDrop?.(
-          (scene.playerState?.x ?? 480) + 42,
-          scene.playerState?.y ?? 300,
+          (scene.localPlayer.state?.x ?? 480) + 42,
+          scene.localPlayer.state?.y ?? 300,
           bossReward(random, scene.floor ?? 1),
         )
         scene.showBanner?.('TREASURE ROOM', '#ffd56a', 30)
         scene.time?.delayedCall?.(350, () => scene.openPortal?.())
       } else if (role === 'antechamber') {
-        const maxHp = scene.playerState?.maxHp ?? 0
+        const maxHp = scene.localPlayer.state?.maxHp ?? 0
         const heal = Math.round(maxHp * 0.12)
         if (heal > 0) {
-          scene.playerState.hp = Math.min(maxHp, (scene.playerState.hp ?? 0) + heal)
+          scene.localPlayer.state.hp = Math.min(maxHp, (scene.localPlayer.state.hp ?? 0) + heal)
           scene.updateHealthBar?.(
-            scene.playerBar,
-            scene.playerState.x,
-            scene.playerState.y - 42,
-            scene.playerState.hp,
+            scene.localPlayer.bar,
+            scene.localPlayer.state.x,
+            scene.localPlayer.state.y - 42,
+            scene.localPlayer.state.hp,
             maxHp,
           )
           scene.emitStats?.()

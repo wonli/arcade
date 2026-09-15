@@ -13,8 +13,8 @@ function resetInputState(scene, state) {
   state.x = 0
   state.y = 0
   state.skillPending = false
-  scene.playerMoving = false
-  scene.playerAttacking = false
+  scene.localPlayer.moving = false
+  scene.localPlayer.attacking = false
 }
 
 export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
@@ -24,7 +24,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
   resetInputState(scene, state)
 
   const ensureAudio = () => {
-    if (scene.dead || scene.runComplete) return
+    if (scene.localPlayer.dead || scene.runComplete) return
     scene.ambient?.start?.().catch?.(() => {})
     scene.sound?.context?.resume?.().catch?.(() => {})
   }

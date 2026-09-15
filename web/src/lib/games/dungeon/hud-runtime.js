@@ -153,7 +153,7 @@ export function installDungeonHud(scene, {
   const update = () => {
     const stats = getStats()
     const model = dungeonHudModel({
-      stats: { ...stats, equippedWeapon: scene.playerState?.equippedWeapon ?? stats.equippedWeapon },
+      stats: { ...stats, equippedWeapon: scene.localPlayer.state?.equippedWeapon ?? stats.equippedWeapon },
       progress: getProgress(),
       labels: getLabels(),
     })

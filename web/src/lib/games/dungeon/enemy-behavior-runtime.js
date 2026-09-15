@@ -3,8 +3,8 @@ import { installDungeonGameplayPass } from './gameplay-pass-runtime.js'
 
 function distanceToPlayer(scene, enemy) {
   return Math.hypot(
-    (scene.playerState?.x ?? 0) - enemy.x,
-    (scene.playerState?.y ?? 0) - enemy.y,
+    (scene.localPlayer.state?.x ?? 0) - enemy.x,
+    (scene.localPlayer.state?.y ?? 0) - enemy.y,
   )
 }
 
@@ -46,8 +46,8 @@ export function installDungeonEnemyBehaviors(scene) {
   const update = (enemy, time, dt) => {
     if (!enemy || enemy.hp <= 0) return
 
-    const dx = (scene.playerState?.x ?? 0) - enemy.x
-    const dy = (scene.playerState?.y ?? 0) - enemy.y
+    const dx = (scene.localPlayer.state?.x ?? 0) - enemy.x
+    const dy = (scene.localPlayer.state?.y ?? 0) - enemy.y
     const distance = Math.hypot(dx, dy) || 1
 
     if ((enemy.archetype === 'fast' || enemy.archetype === 'brute') && enemy.nextSpecialAt == null) {
@@ -111,7 +111,7 @@ export function installDungeonEnemyBehaviors(scene) {
       }
 
       scene.time?.delayedCall?.(step.durationMs, () => {
-        if (enemy.hp <= 0 || scene.dead) return
+        if (enemy.hp <= 0 || scene.localPlayer.dead) return
         if (distanceToPlayer(scene, enemy) <= step.radius) {
           scene.hitPlayer?.(enemy.contactDamage + 4)
         }

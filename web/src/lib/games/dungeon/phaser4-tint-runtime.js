@@ -15,7 +15,7 @@ export function installPhaser4FillTintCompat(scene, Phaser = globalThis.Phaser) 
     return visual
   }
 
-  patch(scene.player)
+  patch(scene.localPlayer.actor)
   for (const enemy of scene.enemies ?? []) patch(enemy?.visual)
 
   const originalMakeActor = scene.makeActor

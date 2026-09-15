@@ -2,10 +2,10 @@ import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
 function equippedItem(scene) {
   if (!scene?.playerState?.weapon) return null
-  return scene.playerState.equippedWeapon ?? {
-    type: scene.playerState.weapon,
-    rarity: scene.playerState.weaponRarity ?? 'common',
-    vfxTheme: scene.playerState.weaponVfxTheme,
+  return scene.localPlayer.state.equippedWeapon ?? {
+    type: scene.localPlayer.state.weapon,
+    rarity: scene.localPlayer.state.weaponRarity ?? 'common',
+    vfxTheme: scene.localPlayer.state.weaponVfxTheme,
   }
 }
 

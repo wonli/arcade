@@ -515,14 +515,14 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
 
   scene.drawArena = function drawSpatialArena() { refreshRoom() }
   scene.updatePlayer = function updateSpatialPlayer(dt) {
-    const before = { x: scene.playerState.x, y: scene.playerState.y }
-    if ((scene.__hitStopUntil ?? 0) > scene.time.now) { scene.playerMoving = false; if (!scene.playerAttacking) scene.syncPlayerAnimation?.(); return }
+    const before = { x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }
+    if ((scene.__hitStopUntil ?? 0) > scene.time.now) { scene.localPlayer.moving = false; if (!scene.localPlayer.attacking) scene.syncPlayerAnimation?.(); return }
     originalUpdatePlayer(dt)
-    const desired = { x: scene.playerState.x, y: scene.playerState.y }
+    const desired = { x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }
     const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
-    scene.playerState.x = next.x; scene.playerState.y = next.y
-    scene.player?.setPosition?.(next.x, next.y)
-    scene.updateHealthBar?.(scene.playerBar, next.x, next.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+    scene.localPlayer.state.x = next.x; scene.localPlayer.state.y = next.y
+    scene.localPlayer.actor?.setPosition?.(next.x, next.y)
+    scene.updateHealthBar?.(scene.localPlayer.bar, next.x, next.y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
     const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
     if (trap && scene.time.now >= trapCooldownUntil) {
       trapCooldownUntil = scene.time.now + 850
@@ -553,18 +553,18 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   scene.moveEnemyTowardPlayer = function moveSpatialEnemy(enemy, time, dt) {
-    navigateEnemy(enemy, scene.playerState, time, dt)
-    const dx = scene.playerState.x - enemy.x
-    scene.syncEnemyVisual(enemy, time, dx, Math.hypot(dx, scene.playerState.y - enemy.y) || 1)
+    navigateEnemy(enemy, scene.localPlayer.state, time, dt)
+    const dx = scene.localPlayer.state.x - enemy.x
+    scene.syncEnemyVisual(enemy, time, dx, Math.hypot(dx, scene.localPlayer.state.y - enemy.y) || 1)
   }
 
   scene.updateRangedEnemy = function updateSpatialRanged(enemy, time, dt) {
     if ((scene.__hitStopUntil ?? 0) > time) return
-    const dx = scene.playerState.x - enemy.x, dy = scene.playerState.y - enemy.y, distance = Math.hypot(dx, dy) || 1
+    const dx = scene.localPlayer.state.x - enemy.x, dy = scene.localPlayer.state.y - enemy.y, distance = Math.hypot(dx, dy) || 1
     const preferred = enemy.preferredRange || 180
     const collisionGeometry = collisionGeometryForEnemy(enemy, scene.__roomGeometry)
-    const los = clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3)
-    if (distance > enemy.attackRange || los.blocked) navigateEnemy(enemy, scene.playerState, time, dt)
+    const los = clipSegmentToSolids(enemy, scene.localPlayer.state, collisionGeometry, 3)
+    if (distance > enemy.attackRange || los.blocked) navigateEnemy(enemy, scene.localPlayer.state, time, dt)
     else if (distance < preferred - 34) {
       const next = movementWithCollision(enemy, { x: -(dx / distance) * enemy.speed * 0.72 * dt, y: -(dy / distance) * enemy.speed * 0.72 * dt }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
       enemy.x = next.x; enemy.y = next.y
@@ -573,9 +573,9 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
       const next = movementWithCollision(enemy, { x: (-dy / distance) * strafe, y: (dx / distance) * strafe }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
       enemy.x = next.x; enemy.y = next.y
     }
-    const nextDx = scene.playerState.x - enemy.x, nextDy = scene.playerState.y - enemy.y, nextDistance = Math.hypot(nextDx, nextDy) || 1
+    const nextDx = scene.localPlayer.state.x - enemy.x, nextDy = scene.localPlayer.state.y - enemy.y, nextDistance = Math.hypot(nextDx, nextDy) || 1
     scene.syncEnemyVisual(enemy, time, nextDx, nextDistance)
-    if (!clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3).blocked && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
+    if (!clipSegmentToSolids(enemy, scene.localPlayer.state, collisionGeometry, 3).blocked && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
       enemy.nextProjectileAt = time + enemy.projectileCooldown
       scene.fireEnemyProjectile(enemy)
     }
@@ -590,7 +590,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
       projectile.life -= dt
       const wallHit = circleHitsSolid(next, 5, projectileGeometry)
       if (!wallHit) { projectile.x = next.x; projectile.y = next.y; projectile.visual?.setPosition(projectile.x, projectile.y); projectile.glow?.setPosition(projectile.x, projectile.y) }
-      const playerHit = !wallHit && Math.hypot(projectile.x - scene.playerState.x, projectile.y - scene.playerState.y) <= 20
+      const playerHit = !wallHit && Math.hypot(projectile.x - scene.localPlayer.state.x, projectile.y - scene.localPlayer.state.y) <= 20
       const expired = projectile.life <= 0
       if (!wallHit && !playerHit && !expired) continue
       if (playerHit) scene.hitPlayer(projectile.damage)
@@ -611,13 +611,13 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   const updateInteraction = () => {
-    const nearest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
+    const nearest = nearestInteractable(scene.localPlayer.state, chests, CHEST_RANGE)
     for (const chest of chests) { if (chest === nearest) showChestPrompt(scene, chest, label); else hideChestPrompt(chest) }
   }
   scene.events.on('update', updateInteraction)
 
   const openNearestChest = () => {
-    const chest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
+    const chest = nearestInteractable(scene.localPlayer.state, chests, CHEST_RANGE)
     if (!chest || chest.opened) return
     openChestVisual(scene, chest); hideChestPrompt(chest)
     const progress = getProgress() ?? {}

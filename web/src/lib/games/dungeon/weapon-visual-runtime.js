@@ -181,9 +181,9 @@ export function setWeaponVisualSelected(scene, visual, item, selected) {
 
 function equippedItem(scene) {
   if (!scene?.playerState?.weapon) return null
-  return scene.playerState.equippedWeapon ?? {
-    type: scene.playerState.weapon,
-    rarity: scene.playerState.weaponRarity ?? 'common',
+  return scene.localPlayer.state.equippedWeapon ?? {
+    type: scene.localPlayer.state.weapon,
+    rarity: scene.localPlayer.state.weaponRarity ?? 'common',
   }
 }
 
@@ -201,7 +201,7 @@ export function installDungeonWeaponVisuals(scene) {
   let ready = false
 
   const presentationNow = (item = equippedItem(scene), attacking = (scene.time?.now ?? 0) < attackUntil) =>
-    resolveWeaponPresentation(presentationConfig(scene), item ?? {}, scene.playerFacing, { attacking })
+    resolveWeaponPresentation(presentationConfig(scene), item ?? {}, scene.localPlayer.facing, { attacking })
 
   const ensureVisual = () => {
     const item = equippedItem(scene)
@@ -213,7 +213,7 @@ export function installDungeonWeaponVisuals(scene) {
     const nextKey = `${profile.archetype}:${profile.textureKey}`
     if (!visual || currentKey !== nextKey) {
       visual?.destroy?.()
-      visual = createWeaponVisual(scene, item, scene.playerState.x, scene.playerState.y, { presentationConfig: presentationConfig(scene) })
+      visual = createWeaponVisual(scene, item, scene.localPlayer.state.x, scene.localPlayer.state.y, { presentationConfig: presentationConfig(scene) })
       currentKey = nextKey
     }
     visual?.setVisible?.(true)
@@ -223,7 +223,7 @@ export function installDungeonWeaponVisuals(scene) {
   const poseNow = () => {
     const item = equippedItem(scene)
     const profile = weaponProfile(item)
-    return weaponPose(scene.playerState, scene.playerFacing, {
+    return weaponPose(scene.localPlayer.state, scene.localPlayer.facing, {
       attacking: (scene.time?.now ?? 0) < attackUntil,
       reachScale: profile.reachScale,
       presentationConfig: presentationConfig(scene),
