@@ -1,4 +1,5 @@
 import { applyPickup } from './combat.js'
+import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
 import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
@@ -48,12 +49,6 @@ function serializeEnemyState(enemy) {
   return result
 }
 
-function enemyBarShape(enemy) {
-  if (enemy?.boss) return { width: 150, height: 11, color: 0xffc857 }
-  if (enemy?.archetype === 'brute') return { width: 46, height: 7, color: 0xff5964 }
-  return { width: 36, height: 5, color: 0xff5964 }
-}
-
 export function createDungeonWorldRuntime(scene, {
   runSeed,
   isHost = false,
@@ -64,6 +59,7 @@ export function createDungeonWorldRuntime(scene, {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
 
   const seed = normalizeRunSeed(runSeed)
+  const enemyPresentation = installEnemyPresentationRuntime(scene)
   const originals = {
     spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
     damageEnemy: typeof scene.damageEnemy === 'function' ? scene.damageEnemy.bind(scene) : null,
@@ -210,8 +206,7 @@ export function createDungeonWorldRuntime(scene, {
     if (Number.isFinite(Number(fact.x))) enemy.x = Number(fact.x)
     if (Number.isFinite(Number(fact.y))) enemy.y = Number(fact.y)
     enemy.hitUntil = (scene.time?.now ?? 0) + 90
-    enemy.visual?.setPosition?.(enemy.x, enemy.y)
-    scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - (enemy.barOffset ?? 28), enemy.hp, enemy.maxHp)
+    enemyPresentation?.sync(enemy)
     if (Number(fact.damage) > 0) scene.damageText?.(enemy.x, enemy.y - 16, Number(fact.damage), Boolean(fact.critical))
     return enemy
   }
@@ -222,16 +217,10 @@ export function createDungeonWorldRuntime(scene, {
     enemy.hp = 0
     if (Number.isFinite(Number(fact.x))) enemy.x = Number(fact.x)
     if (Number.isFinite(Number(fact.y))) enemy.y = Number(fact.y)
-    enemy.visual?.setPosition?.(enemy.x, enemy.y)
-    enemy.visual?.setVisible?.(false)
-    scene.destroyHealthBar?.(enemy.healthBar)
-    enemy.healthBar = null
     scene.deathBurst?.(enemy.x, enemy.y, fact.color)
     if (Number.isFinite(Number(fact.kills))) scene.kills = Number(fact.kills)
     if (Number.isFinite(Number(fact.floorKills))) scene.floorKills = Number(fact.floorKills)
-    const index = (scene.enemies ?? []).indexOf(enemy)
-    if (index >= 0) scene.enemies.splice(index, 1)
-    enemy.visual?.destroy?.()
+    enemyPresentation?.removeById(enemy.id)
     return enemy
   }
 
@@ -290,25 +279,6 @@ export function createDungeonWorldRuntime(scene, {
     return scene.floor
   }
 
-  const rebuildEnemyPresentation = (enemy, snapshot, previous) => {
-    const changed = previous.archetype !== enemy.archetype || previous.boss !== enemy.boss || previous.elite !== enemy.elite
-    if (!changed || typeof scene.makeActor !== 'function') return
-
-    enemy.visual?.destroy?.()
-    const visual = scene.makeActor(enemy.x, enemy.y, 'enemy', enemy.archetype)
-    if (visual) {
-      visual.setDepth?.(enemy.elite ? 12 : 10)
-      const scale = Number(enemy.scale) || 1
-      visual.setScale?.((visual.scaleX ?? 1) * scale, (visual.scaleY ?? 1) * scale)
-      if (enemy.tint != null) visual.setTint?.(enemy.tint)
-      enemy.visual = visual
-    }
-
-    scene.destroyHealthBar?.(enemy.healthBar)
-    const bar = enemyBarShape(enemy)
-    enemy.healthBar = scene.createHealthBar?.(enemy.x, enemy.y - (enemy.barOffset ?? 28), bar.width, bar.height, bar.color) ?? null
-  }
-
   const applyEnemyState = (snapshot, index) => {
     const id = String(snapshot?.id ?? stableWorldEntityId(seed, scene.floor, 'enemy', index))
     let enemy = findEnemy(scene, id)
@@ -320,9 +290,7 @@ export function createDungeonWorldRuntime(scene, {
     for (const field of ENEMY_STATE_FIELDS) {
       if (snapshot?.[field] !== undefined) enemy[field] = snapshot[field]
     }
-    rebuildEnemyPresentation(enemy, snapshot, previous)
-    enemy.visual?.setPosition?.(enemy.x, enemy.y)
-    scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - (enemy.barOffset ?? 28), enemy.hp, enemy.maxHp)
+    enemyPresentation?.reconcile(enemy, previous)
     return enemy
   }
 
@@ -346,8 +314,7 @@ export function createDungeonWorldRuntime(scene, {
     }
     for (const enemy of previousEnemies) {
       if (synchronizedEnemies.includes(enemy)) continue
-      scene.destroyHealthBar?.(enemy?.healthBar)
-      enemy?.visual?.destroy?.()
+      enemyPresentation?.destroy(enemy)
     }
     scene.enemies = synchronizedEnemies
 
