@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { createPlayerEntity } from './player-entity.js'
 import { installDungeonPlayerFacing, playerFlipX } from './player-facing-runtime.js'
 
 test('RPG side sprite faces the same horizontal direction as movement', () => {
@@ -10,19 +11,23 @@ test('RPG side sprite faces the same horizontal direction as movement', () => {
   assert.equal(playerFlipX('down'), false)
 })
 
-test('player facing runtime corrects the side sprite after scene animation sync', () => {
+test('player facing runtime uses the provided PlayerEntity after scene animation sync', () => {
   const flips = []
+  const player = createPlayerEntity({
+    id: 'local',
+    state: {},
+    facing: 'right',
+    actor: { setFlipX(value) { flips.push(value) } },
+  })
   const scene = {
-    playerFacing: 'right',
-    player: { setFlipX(value) { flips.push(value) } },
-    syncPlayerAnimation() { this.player.setFlipX(this.playerFacing === 'left') },
+    syncPlayerAnimation() { player.actor.setFlipX(player.facing === 'left') },
     events: { once() {} },
   }
 
-  installDungeonPlayerFacing(scene)
+  installDungeonPlayerFacing(scene, { player })
   assert.deepEqual(flips, [false, true])
 
-  scene.playerFacing = 'left'
+  player.facing = 'left'
   scene.syncPlayerAnimation()
   assert.deepEqual(flips.slice(-2), [true, false])
 })
