@@ -2,11 +2,12 @@ import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installPickupInteraction, prepareDropItem, resolveDropPosition, weaponDamageForFloor } from './pickup-runtime.js'
+import { currentWeapon } from './player-loadout.js'
 import { hasRoute } from './pathfinding.js'
 
 const sequence = (values) => { let i = 0; return () => values[i++ % values.length] }
 
-function runtimeScene(playerState = { x: 0, y: 0, hp: 100, maxHp: 100, healthPotions: 0 }) {
+function runtimeScene(playerState = { x: 0, y: 0, hp: 100, maxHp: 100, healthPotions: 0, equipment: { weapon: null }, modifiers: {} }) {
   const listeners = new Map()
   return {
     floor: 6,
@@ -93,7 +94,7 @@ test('collision-safe loot on a disconnected island is relocated to the player re
 })
 
 test('auto potion consumes one stored potion at thirty percent health', () => {
-  const scene = runtimeScene({ x: 0, y: 0, hp: 30, maxHp: 100, healthPotions: 2 })
+  const scene = runtimeScene({ x: 0, y: 0, hp: 30, maxHp: 100, healthPotions: 2, equipment: { weapon: null }, modifiers: {} })
   const runtime = installPickupInteraction(attachLegacyTestPlayer(scene))
   assert.equal(runtime.autoUseHealthPotion(), true)
   assert.equal(scene.localPlayer.state.hp, 60)
@@ -139,7 +140,7 @@ test('equipping a selected named weapon never changes texture after its visual i
   const candidate = { type: 'weapon.iron_fang', archetype: 'dagger', rarity: 'rare', damage: 40, affixes: [] }
   const scene = {
     floor: 6,
-    playerState: { x: 0, y: 0, hp: 100, maxHp: 100, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 } },
+    playerState: { x: 0, y: 0, hp: 100, maxHp: 100, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }, equipment: { weapon: null }, modifiers: {} },
     drops: [],
     time: { now: 0 },
     input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
@@ -163,11 +164,8 @@ test('equipping a selected named weapon never changes texture after its visual i
     updateDrops() {
       const drop = this.drops[0]
       if (!drop) return
-      this.localPlayer.state.weapon = drop.item.type
-      this.localPlayer.state.weaponRarity = drop.item.rarity
-      this.localPlayer.state.weaponDamage = drop.item.damage
-      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
-      this.localPlayer.state.equippedWeapon = drop.item
+      this.localPlayer.state.equipment = { weapon: drop.item }
+      this.localPlayer.state.modifiers ??= {}
       this.destroyDrop(drop)
       this.drops.splice(0, 1)
     },
@@ -177,7 +175,7 @@ test('equipping a selected named weapon never changes texture after its visual i
   scene.spawnDrop(0, 0, candidate)
   scene.updateDrops()
   assert.doesNotThrow(() => onDown())
-  assert.equal(scene.localPlayer.state.weapon, candidate.type)
+  assert.equal(currentWeapon(scene.localPlayer.state).type, candidate.type)
 })
 
 test('equipping with E leaves the previous weapon on the ground', () => {
@@ -186,7 +184,7 @@ test('equipping with E leaves the previous weapon on the ground', () => {
   const candidate = { type: 'weapon.dungeon_blade', rarity: 'epic', damage: 40, affixes: [] }
   const scene = {
     floor: 6,
-    playerState: { x: 0, y: 0, weapon: oldWeapon.type, weaponRarity: oldWeapon.rarity, weaponDamage: oldWeapon.damage, weaponAffixes: oldWeapon.affixes, equippedWeapon: oldWeapon },
+    playerState: { x: 0, y: 0, equipment: { weapon: oldWeapon }, modifiers: {} },
     drops: [], time: { now: 0 },
     input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
     events: { once() {}, on() {}, off() {} }, emitStats() {},
@@ -194,11 +192,8 @@ test('equipping with E leaves the previous weapon on the ground', () => {
     updateDrops() {
       const drop = this.drops[0]
       if (!drop) return
-      this.localPlayer.state.weapon = drop.item.type
-      this.localPlayer.state.weaponRarity = drop.item.rarity
-      this.localPlayer.state.weaponDamage = drop.item.damage
-      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
-      this.localPlayer.state.equippedWeapon = drop.item
+      this.localPlayer.state.equipment = { weapon: drop.item }
+      this.localPlayer.state.modifiers ??= {}
       this.drops.splice(0, 1)
     },
     clearDrops() { this.drops = [] },
@@ -207,7 +202,7 @@ test('equipping with E leaves the previous weapon on the ground', () => {
   scene.spawnDrop(0, 0, candidate)
   scene.updateDrops()
   onDown()
-  assert.equal(scene.localPlayer.state.weaponRarity, 'epic')
+  assert.equal(currentWeapon(scene.localPlayer.state).rarity, 'epic')
   assert.equal(scene.drops.length, 1)
   assert.equal(scene.drops[0].item.rarity, 'rare')
   assert.equal(scene.drops[0].item.damage, 22)
