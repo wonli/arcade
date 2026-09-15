@@ -2,6 +2,8 @@ name: Dungeon Co-op V3 Debug
 on:
   push:
     branches: [feat/dungeon-coop-v3]
+permissions:
+  contents: write
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -12,6 +14,36 @@ jobs:
           node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Apply minimal enemy fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('web/src/lib/games/dungeon/coop-runtime.js')
+          text = path.read_text()
+          replacements = [
+              (
+                  "const world = installDeterministicCoopWorld(scene, { runSeed: seed })",
+                  "const world = installDeterministicCoopWorld(scene, { runSeed: seed, role })",
+              ),
+              (
+                  """        archetype: enemy.archetype,\n        patch: enemySpawnPatch(enemy),""",
+                  """        archetype: enemy.archetype,\n        x: enemy.x,\n        y: enemy.y,\n        patch: enemySpawnPatch(enemy),""",
+              ),
+              (
+                  """          enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, { elite: Boolean(event.spawnElite) })\n          if (!enemy) return false\n          enemy.id = event.enemyId || enemy.id\n        }\n        applyEnemySpawnPatch(scene, enemy, event.patch)""",
+                  """          enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, {\n            elite: Boolean(event.spawnElite),\n            archetypeType: event.archetype,\n          })\n          if (!enemy) return false\n          enemy.id = event.enemyId || enemy.id\n        }\n        if (Number.isFinite(Number(event.x))) enemy.x = Number(event.x)\n        if (Number.isFinite(Number(event.y))) enemy.y = Number(event.y)\n        applyEnemySpawnPatch(scene, enemy, event.patch)""",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f'expected coop-runtime fragment not found: {old[:80]}')
+
+          path.write_text(text)
+          PY
       - name: Run coop enemy regressions
         working-directory: web
         run: |
@@ -19,3 +51,14 @@ jobs:
           node --test \
             src/lib/games/dungeon/coop-world.test.js \
             src/lib/games/dungeon/coop-runtime.test.js
+      - name: Commit verified fix
+        run: |
+          if git diff --quiet -- web/src/lib/games/dungeon/coop-runtime.js; then
+            echo "No runtime patch to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/src/lib/games/dungeon/coop-runtime.js
+          git commit -m "fix(dungeon): preserve host enemy runtime"
+          git push origin HEAD:feat/dungeon-coop-v3
