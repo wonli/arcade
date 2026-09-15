@@ -1,6 +1,3 @@
-import { generateDungeonGeometry } from './map-generator.js'
-import { placePlayerAtRoomSpawn } from './room-anchors.js'
-import { rngFor } from './deterministic-rng.js'
 import {
   acceptEventSequence,
   acceptSyncTick,
@@ -10,9 +7,15 @@ import {
 } from './coop-protocol.js'
 import { interpolateRemoteState, reconcilePredictedPlayer } from './coop-state.js'
 import { applyChestOpened, openChestForPlayer } from './coop-chest-runtime.js'
+import {
+  applyEnemySpawnPatch,
+  enemySpawnPatch,
+  installDeterministicCoopWorld,
+} from './coop-world.js'
 
 const INPUT_INTERVAL_MS = 50
 const SYNC_INTERVAL_MS = 125
+const PICKUP_RADIUS = 46
 
 function clone(value) {
   if (value == null) return value
@@ -48,51 +51,6 @@ export function nextGuestInput(input = {}, sequence = 0, pending = {}) {
     skill: Boolean(normalized.skill || pending.skill),
     interact: Boolean(normalized.interact || pending.interact),
   })
-}
-
-function withRandom(random, callback) {
-  const previous = Math.random
-  Math.random = random
-  try { return callback() } finally { Math.random = previous }
-}
-
-function deterministicEnemyId(floor, index, elite = false) {
-  return `enemy:${Math.max(1, Number(floor) || 1)}:${Math.max(0, Number(index) || 0)}:${elite ? 'elite' : 'normal'}`
-}
-
-function enemySpawnPatch(enemy) {
-  return {
-    hp: enemy.hp,
-    maxHp: enemy.maxHp,
-    speed: enemy.speed,
-    contactDamage: enemy.contactDamage,
-    projectileDamage: enemy.projectileDamage,
-    projectileCooldown: enemy.projectileCooldown,
-    projectileSpeed: enemy.projectileSpeed,
-    attackRange: enemy.attackRange,
-    preferredRange: enemy.preferredRange,
-    scale: enemy.scale,
-    tint: enemy.tint,
-    barOffset: enemy.barOffset,
-    phase: enemy.phase,
-    boss: Boolean(enemy.boss),
-    elite: Boolean(enemy.elite),
-    archetype: enemy.archetype,
-  }
-}
-
-function applyEnemySpawnPatch(scene, enemy, patch = {}) {
-  if (!enemy) return null
-  const previousScale = Number(enemy.scale) || 1
-  Object.assign(enemy, clone(patch))
-  const nextScale = Number(enemy.scale) || previousScale
-  if (enemy.visual && nextScale !== previousScale && previousScale > 0) {
-    const ratio = nextScale / previousScale
-    enemy.visual.setScale?.((enemy.visual.scaleX ?? 1) * ratio, (enemy.visual.scaleY ?? 1) * ratio)
-  }
-  if (enemy.tint != null) enemy.visual?.setTint?.(enemy.tint)
-  scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - (enemy.barOffset ?? 28), enemy.hp, enemy.maxHp)
-  return enemy
 }
 
 function playerPatch(player) {
@@ -150,6 +108,7 @@ function removeEnemy(scene, enemy) {
   if (!enemy) return
   const index = (scene.enemies ?? []).indexOf(enemy)
   if (index >= 0) scene.enemies.splice(index, 1)
+  enemy.eliteAura?.destroy?.()
   enemy.visual?.destroy?.()
   scene.destroyHealthBar?.(enemy.healthBar)
 }
@@ -163,14 +122,60 @@ function removeDrop(scene, drop) {
 function openReplicaPortal(scene, event) {
   if (scene.portal) return scene.portal
   const actualFloor = scene.floor
-  // The base solo portal has a five-floor guard; Endless co-op is allowed to
-  // reuse its normal presentation beyond floor five while Host owns progression.
-  if (actualFloor >= 5) scene.floor = 1
+  if (actualFloor >= 5 && !scene.__infiniteDungeon) scene.floor = 1
   scene.openPortal?.()
   scene.floor = actualFloor
   if (!scene.portal) return null
   scene.portal.unlockAt = Number(event.unlockAt) || scene.portal.unlockAt || 0
   return scene.portal
+}
+
+function nearestPickupPlayer(playerRuntime, drop) {
+  if (!drop) return null
+  let best = null
+  let distance = PICKUP_RADIUS
+  for (const player of playerRuntime.activePlayers?.() ?? []) {
+    if (!player?.state || player.dead) continue
+    const next = Math.hypot((drop.x ?? 0) - player.state.x, (drop.y ?? 0) - player.state.y)
+    if (next > distance) continue
+    best = player
+    distance = next
+  }
+  return best
+}
+
+function presentPlayerAttack(scene, playerRuntime, event) {
+  const player = playerRuntime.playerById?.(event.playerId)
+  if (!player) return false
+  const target = (scene.enemies ?? []).find((enemy) => enemy?.id === event.enemyId) ?? null
+  player.attacking = true
+  playerRuntime.syncAnimation?.(player, 'attack')
+  if (target) scene.__dungeonVfx?.slash?.(player.state, target, false)
+  scene.time?.delayedCall?.(180, () => {
+    if (!player) return
+    player.attacking = false
+    playerRuntime.syncAnimation?.(player)
+  })
+  return true
+}
+
+function presentEnemyHit(scene, playerRuntime, event) {
+  const enemy = (scene.enemies ?? []).find((entry) => entry?.id === event.enemyId)
+  if (!enemy) return false
+  const x = Number.isFinite(Number(event.x)) ? Number(event.x) : enemy.x
+  const y = Number.isFinite(Number(event.y)) ? Number(event.y) : enemy.y
+  const damage = Math.max(0, Number(event.damage) || 0)
+  const critical = Boolean(event.critical)
+  const killed = Boolean(event.killed)
+  const player = playerRuntime.playerById?.(event.playerId)
+
+  scene.damageText?.(x, y - 16, damage, critical)
+  scene.__dungeonVfx?.impact?.(x, y, { seed: `${event.id}:impact` })
+  if (critical) scene.__dungeonVfx?.critical?.(x, y, { seed: `${event.id}:critical` })
+  if (killed) scene.__dungeonEnemyFeedback?.death?.(enemy, { critical, damage, source: event.reason })
+  else scene.__dungeonEnemyFeedback?.hit?.(enemy, player?.state ?? scene.playerState, { critical, damage, source: event.reason })
+  if (damage > 0) scene.__dungeonAttackRuntime?.playImpactSound?.({ damage, critical, killed, elite: Boolean(enemy.elite || enemy.boss) })
+  return true
 }
 
 export function installDungeonCoop(scene, {
@@ -193,41 +198,29 @@ export function installDungeonCoop(scene, {
   if (!runSeed) throw new Error('Dungeon co-op requires runSeed')
 
   const seed = String(runSeed)
+  const hostPlayerId = role === 'host' ? String(localPlayerId) : String(remotePlayerId)
+  const guestPlayerId = role === 'guest' ? String(localPlayerId) : String(remotePlayerId)
+  const world = installDeterministicCoopWorld(scene, { runSeed: seed })
+
   playerRuntime.setLocalPlayerId(localPlayerId)
   const localPlayer = playerRuntime.localPlayer
   let remotePlayer = playerRuntime.addPlayer({ id: remotePlayerId })
-  // A network player is a normal Dungeon player. Identity rings/labels are not
-  // part of gameplay presentation and caused the V2 “green ring” split.
   remotePlayer?.marker?.destroy?.()
   remotePlayer?.label?.destroy?.()
-  if (remotePlayer) { remotePlayer.marker = null; remotePlayer.label = null }
+  if (remotePlayer) {
+    remotePlayer.marker = null
+    remotePlayer.label = null
+  }
 
   const original = {
-    drawArena: scene.drawArena?.bind(scene),
-    spawnEnemy: scene.spawnEnemy?.bind(scene),
     updateEnemies: scene.updateEnemies?.bind(scene),
     updateEnemyProjectiles: scene.updateEnemyProjectiles?.bind(scene),
     updatePortal: scene.updatePortal?.bind(scene),
     autoAttack: scene.autoAttack?.bind(scene),
     trySkill: scene.trySkill?.bind(scene),
     checkFloorClear: scene.checkFloorClear?.bind(scene),
-  }
-
-  scene.drawArena = function drawDeterministicCoopArena() {
-    const geometry = generateDungeonGeometry({ runSeed: seed, floor: scene.floor })
-    if (scene.__dungeonSpatial?.refreshRoom) return scene.__dungeonSpatial.refreshRoom({ geometry })
-    return original.drawArena?.()
-  }
-
-  scene.spawnEnemy = function spawnDeterministicCoopEnemy(index = 0, options = {}) {
-    const elite = Boolean(options?.elite)
-    const random = rngFor(seed, scene.floor, 'enemy', `${index}:${elite ? 'elite' : 'normal'}`)
-    const enemy = withRandom(random, () => original.spawnEnemy?.(index, options))
-    if (!enemy) return enemy
-    enemy.id = deterministicEnemyId(scene.floor, index, elite)
-    enemy.__coopSpawnIndex = Number(index) || 0
-    enemy.__coopSpawnElite = elite
-    return enemy
+    slash: scene.slash?.bind(scene),
+    damageEnemy: scene.damageEnemy?.bind(scene),
   }
 
   let remoteInput = normalizeCoopInput()
@@ -249,6 +242,7 @@ export function installDungeonCoop(scene, {
   const knownDrops = new Map()
   const knownOpenedChests = new Set()
   const playerPatchSignatures = new Map()
+  const lastPlayerPatches = new Map()
 
   const emitEvent = (type, payload = {}) => {
     if (role !== 'host') return null
@@ -265,7 +259,52 @@ export function installDungeonCoop(scene, {
     return event
   }
 
-  const resetFloorPresentation = (floor) => {
+  const placePlayers = () => world?.placePlayers?.(playerRuntime, { hostPlayerId, guestPlayerId })
+
+  if (role === 'host') {
+    scene.slash = function coopHostSlash(target, player = null) {
+      const context = player ?? localPlayer
+      if (target && context) {
+        emitEvent('player.attack', {
+          playerId: context.id,
+          enemyId: target.id,
+          facing: context.facing,
+        })
+      }
+      return original.slash?.(target, context)
+    }
+
+    scene.damageEnemy = function coopHostDamageEnemy(
+      enemy,
+      damage,
+      critical,
+      knockback,
+      damageContext,
+      player = null,
+    ) {
+      if (!enemy || enemy.hp <= 0) return original.damageEnemy?.(enemy, damage, critical, knockback, damageContext, player)
+      const beforeHp = enemy.hp
+      const x = enemy.x
+      const y = enemy.y
+      const context = player ?? localPlayer
+      const result = original.damageEnemy?.(enemy, damage, critical, knockback, damageContext, context)
+      if (enemy.hp < beforeHp) {
+        emitEvent('enemy.hit', {
+          enemyId: enemy.id,
+          playerId: context?.id,
+          x,
+          y,
+          damage: Math.max(0, beforeHp - enemy.hp),
+          critical: Boolean(critical),
+          killed: enemy.hp <= 0,
+          reason: damageContext?.source ?? 'effect',
+        })
+      }
+      return result
+    }
+  }
+
+  const clearAndDrawFloor = (floor) => {
     scene.floor = Math.max(1, Number(floor) || 1)
     scene.floorCleared = false
     scene.clearEnemies?.()
@@ -273,23 +312,22 @@ export function installDungeonCoop(scene, {
     scene.clearDrops?.()
     scene.destroyPortal?.()
     scene.drawArena?.()
-    placePlayerAtRoomSpawn(scene)
-    playerRuntime.repositionRemotePlayers?.()
+    placePlayers()
   }
 
   if (role === 'guest') {
-    // Guest owns normal actors/UI/VFX but never advances authoritative combat.
     scene.updateEnemies = () => {}
     scene.updateEnemyProjectiles = () => {}
     scene.updatePortal = () => {}
     scene.autoAttack = () => {}
     scene.trySkill = () => {}
     scene.checkFloorClear = () => {}
-    resetFloorPresentation(scene.floor)
+    clearAndDrawFloor(scene.floor)
   } else {
-    resetFloorPresentation(scene.floor)
-    // Re-run the Host encounter only after deterministic geometry/enemy RNG is installed.
+    clearAndDrawFloor(scene.floor)
     scene.startFloor?.(true)
+    placePlayers()
+    lastFloor = scene.floor
     emitEvent('run.start', { runSeed: seed, floor: scene.floor, progress: clone(getProgress()) })
     emitEvent('floor.start', { floor: scene.floor, progress: clone(getProgress()) })
   }
@@ -332,9 +370,10 @@ export function installDungeonCoop(scene, {
       emitEvent('enemy.spawn', {
         enemyId: enemy.id,
         spawnIndex: enemy.__coopSpawnIndex ?? 0,
-        archetype: enemy.archetype,
-        elite: Boolean(enemy.__coopSpawnElite || enemy.elite),
+        spawnElite: Boolean(enemy.__coopSpawnElite),
+        elite: Boolean(enemy.elite),
         boss: Boolean(enemy.boss),
+        archetype: enemy.archetype,
         patch: enemySpawnPatch(enemy),
       })
     }
@@ -350,7 +389,8 @@ export function installDungeonCoop(scene, {
       if (!drop.__coopId) drop.__coopId = `drop:${scene.floor}:${++dropSequence}`
       currentDrops.set(drop.__coopId, drop)
       if (knownDrops.has(drop.__coopId)) continue
-      knownDrops.set(drop.__coopId, true)
+      const fact = { x: drop.x, y: drop.y, item: clone(drop.item) }
+      knownDrops.set(drop.__coopId, fact)
       emitEvent('drop.spawn', {
         dropId: drop.__coopId,
         x: drop.x,
@@ -358,16 +398,29 @@ export function installDungeonCoop(scene, {
         item: clone(drop.item),
       })
     }
-    for (const id of [...knownDrops.keys()]) {
+    for (const [id, previous] of [...knownDrops.entries()]) {
       if (currentDrops.has(id)) continue
       knownDrops.delete(id)
-      emitEvent('drop.remove', { dropId: id })
+      const picker = nearestPickupPlayer(playerRuntime, previous)
+      const currentPatch = picker ? playerPatch(picker) : null
+      const oldPatch = picker ? lastPlayerPatches.get(picker.id) : null
+      const healed = oldPatch && currentPatch ? Math.max(0, (currentPatch.hp ?? 0) - (oldPatch.hp ?? 0)) : 0
+      emitEvent('drop.remove', {
+        dropId: id,
+        reason: picker ? 'pickup' : 'clear',
+        playerId: picker?.id,
+        x: previous.x,
+        y: previous.y,
+        item: clone(previous.item),
+        healed,
+      })
     }
 
     for (const chest of scene.__dungeonSpatial?.getChests?.() ?? []) {
       if (!chest?.opened || knownOpenedChests.has(chest.id)) continue
       knownOpenedChests.add(chest.id)
-      emitEvent('chest.opened', { chestId: chest.id })
+      const opener = nearestPickupPlayer(playerRuntime, chest)
+      emitEvent('chest.opened', { chestId: chest.id, playerId: opener?.id })
     }
 
     if (scene.portal && !portalNotified) {
@@ -382,6 +435,7 @@ export function installDungeonCoop(scene, {
     for (const player of playerRuntime.activePlayers()) {
       const patch = playerPatch(player)
       const signature = patchSignature(patch)
+      lastPlayerPatches.set(player.id, clone(patch))
       if (playerPatchSignatures.get(player.id) === signature) continue
       playerPatchSignatures.set(player.id, signature)
       emitEvent('player.patch', { playerId: player.id, patch })
@@ -446,15 +500,20 @@ export function installDungeonCoop(scene, {
       case 'run.start':
         if (event.progress) onProgress(event.progress)
         return true
-      case 'floor.start':
-        resetFloorPresentation(event.floor)
+      case 'floor.start': {
         if (event.progress) onProgress(event.progress)
+        const applied = event.progress && scene.__infiniteDungeon?.startFloorFromNetwork?.(event.progress)
+        if (!applied) clearAndDrawFloor(event.floor)
+        placePlayers()
         return true
+      }
       case 'enemy.spawn': {
-        if ((scene.enemies ?? []).some((enemy) => enemy?.id === event.enemyId)) return true
-        const enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, { elite: Boolean(event.elite) })
-        if (!enemy) return false
-        enemy.id = event.enemyId || enemy.id
+        let enemy = (scene.enemies ?? []).find((entry) => entry?.id === event.enemyId)
+        if (!enemy) {
+          enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, { elite: Boolean(event.spawnElite) })
+          if (!enemy) return false
+          enemy.id = event.enemyId || enemy.id
+        }
         applyEnemySpawnPatch(scene, enemy, event.patch)
         return true
       }
@@ -467,15 +526,16 @@ export function installDungeonCoop(scene, {
         if ((scene.drops ?? []).some((drop) => drop?.__coopId === event.dropId)) return true
         const drop = scene.__dungeonPickupRuntime?.spawnExact?.(event.x, event.y, clone(event.item))
           ?? scene.spawnDrop?.(event.x, event.y, clone(event.item))
-        if (drop) drop.__coopId = event.dropId
-        else {
-          const newest = (scene.drops ?? []).at(-1)
-          if (newest) newest.__coopId = event.dropId
-        }
-        return true
+        const actual = drop ?? (scene.drops ?? []).at(-1)
+        if (actual) actual.__coopId = event.dropId
+        return Boolean(actual)
       }
       case 'drop.remove': {
         const drop = (scene.drops ?? []).find((entry) => entry?.__coopId === event.dropId)
+        if (event.reason === 'pickup') {
+          const item = event.item ?? drop?.item
+          if (item) scene.pickupBurst?.(event.x ?? drop?.x ?? 0, event.y ?? drop?.y ?? 0, item, event.healed ?? 0)
+        }
         removeDrop(scene, drop)
         return true
       }
@@ -486,11 +546,18 @@ export function installDungeonCoop(scene, {
         if (!player?.state || !event.patch) return false
         player.state = { ...player.state, ...clone(event.patch) }
         playerRuntime.updatePlayerVisual(player)
-        if (player.local) scene.emitStats?.()
+        if (player.local) {
+          scene.__dungeonInventoryStats?.(player.state.healthPotions ?? 0)
+          scene.emitStats?.()
+        }
         return true
       }
       case 'portal.opened':
         return Boolean(openReplicaPortal(scene, event))
+      case 'player.attack':
+        return presentPlayerAttack(scene, playerRuntime, event)
+      case 'enemy.hit':
+        return presentEnemyHit(scene, playerRuntime, event)
       case 'run.gameover':
         scene.dead = true
         onGameOver(event)
@@ -514,7 +581,6 @@ export function installDungeonCoop(scene, {
     for (const correction of sync.players) {
       const player = playerRuntime.playerById(correction.id)
       if (!player) continue
-      const previousAttackAt = Number(player.lastAttackAt) || 0
       if (player.local) {
         reconcilePredictedPlayer(player, {
           state: { ...player.state, x: correction.x, y: correction.y, hp: correction.hp, maxHp: correction.maxHp },
@@ -536,10 +602,7 @@ export function installDungeonCoop(scene, {
         player.lastAttackAt = correction.lastAttackAt
       }
       playerRuntime.updatePlayerVisual(player)
-      if (Number(correction.lastAttackAt) > previousAttackAt) {
-        playerRuntime.syncAnimation(player, 'attack')
-        scene.time?.delayedCall?.(180, () => playerRuntime.syncAnimation(player))
-      } else if (!player.attacking) playerRuntime.syncAnimation(player)
+      if (!player.attacking) playerRuntime.syncAnimation(player)
     }
 
     for (const correction of sync.enemies) {
@@ -568,9 +631,10 @@ export function installDungeonCoop(scene, {
     destroyed = true
     scene.events?.off?.('update', update)
     peerDisconnected()
-    scene.drawArena = original.drawArena
-    scene.spawnEnemy = original.spawnEnemy
-    if (role === 'guest') {
+    if (role === 'host') {
+      scene.slash = original.slash
+      scene.damageEnemy = original.damageEnemy
+    } else {
       scene.updateEnemies = original.updateEnemies
       scene.updateEnemyProjectiles = original.updateEnemyProjectiles
       scene.updatePortal = original.updatePortal
@@ -578,6 +642,7 @@ export function installDungeonCoop(scene, {
       scene.trySkill = original.trySkill
       scene.checkFloorClear = original.checkFloorClear
     }
+    world?.restore?.()
     scene.__dungeonCoop = null
   }
 
