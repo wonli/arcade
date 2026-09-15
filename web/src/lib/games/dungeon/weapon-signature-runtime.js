@@ -1,13 +1,14 @@
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { weaponArchetype } from './weapon-profile.js'
 import { hasWeaponLineOfSight } from './weapon-targeting.js'
 
-function weaponIdentity(player) {
-  const item = player?.equippedWeapon
-  return [item?.type ?? player?.weapon ?? '', item?.archetype ?? '', item?.signature ?? 'arcane_burst'].join('|')
+function weaponIdentity(state) {
+  const item = currentWeapon(state)
+  return [item?.type ?? '', item?.archetype ?? '', item?.signature ?? 'arcane_burst'].join('|')
 }
 
-function signatureFor(player) {
-  return player?.equippedWeapon?.signature ?? 'arcane_burst'
+function signatureFor(state) {
+  return currentWeapon(state)?.signature ?? 'arcane_burst'
 }
 
 function damageSignatureTarget(scene, player, target, damage, source = 'staff_signature') {
@@ -100,7 +101,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
   }
 
   const arcaneBurst = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const radius = 88 * (1 + (effects.skillRadius ?? 0))
     damageSignatureTarget(scene, player, primary, baseDamage * 0.60)
     for (const enemy of scene.enemies ?? []) {
@@ -129,7 +130,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
   }
 
   const frostBlizzard = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const blizzard = {
       x: primary.x,
       y: primary.y,
@@ -148,7 +149,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
   }
 
   const arcaneNova = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const amount = effects.arcaneNova ?? 0
     if (!(amount > 0)) return
 
