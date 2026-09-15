@@ -17,7 +17,8 @@
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
   import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { createDungeonNetworkRuntime, dungeonSceneReadyForNetwork } from '$lib/games/dungeon/network-runtime.js'
-  import { weaponHudModel } from '$lib/games/dungeon/presentation.js'
+  import { formatAffixLabel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
+  import { createDungeonTranslator, dungeonHudLabels, normalizeDungeonLocale } from '$lib/games/dungeon/i18n.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
 
   export let data
@@ -41,33 +42,47 @@
   let panelOpen = false
   let error = ''
   let eventText = ''
+  let locale = 'en'
   let stats = initialDungeonStats()
   let progress = initialDungeonProgress()
   let resources = null
 
   $: isHost = room?.hostId === identity.sessionId
   $: waiting = room?.status !== 'playing'
-  $: weaponModel = weaponHudModel(stats, 'en')
+  $: weaponModel = weaponHudModel(stats, locale)
+
+  function t(key, values = {}) {
+    return createDungeonTranslator(locale)(key, values)
+  }
+
+  function rarityName(rarity) {
+    const key = {
+      common: 'rarityCommon',
+      uncommon: 'rarityUncommon',
+      rare: 'rarityRare',
+      epic: 'rarityEpic',
+      legendary: 'rarityLegendary',
+    }[rarity]
+    return key ? t(key) : ''
+  }
 
   function hudLabels() {
-    return {
-      locale: 'en',
-      hp: 'HP',
-      weapon: 'Weapon',
-      details: 'Stats',
-      none: 'None',
-      emptyWeapon: 'No weapon equipped',
-      dungeonBlade: 'Dungeon Blade',
-      baseDamage: 'Weapon damage',
-      floor: 'Floor',
-      chapter: 'Chapter',
-      boss: 'Boss',
-      'rarity:common': 'Common',
-      'rarity:uncommon': 'Uncommon',
-      'rarity:rare': 'Rare',
-      'rarity:epic': 'Epic',
-      'rarity:legendary': 'Legendary',
-    }
+    return dungeonHudLabels(locale)
+  }
+
+  function connectionLabel() {
+    return t({ connecting: 'connectionConnecting', live: 'connectionLive', offline: 'connectionOffline' }[connection] ?? 'connectionOffline')
+  }
+
+  function setLocale(next) {
+    locale = normalizeDungeonLocale(next)
+    localStorage.setItem('arcade.locale', locale)
+    pickupRuntime?.refreshLabels?.()
+    hudRuntime?.update()
+  }
+
+  function toggleLocale() {
+    setLocale(locale === 'zh-CN' ? 'en' : 'zh-CN')
   }
 
   function currentPlayerSlot() {
@@ -83,15 +98,15 @@
     event?.preventDefault?.()
     event?.stopPropagation?.()
     if ((stats.healthPotions ?? 0) <= 0) {
-      eventText = 'No health potions'
+      eventText = t('noHealthPotions')
       return
     }
     if ((stats.hp ?? 0) >= (stats.maxHp ?? 0)) {
-      eventText = 'HP is already full'
+      eventText = t('fullHealth')
       return
     }
     if (pickupRuntime?.useHealthPotion?.()) {
-      eventText = 'Health potion used'
+      eventText = t('healthPotionUsed')
       hudRuntime?.update()
     }
   }
@@ -111,13 +126,18 @@
 
   function onEvent(event) {
     if (!event?.type) return
-    if (event.type === 'floorstart') eventText = `Floor ${event.floor}`
-    else if (event.type === 'skill') eventText = `Skill · ${event.hits ?? 0} hits`
-    else if (event.type === 'pickup') eventText = 'Item picked up'
-    else if (event.type === 'drop') eventText = 'Loot dropped'
+    if (event.type === 'floorstart') eventText = t('floorStart', { floor: event.floor })
+    else if (event.type === 'floorclear') eventText = t('floorClear')
+    else if (event.type === 'portal') eventText = t('portal')
+    else if (event.type === 'rest') eventText = t('restEntered')
+    else if (event.type === 'restchoice') eventText = t('restChoice', { choice: t(`rest${event.choice?.[0]?.toUpperCase?.() ?? ''}${event.choice?.slice?.(1) ?? ''}`) })
+    else if (event.type === 'chestopen') eventText = t('chestOpened')
+    else if (event.type === 'skill') eventText = t('skillHits', { hits: event.hits ?? 0 })
+    else if (event.type === 'pickup') eventText = t('itemPickedUp')
+    else if (event.type === 'drop') eventText = t('lootDropped')
     else if (event.type === 'gameover') {
       panelOpen = false
-      eventText = 'Run ended'
+      eventText = t('gameover')
     } else eventText = event.type
   }
 
@@ -164,6 +184,12 @@
       Phaser,
       parent: mount,
       assets,
+      labels: {
+        floor: (floor) => t('floorTitle', { floor }),
+        floorClear: () => t('floorClear'),
+        rarity: (rarity) => rarityName(rarity),
+        affix: (id, value, tier) => formatAffixLabel({ id, value, tier }, locale),
+      },
       onStats(next) {
         stats = { ...stats, ...next }
         hudRuntime?.update()
@@ -190,7 +216,7 @@
         hudRuntime?.update()
       }
 
-      pickupRuntime = installPickupInteraction(scene)
+      pickupRuntime = installPickupInteraction(scene, { getLocale: () => locale })
       if (!scene.__infiniteDungeon) {
         scene.__infiniteDungeon = installInfiniteDungeon(scene, {
           onProgress(next) {
@@ -198,11 +224,16 @@
             hudRuntime?.update()
           },
           onEvent,
+          label: (key) => t(({
+            floor: 'floor', chapter: 'chapter', floorClear: 'floorClear', restTitle: 'restTitle', restComplete: 'restComplete',
+            'rest.recover': 'restRecover', 'rest.temper': 'restTemper', 'rest.fortune': 'restFortune',
+          })[key] ?? key),
         })
       }
       installDungeonSpatial(scene, {
         getProgress: () => scene.__infiniteDungeon?.getProgress?.() ?? progress,
         onEvent,
+        label: (key) => t(key),
       })
       installDungeonAttackRuntime(scene)
       installDungeonBacktracking(scene, {
@@ -242,7 +273,7 @@
       room = await socket.request('room.join', { roomId: roomCode, name })
     }
 
-    if (room?.game !== 'dungeon') throw new Error('Room is not a Dungeon room')
+    if (room?.game !== 'dungeon') throw new Error(t('roomNotDungeon'))
     subscribeRoomState()
     connection = 'live'
     await startGame()
@@ -264,15 +295,17 @@
 
   async function copyInvite() {
     await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/dungeon`)
-    eventText = 'Invite copied'
+    eventText = t('inviteCopied')
   }
 
   onMount(() => {
+    const saved = localStorage.getItem('arcade.locale')
+    locale = normalizeDungeonLocale(saved || navigator.language)
     unsubscribeConnection = socket.onConnection((state) => { connection = state })
     bootstrap().catch((cause) => {
       console.error(cause)
       connection = 'offline'
-      error = cause?.message || 'Failed to join Dungeon room'
+      error = cause?.message || t('failedJoinRoom')
     })
 
     return () => {
@@ -293,19 +326,20 @@
   })
 </script>
 
-<svelte:head><title>Dungeon · {roomCode.toLowerCase()} · AQI Arcade</title></svelte:head>
+<svelte:head><title>{t('title')} · {roomCode.toLowerCase()} · AQI Arcade</title></svelte:head>
 
 <main class="page">
   <header>
     <div>
       <a href="/">AQI ARCADE</a>
       <strong>DUNGEON · {roomCode.toLowerCase()}</strong>
-      <span class:offline={connection !== 'live'}>{connection.toUpperCase()}</span>
+      <span class:offline={connection !== 'live'}>{connectionLabel()}</span>
     </div>
     <div class="players">
-      <span>{isHost ? 'HOST' : 'GUEST'}</span>
-      <span>{room?.players?.length ?? 0}/2 PLAYERS</span>
-      <button onclick={copyInvite}>COPY INVITE</button>
+      <span>{t(isHost ? 'host' : 'guest')}</span>
+      <span>{t('players', { count: room?.players?.length ?? 0 })}</span>
+      <button onclick={toggleLocale}>{locale === 'zh-CN' ? 'EN' : '中文'}</button>
+      <button onclick={copyInvite}>{t('copyInvite')}</button>
     </div>
   </header>
 
@@ -313,9 +347,9 @@
     <div bind:this={mount} class="stage"></div>
 
     {#if waiting}
-      <div class="banner">WAITING FOR PLAYER · SHARE {roomCode.toLowerCase()}</div>
+      <div class="banner">{t('waitingPlayer', { room: roomCode.toLowerCase() })}</div>
     {:else if !ready}
-      <div class="banner">SYNCING DUNGEON…</div>
+      <div class="banner">{t('syncingDungeon')}</div>
     {/if}
 
     {#if error}<div class="error">{error}</div>{/if}
@@ -324,55 +358,55 @@
       <div class="touch-controls">
         <div class="joystick"><VirtualJoystick on:move={moveJoystick}/></div>
         <div class="touch-actions">
-          <button onpointerdown={useInteract}>USE</button>
-          <button class="skill" onpointerdown={useSkill}>SKILL</button>
+          <button onpointerdown={useInteract}>{t('touchInteract')}</button>
+          <button class="skill" onpointerdown={useSkill}>{t('touchSkill')}</button>
         </div>
       </div>
     {/if}
 
     {#if panelOpen}
-      <div class="stats-overlay" role="dialog" aria-modal="true" aria-label="Weapon stats">
+      <div class="stats-overlay" role="dialog" aria-modal="true" aria-label={t('details')}>
         <div class="stats-panel">
-          <div class="panel-kicker">LIVE CO-OP · LOADOUT</div>
+          <div class="panel-kicker">{t('liveCoopLoadout')}</div>
           <div class="weapon-title">
             <div>
-              <span>CURRENT WEAPON</span>
+              <span>{t('currentWeapon')}</span>
               <h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'} class:legendary={stats.weaponRarity==='legendary'}>
-                {stats.weapon ? `${weaponModel.archetypeLabel ?? 'Weapon'} · ${weaponModel.name ?? 'Dungeon Blade'}` : 'No weapon equipped'}
+                {stats.weapon ? `${weaponModel.archetypeLabel ?? t('weapon')} · ${weaponModel.name ?? t('dungeonBlade')}` : t('emptyWeapon')}
               </h2>
             </div>
-            <button class="close" onclick={() => setPanel(false)} aria-label="Close">×</button>
+            <button class="close" onclick={() => setPanel(false)} aria-label={t('closeLabel')}>×</button>
           </div>
 
           <div class="stat-grid">
-            <div><span>WEAPON DMG</span><strong>{weaponModel.damage}</strong></div>
-            <div><span>TOTAL DMG</span><strong>{stats.damage}</strong></div>
-            <div><span>HP</span><strong>{stats.hp}/{stats.maxHp}</strong></div>
-            <div><span>POTIONS</span><strong>{stats.healthPotions ?? 0}</strong></div>
+            <div><span>{t('weaponDamage')}</span><strong>{weaponModel.damage}</strong></div>
+            <div><span>{t('totalDamage')}</span><strong>{stats.damage}</strong></div>
+            <div><span>{t('hp')}</span><strong>{stats.hp}/{stats.maxHp}</strong></div>
+            <div><span>{t('potions')}</span><strong>{stats.healthPotions ?? 0}</strong></div>
           </div>
 
           <div class="affix-box">
-            <span>AFFIXES</span>
+            <span>{t('affixes')}</span>
             {#if weaponModel.affixes.length}
               <div class="affix-list">{#each weaponModel.affixes as affix}<div>◆ {affix}</div>{/each}</div>
             {:else}
-              <p>No affixes</p>
+              <p>{t('noAffixes')}</p>
             {/if}
           </div>
 
           <div class="panel-actions">
-            <button class="use-potion" disabled={(stats.healthPotions ?? 0) <= 0 || stats.hp >= stats.maxHp} onclick={usePotion}>USE POTION · {stats.healthPotions ?? 0}</button>
-            <button class="resume" onclick={() => setPanel(false)}>BACK TO GAME</button>
+            <button class="use-potion" disabled={(stats.healthPotions ?? 0) <= 0 || stats.hp >= stats.maxHp} onclick={usePotion}>{t('usePotion')} · {stats.healthPotions ?? 0}</button>
+            <button class="resume" onclick={() => setPanel(false)}>{t('backToGame')}</button>
           </div>
-          <p class="online-note">The online world keeps running while this panel is open.</p>
+          <p class="online-note">{t('onlineWorldContinues')}</p>
         </div>
       </div>
     {/if}
   </section>
 
   <footer>
-    <span>HP {stats.hp ?? 0}/{stats.maxHp ?? 0} · DMG {stats.damage ?? 0} · FLOOR {progress.floor ?? 1}</span>
-    <span>{eventText || '20Hz player snapshots · Host authoritative world state'}</span>
+    <span>{t('hp')} {stats.hp ?? 0}/{stats.maxHp ?? 0} · {t('damage')} {stats.damage ?? 0} · {t('floor')} {progress.floor ?? 1}</span>
+    <span>{eventText || t('coopStatus')}</span>
   </footer>
 </main>
 
