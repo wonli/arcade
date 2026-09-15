@@ -44,7 +44,8 @@
   let hudRuntime = null
   let coopRuntime = null
   let pendingInput = null
-  let pendingState = null
+  let pendingEvents = []
+  let pendingSync = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let mounted = false
@@ -57,13 +58,17 @@
 
   const rarityName = (rarity) => ({ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' }[rarity] ?? '')
 
-  function dungeonScene() {
-    return game?.scene?.getScene?.('Dungeon')
-  }
-
   function applyRoom(next) {
     if (!next || next.type || next.game !== 'dungeon') return
     room = next
+
+    if (game && coopRuntime?.role === 'host' && next.players?.length < 2) {
+      role = 'host'
+      coopRuntime.peerDisconnected?.()
+      eventText = 'P2 disconnected · continuing solo'
+      return
+    }
+
     role = dungeonRoomRole(next, identity.sessionId)
     if (next.players?.length === 2 && next.status === 'playing') startDungeon()
   }
@@ -84,9 +89,13 @@
         if (coopRuntime) coopRuntime.receiveInput(payload.input)
         else pendingInput = payload.input
       }
-      if (payload.type === 'dungeon.state' && payload.playerId !== identity.sessionId) {
-        if (coopRuntime) coopRuntime.receiveState(payload.state)
-        else pendingState = payload.state
+      if (payload.type === 'dungeon.event' && payload.playerId !== identity.sessionId) {
+        if (coopRuntime) coopRuntime.receiveEvent(payload.event)
+        else pendingEvents = [...pendingEvents, payload.event]
+      }
+      if (payload.type === 'dungeon.sync' && payload.playerId !== identity.sessionId) {
+        if (coopRuntime) coopRuntime.receiveSync(payload.sync)
+        else pendingSync = payload.sync
       }
     })
   }
@@ -130,9 +139,14 @@
     socket.notify('dungeon.input', { roomId: roomCode, input })
   }
 
-  function sendState(state) {
+  function sendEvent(event) {
     if (role !== 'host' || !roomCode) return
-    socket.notify('dungeon.state', { roomId: roomCode, state })
+    socket.notify('dungeon.event', { roomId: roomCode, event })
+  }
+
+  function sendSync(sync) {
+    if (role !== 'host' || !roomCode) return
+    socket.notify('dungeon.sync', { roomId: roomCode, sync })
   }
 
   function onEvent(event) {
@@ -163,6 +177,28 @@
     const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
     gameResources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
     return gameResources
+  }
+
+  function installSpatialForRole(scene) {
+    const interactionKey = scene.input?.keyboard?.addKey?.('E')
+    const before = role === 'guest' && interactionKey?.listeners
+      ? new Set(interactionKey.listeners('down'))
+      : null
+
+    const runtime = installDungeonSpatial(scene, {
+      getProgress: () => scene.__infiniteDungeon?.getProgress?.() ?? progress,
+      onEvent,
+      label: (key) => key,
+    })
+
+    // Spatial owns local chest opening. Guest must send interact intent to Host,
+    // but must keep later PickupRuntime E listeners for the ground-item UI.
+    if (before && interactionKey?.listeners) {
+      for (const listener of interactionKey.listeners('down')) {
+        if (!before.has(listener)) interactionKey.off?.('down', listener)
+      }
+    }
+    return runtime
   }
 
   async function startDungeon() {
@@ -220,7 +256,10 @@
           hudRuntime?.update?.()
         }
 
+        installSpatialForRole(scene)
+
         pickupRuntime = installPickupInteraction(scene, {
+          authority: role === 'host',
           getLocale: () => 'en',
           onSelection(next) { scene.__comparisonCard?.setSelection?.(next) },
         })
@@ -241,11 +280,6 @@
           })
         }
 
-        installDungeonSpatial(scene, {
-          getProgress: () => scene.__infiniteDungeon?.getProgress?.() ?? progress,
-          onEvent,
-          label: (key) => key,
-        })
         installDungeonAttackRuntime(scene)
 
         if (role === 'host') {
@@ -268,10 +302,12 @@
 
         coopRuntime = installDungeonCoop(scene, {
           role,
+          runSeed: roomCode,
           localPlayerId: localId,
           remotePlayerId: remoteId,
           sendInput,
-          sendState,
+          sendEvent,
+          sendSync,
           getProgress: () => scene.__infiniteDungeon?.getProgress?.() ?? progress,
           onProgress(next) {
             progress = next
@@ -281,11 +317,10 @@
             gameOver = true
             touchInput?.stopMove()
           },
+          onProtocolError(cause) {
+            error = cause?.message ?? 'Dungeon synchronization failed'
+          },
         })
-
-        // Guest interaction is intent-only. Remove the local E listeners created
-        // by chest/equipment runtimes so they cannot mutate the mirrored world.
-        if (role === 'guest') scene.input?.keyboard?.addKey?.('E')?.removeAllListeners?.('down')
 
         hudRuntime = installDungeonHud(scene, {
           getStats: () => stats,
@@ -301,9 +336,11 @@
           onDetails: () => {},
         })
 
-        if (pendingState) {
-          coopRuntime.receiveState(pendingState)
-          pendingState = null
+        for (const event of pendingEvents) coopRuntime.receiveEvent(event)
+        pendingEvents = []
+        if (pendingSync) {
+          coopRuntime.receiveSync(pendingSync)
+          pendingSync = null
         }
         if (pendingInput) {
           coopRuntime.receiveInput(pendingInput)
@@ -369,7 +406,7 @@
     <div>
       <a class="brand" href="/">AQI ARCADE</a>
       <h1>Endless Dungeon · Co-op</h1>
-      <p>P1 hosts the existing Dungeon · P2 sends input only</p>
+      <p>P1 owns gameplay facts · both clients render the same Dungeon</p>
     </div>
     <div class="actions">
       <span class:offline={connection !== 'live'}>{connection.toUpperCase()}</span>
@@ -387,7 +424,7 @@
 
   {#if error}
     <section class="notice error"><strong>CO-OP ERROR</strong><span>{error}</span><button onclick={newExpedition}>NEW ROOM</button></section>
-  {:else if playerCount < 2}
+  {:else if playerCount < 2 && !game}
     <section class="notice waiting">
       <div class="pulse"></div>
       <strong>WAITING FOR P2</strong>
@@ -424,7 +461,7 @@
     </section>
 
     <footer>
-      <span>{eventText || (role === 'host' ? 'HOST · authoritative world simulation' : 'P2 · input prediction + host snapshots')}</span>
+      <span>{eventText || (role === 'host' ? 'HOST · authoritative gameplay facts' : 'P2 · local presentation + host authority')}</span>
       <span>{room?.players?.map((player) => player.name).join(' · ')}</span>
     </footer>
   {/if}
