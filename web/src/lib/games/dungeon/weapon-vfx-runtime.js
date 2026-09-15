@@ -131,7 +131,9 @@ function applyPresentation(profile, presentation = {}) {
 }
 
 export function installDungeonWeaponVfx(scene, { anchor = null, presentation = null, player = scene?.localPlayer } = {}) {
-  if (!scene || !player || scene.__dungeonWeaponVfx) return scene?.__dungeonWeaponVfx ?? null
+  if (!scene || !player) return null
+  player.runtime ??= {}
+  if (player.runtime.weaponVfx) return player.runtime.weaponVfx
 
   let currentSignature = null
   let particleManager = null
@@ -270,16 +272,19 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   sync()
   scene.events?.on?.('update', sync)
 
+  let api = null
   const restore = () => {
     destroyParticles()
     scene.events?.off?.('update', sync)
-    scene.__dungeonWeaponVfx = null
+    if (player.runtime?.weaponVfx === api) delete player.runtime.weaponVfx
+    if (scene.__dungeonWeaponVfx === api) scene.__dungeonWeaponVfx = null
   }
 
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { sync, attack, impact, volley, nova, restore }
-  scene.__dungeonWeaponVfx = api
+  api = { sync, attack, impact, volley, nova, restore }
+  player.runtime.weaponVfx = api
+  if (player === scene.localPlayer || !scene.localPlayer) scene.__dungeonWeaponVfx = api
   return api
 }
