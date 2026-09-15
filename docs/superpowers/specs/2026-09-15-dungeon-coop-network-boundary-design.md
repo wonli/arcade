@@ -80,7 +80,7 @@ executePlayerCommand(scene, command, { authoritative = true } = {})
 Commands use stable player ids and semantic intent:
 
 ```js
-{ type: 'attack', playerId, targetId?, time? }
+{ type: 'attack', playerId, time?, targetId? }
 { type: 'skill', playerId, skillId, time? }
 { type: 'pickup', playerId, dropId }
 ```
@@ -88,9 +88,9 @@ Commands use stable player ids and semantic intent:
 The boundary resolves the player through `scene.players`. It rejects unknown/dead players and malformed commands without mutating state.
 
 For this phase:
-- `attack` calls existing `scene.autoAttack(time, player)`; if a target id is supplied and a matching live enemy exists, it calls `scene.slash(target, player)`.
+- `attack` always calls existing `scene.autoAttack(time, player)`. A supplied `targetId` is treated only as non-authoritative metadata and never bypasses host targeting/cooldown validation.
 - `skill` calls `castPlayerSkill(scene, player, skillId, time)`.
-- `pickup` delegates to an explicit pickup runtime command API; if that API is unavailable it returns a non-applied result.
+- `pickup` delegates only to an explicit stable-id pickup runtime API; if stable drop identity is not available it returns a non-applied result.
 
 `authoritative: false` must not execute gameplay mutation. It returns a validated intent result only. This gives the future guest client a safe path to emit intent without locally authoring game facts.
 
@@ -99,6 +99,10 @@ For this phase:
 Seed determines static world generation. Host determines mutable history.
 
 Future transport will use snapshots for high-frequency player state and reliable semantic commands/facts for attacks, skills, pickups and progression. Guest clients may render/interpolate remote snapshots but must not independently run enemy AI, resolve damage, drops or floor progression.
+
+## Stable identity note
+
+Current dungeon drops have no stable id; they are plain runtime objects appended to `scene.drops`. Array position must never be used as network identity. Pickup commands therefore remain intentionally non-applied until the world/history layer exposes host-owned stable drop ids.
 
 ## Tests
 
@@ -109,5 +113,6 @@ Add focused Node tests for:
 - remote spawn/despawn and cleanup isolation from local player;
 - duplicate/local-id rejection;
 - authoritative command routing by player id;
+- attacks remaining host-targeted even when a target hint is supplied;
 - non-authoritative commands performing no gameplay mutation;
 - unknown/dead player rejection.
