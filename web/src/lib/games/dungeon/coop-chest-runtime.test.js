@@ -51,3 +51,18 @@ test('opened chest cannot generate loot twice', () => {
   assert.equal(openChestForPlayer(scene, player, options), null)
   assert.equal(scene.drops.length, 1)
 })
+
+test('ground equipment consumes USE before a nearby chest', () => {
+  const scene = makeScene()
+  scene.drops.push({
+    x: 120,
+    y: 100,
+    item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 17, affixes: [] },
+  })
+  const player = { id: 'p2', state: { x: 120, y: 100 } }
+  const options = { runSeed: 'ABCDEF', floor: 3, progress: { chapter: 1, roomRole: 'combat' } }
+
+  assert.equal(openChestForPlayer(scene, player, options), null)
+  assert.equal(scene.chest.opened, false)
+  assert.equal(scene.drops.length, 1)
+})
