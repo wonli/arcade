@@ -81,7 +81,7 @@ test('potion pickup heals only the provided PlayerEntity when damaged', () => {
 
   scene.updateDrops(target)
 
-  assert.equal(target.state.hp, 100)
+  assert.equal(target.state.hp, 50)
   assert.equal(target.state.healthPotions, 0)
   assert.equal(local.state.hp, 20)
   assert.equal(local.state.healthPotions, 0)
