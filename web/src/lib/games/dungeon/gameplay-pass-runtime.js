@@ -2,6 +2,12 @@ import { bossReward } from './combat.js'
 import { bossEncounterProfile, encounterVariantForFloor } from './encounter-profile.js'
 import { createPerformanceBudget } from './performance-budget.js'
 
+function fallbackPlayer(scene) {
+  if (scene.localPlayer) return scene.localPlayer
+  if (!scene.playerState) return null
+  return { id: 'local', state: scene.playerState, bar: scene.playerBar ?? null, dead: (scene.playerState.hp ?? 1) <= 0 }
+}
+
 export function installDungeonGameplayPass(scene, { random = Math.random } = {}) {
   if (!scene || scene.__dungeonGameplayPass) return scene?.__dungeonGameplayPass ?? null
 
@@ -53,7 +59,7 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
         enemy.visual?.setTint?.(enemy.encounter.accent)
       }
 
-      const target = requestedPlayer ?? scene.__dungeonPlayerRuntime?.nearestPlayer?.(enemy) ?? scene.localPlayer
+      const target = requestedPlayer ?? scene.__dungeonPlayerRuntime?.nearestPlayer?.(enemy) ?? fallbackPlayer(scene)
       if (!target || target.dead) return
       scene.moveEnemyTowardPlayer?.(enemy, time, dt, target)
       if (time < (enemy.nextVariantAttackAt ?? 0)) return
@@ -65,7 +71,7 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
         scene.time?.delayedCall?.(i * 95, () => {
           if (enemy.hp <= 0 || scene.dead) return
           if ((scene.enemyProjectiles?.length ?? 0) >= 20) return
-          const nextTarget = scene.__dungeonPlayerRuntime?.playerById?.(targetId)
+          const nextTarget = scene.__dungeonPlayerRuntime?.playerById?.(targetId) ?? target
           if (!nextTarget || nextTarget.dead) return
           originalProjectile?.(enemy, nextTarget)
         })
@@ -78,7 +84,7 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
       const result = originalStart(...args)
       const progress = scene.__infiniteDungeon?.getProgress?.()
       const role = progress?.roomRole
-      const players = scene.__dungeonPlayerRuntime?.livingPlayers?.() ?? [scene.localPlayer].filter(Boolean)
+      const players = scene.__dungeonPlayerRuntime?.livingPlayers?.() ?? [fallbackPlayer(scene)].filter(Boolean)
 
       if (role === 'treasure') {
         scene.clearEnemies?.()
@@ -100,6 +106,9 @@ export function installDungeonGameplayPass(scene, { random = Math.random } = {})
           if (heal <= 0) continue
           state.hp = Math.min(maxHp, (state.hp ?? 0) + heal)
           scene.__dungeonPlayerRuntime?.updatePlayerVisual?.(player)
+          if (!scene.__dungeonPlayerRuntime && player === players[0]) {
+            scene.updateHealthBar?.(scene.playerBar, state.x, state.y - 42, state.hp, maxHp)
+          }
         }
         scene.emitStats?.()
         scene.showBanner?.('BOSS ANTECHAMBER', '#ffb55c', 28)
