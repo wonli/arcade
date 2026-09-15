@@ -336,16 +336,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       })
     }
 
-    syncPlayerAnimation(forceAction = null) {
-      if (assets.player?.source !== 'rpg-main-character' || !this.localPlayer.actor?.anims) return
-      const action = forceAction || (this.localPlayer.moving ? 'walk' : 'idle')
-      const sheetDirection = this.localPlayer.facing === 'up' ? 'up' : this.localPlayer.facing === 'down' ? 'down' : 'side'
-      const key = `dungeon-player-${sheetDirection}-${action}`
-      this.localPlayer.actor.setFlipX?.(this.localPlayer.facing === 'left')
-      if (this.anims.exists(key) && this.localPlayer.actor.anims.currentAnim?.key !== key) this.localPlayer.actor.play(key, true)
-    }
+    syncPlayerAnimation(forceAction = null, player = this.localPlayer) {
+  if (assets.player?.source !== 'rpg-main-character' || !player?.actor?.anims) return
+  const action = forceAction || (player.moving ? 'walk' : 'idle')
+  const sheetDirection = player.facing === 'up' ? 'up' : player.facing === 'down' ? 'down' : 'side'
+  const key = `dungeon-player-${sheetDirection}-${action}`
+  player.actor.setFlipX?.(player.facing === 'left')
+  if (this.anims.exists(key) && player.actor.anims.currentAnim?.key !== key) player.actor.play(key, true)
+}
 
-    makeActor(x, y, kind, enemyType = 'skeleton') {
+makeActor(x, y, kind, enemyType = 'skeleton') {
       if (kind === 'player' && assets.player?.source === 'rpg-main-character' && this.textures.exists('dungeon-player-down-idle')) {
         return this.add.sprite(x, y, 'dungeon-player-down-idle', 0).setScale(1).setData('usesTexture', true)
       }
@@ -454,28 +454,28 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.trySkill(time)
     }
 
-    updatePlayer(dt) {
-      let dx = 0, dy = 0
-      if (this.keys.A.isDown) dx -= 1
-      if (this.keys.D.isDown) dx += 1
-      if (this.keys.W.isDown) dy -= 1
-      if (this.keys.S.isDown) dy += 1
-      this.localPlayer.facing = directionFromInput(dx, dy, this.localPlayer.facing)
-      this.localPlayer.moving = Boolean(dx || dy)
-      const hurtBoost = (this.localPlayer.state.hasteUntil ?? 0) > this.time.now ? 1 + (this.localPlayer.state.effects?.hurtHaste ?? 0) : 1
-      if (dx || dy) {
-        const length = Math.hypot(dx, dy) || 1
-        this.localPlayer.state.x += (dx / length) * this.localPlayer.state.speed * hurtBoost * dt
-        this.localPlayer.state.y += (dy / length) * this.localPlayer.state.speed * hurtBoost * dt
-      }
-      this.localPlayer.state.x = Phaser.Math.Clamp(this.localPlayer.state.x, TILE + 18, WIDTH - TILE - 18)
-      this.localPlayer.state.y = Phaser.Math.Clamp(this.localPlayer.state.y, TILE + 18, HEIGHT - TILE - 18)
-      this.localPlayer.actor.setPosition(this.localPlayer.state.x, this.localPlayer.state.y)
-      this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
-      if (!this.localPlayer.attacking) this.syncPlayerAnimation()
-    }
+    updatePlayer(dt, player = this.localPlayer) {
+  let dx = 0, dy = 0
+  if (this.keys.A.isDown) dx -= 1
+  if (this.keys.D.isDown) dx += 1
+  if (this.keys.W.isDown) dy -= 1
+  if (this.keys.S.isDown) dy += 1
+  player.facing = directionFromInput(dx, dy, player.facing)
+  player.moving = Boolean(dx || dy)
+  const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (player.state.effects?.hurtHaste ?? 0) : 1
+  if (dx || dy) {
+    const length = Math.hypot(dx, dy) || 1
+    player.state.x += (dx / length) * player.state.speed * hurtBoost * dt
+    player.state.y += (dy / length) * player.state.speed * hurtBoost * dt
+  }
+  player.state.x = Phaser.Math.Clamp(player.state.x, TILE + 18, WIDTH - TILE - 18)
+  player.state.y = Phaser.Math.Clamp(player.state.y, TILE + 18, HEIGHT - TILE - 18)
+  player.actor?.setPosition?.(player.state.x, player.state.y)
+  this.updateHealthBar(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
+  if (!player.attacking) this.syncPlayerAnimation(null, player)
+}
 
-    updateEnemies(time, dt) {
+updateEnemies(time, dt) {
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0) continue
         if (enemy.boss) this.updateBoss(enemy, time, dt)

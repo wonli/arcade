@@ -470,8 +470,8 @@ function enemyIsFlying(enemy) {
 }
 function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry }
 
-export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
-  if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
+export function installDungeonSpatial(scene, { player = scene?.localPlayer, getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
+  if (!scene || !player || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
   scene.__dungeonSpatialInstalled = true
   let chests = [], trapCooldownUntil = 0
   const chestKey = scene.input.keyboard.addKey('E')
@@ -490,7 +490,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     chests = []
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
-    if (!fixedGeometry) placePlayerAtRoomSpawn(scene)
+    if (!fixedGeometry) placePlayerAtRoomSpawn(scene, player)
     const cellSize = geometry.grid?.tileSize ?? 32
     scene.__navGrids = {
       ground: buildNavGrid(geometry, { cellSize, actorRadius: ENEMY_RADIUS, profile: 'ground' }),
@@ -514,24 +514,28 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   scene.drawArena = function drawSpatialArena() { refreshRoom() }
-  scene.updatePlayer = function updateSpatialPlayer(dt) {
-    const before = { x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }
-    if ((scene.__hitStopUntil ?? 0) > scene.time.now) { scene.localPlayer.moving = false; if (!scene.localPlayer.attacking) scene.syncPlayerAnimation?.(); return }
-    originalUpdatePlayer(dt)
-    const desired = { x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }
-    const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
-    scene.localPlayer.state.x = next.x; scene.localPlayer.state.y = next.y
-    scene.localPlayer.actor?.setPosition?.(next.x, next.y)
-    scene.updateHealthBar?.(scene.localPlayer.bar, next.x, next.y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
-    const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
-    if (trap && scene.time.now >= trapCooldownUntil) {
-      trapCooldownUntil = scene.time.now + 850
-      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4)
-      onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
-    }
+  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
+  const before = { x: target.state.x, y: target.state.y }
+  if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
+    target.moving = false
+    if (!target.attacking) scene.syncPlayerAnimation?.(null, target)
+    return
   }
+  originalUpdatePlayer(dt, target)
+  const desired = { x: target.state.x, y: target.state.y }
+  const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
+  target.state.x = next.x; target.state.y = next.y
+  target.actor?.setPosition?.(next.x, next.y)
+  scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)
+  const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
+  if (trap && scene.time.now >= trapCooldownUntil) {
+    trapCooldownUntil = scene.time.now + 850
+    scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)
+    onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
+  }
+}
 
-  function navigateEnemy(enemy, target, time, dt) {
+function navigateEnemy(enemy, target, time, dt) {
     const geometry = scene.__roomGeometry
     if (!geometry || (scene.__hitStopUntil ?? 0) > time) return
     const flying = enemyIsFlying(enemy)
@@ -611,7 +615,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   const updateInteraction = () => {
-    const nearest = nearestInteractable(scene.localPlayer.state, chests, CHEST_RANGE)
+    const nearest = nearestInteractable(player.state, chests, CHEST_RANGE)
     for (const chest of chests) { if (chest === nearest) showChestPrompt(scene, chest, label); else hideChestPrompt(chest) }
   }
   scene.events.on('update', updateInteraction)
