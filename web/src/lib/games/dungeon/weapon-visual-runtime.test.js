@@ -1,6 +1,7 @@
 import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { PlayerEntity } from './player-entity.js'
 import { createWeaponVisual, installDungeonWeaponVisuals, weaponVisualProfile, weaponPose } from './weapon-visual-runtime.js'
 
 test('weapon visual profile maps archetype and rarity to existing Soul art', () => {
@@ -76,7 +77,7 @@ test('weapon flip follows corrected side-sprite facing semantics', () => {
   assert.equal(weaponPose({ x: 0, y: 0 }, 'left').flipX, false); assert.equal(weaponPose({ x: 0, y: 0 }, 'right').flipX, true)
 })
 
-test('runtime uses archetype swing duration, follows the player, and is owned by that player', () => {
+function visualScene() {
   let update = null, delayed = null
   const created = []
   const scene = {
@@ -85,7 +86,42 @@ test('runtime uses archetype swing duration, follows the player, and is owned by
     add: { image(x, y, key) { const object = { x, y, key, visible: true, angle: 0, depth: 0, flipX: false, setOrigin() { return this }, setScale() { return this }, setVisible(value) { this.visible = value; return this }, setPosition(nx, ny) { this.x = nx; this.y = ny; return this }, setAngle(value) { this.angle = value; return this }, setFlipX(value) { this.flipX = value; return this }, setDepth(value) { this.depth = value; return this }, destroy() {} }; created.push(object); return object } },
     load: { image() {}, once() {}, start() {} }, events: { on(event, handler) { if (event === 'update') update = handler }, off() {}, once() {} },
   }
-  const runtime = installDungeonWeaponVisuals(attachLegacyTestPlayer(scene)); update(); assert.match(created[0].key, /dagger-rare$/); assert.ok(created[0].x < scene.localPlayer.state.x)
+  return { scene, created, getUpdate: () => update, getDelayed: () => delayed }
+}
+
+test('runtime uses archetype swing duration, follows the player, and is owned by that player', () => {
+  const fixture = visualScene()
+  const scene = attachLegacyTestPlayer(fixture.scene)
+  const runtime = installDungeonWeaponVisuals(scene)
+  fixture.getUpdate()(); assert.match(fixture.created[0].key, /dagger-rare$/); assert.ok(fixture.created[0].x < scene.localPlayer.state.x)
   assert.equal(scene.localPlayer.runtime.weaponVisuals, runtime)
-  const tip = runtime.swing(); assert.equal(delayed, 110); assert.ok(tip.x > scene.localPlayer.state.x)
+  const tip = runtime.swing(); assert.equal(fixture.getDelayed(), 110); assert.ok(tip.x > scene.localPlayer.state.x)
+})
+
+test('weapon visual runtimes are isolated per PlayerEntity', () => {
+  const fixture = visualScene()
+  const scene = attachLegacyTestPlayer(fixture.scene)
+  const remote = new PlayerEntity({
+    id: 'remote',
+    state: {
+      x: 300,
+      y: 220,
+      weapon: 'weapon.remote_blade',
+      weaponRarity: 'rare',
+      equippedWeapon: { type: 'weapon.remote_blade', archetype: 'sword', rarity: 'rare' },
+    },
+    facing: 'left',
+  })
+
+  const localRuntime = installDungeonWeaponVisuals(scene, { player: scene.localPlayer })
+  const remoteRuntime = installDungeonWeaponVisuals(scene, { player: remote })
+
+  assert.notEqual(localRuntime, remoteRuntime)
+  assert.equal(scene.localPlayer.runtime.weaponVisuals, localRuntime)
+  assert.equal(remote.runtime.weaponVisuals, remoteRuntime)
+  assert.equal(scene.__dungeonWeaponVisuals, localRuntime)
+
+  remoteRuntime.restore()
+  assert.equal(scene.localPlayer.runtime.weaponVisuals, localRuntime)
+  assert.equal(scene.__dungeonWeaponVisuals, localRuntime)
 })
