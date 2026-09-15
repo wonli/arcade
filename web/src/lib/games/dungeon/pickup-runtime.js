@@ -84,41 +84,42 @@ function candidateRing(origin, radius) {
   return [...unique.values()].sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y))
 }
 
-export function resolveDropPosition(scene, x, y) {
+export function resolveDropPosition(scene, x, y, player = scene?.localPlayer) {
   const geometry = scene?.__dungeonSpatial?.getGeometry?.()
   const requested = { x: Number(x) || 0, y: Number(y) || 0 }
   if (!geometry) return requested
 
-  const player = scene?.localPlayer?.state
-  if (!player) return requested
+  const state = player?.state
+  if (!state) return requested
   const grid = dropNavGrid(scene, geometry)
 
-  if (dropPositionIsReachable(requested, geometry, player, grid)) return requested
+  if (dropPositionIsReachable(requested, geometry, state, grid)) return requested
 
   for (let radius = DROP_SEARCH_STEP; radius <= DROP_SEARCH_RADIUS; radius += DROP_SEARCH_STEP) {
-    const reachable = candidateRing(requested, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, player, grid))
+    const reachable = candidateRing(requested, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, state, grid))
     if (reachable) return reachable
   }
 
-  if (dropPositionIsReachable(player, geometry, player, grid)) return { x: player.x, y: player.y }
+  if (dropPositionIsReachable(state, geometry, state, grid)) return { x: state.x, y: state.y }
 
   for (let radius = DROP_SEARCH_STEP; radius <= DROP_SEARCH_RADIUS; radius += DROP_SEARCH_STEP) {
-    const reachable = candidateRing(player, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, player, grid))
+    const reachable = candidateRing(state, radius).find((candidate) => dropPositionIsReachable(candidate, geometry, state, grid))
     if (reachable) return reachable
   }
 
   return requested
 }
 
-function currentWeapon(scene) {
-  if (!scene?.localPlayer?.state?.weapon) return null
-  const equipped = scene.localPlayer.state.equippedWeapon
+function currentWeapon(player) {
+  const state = player?.state
+  if (!state?.weapon) return null
+  const equipped = state.equippedWeapon
   if (equipped) return { ...equipped, affixes: [...(equipped.affixes ?? [])] }
   return {
-    type: scene.localPlayer.state.weapon,
-    rarity: scene.localPlayer.state.weaponRarity ?? null,
-    damage: scene.localPlayer.state.weaponDamage ?? 0,
-    affixes: [...(scene.localPlayer.state.weaponAffixes ?? [])],
+    type: state.weapon,
+    rarity: state.weaponRarity ?? null,
+    damage: state.weaponDamage ?? 0,
+    affixes: [...(state.weaponAffixes ?? [])],
   }
 }
 
@@ -151,10 +152,15 @@ function syncGroundWeaponLabel(drop, locale) {
   drop.label.setText(drop.__weaponDetailText ? `${identity}\n${drop.__weaponDetailText}` : identity)
 }
 
-export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random, getLocale = () => 'en' } = {}) {
-  if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
+export function installPickupInteraction(scene, {
+  onSelection = () => {},
+  random = Math.random,
+  getLocale = () => 'en',
+  player = scene?.localPlayer,
+} = {}) {
+  if (!scene || !player || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
-  scene.localPlayer.state.healthPotions ??= 0
+  player.state.healthPotions ??= 0
 
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalUpdateDrops = scene.updateDrops.bind(scene)
@@ -176,7 +182,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
 
   const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
-    const position = resolveDropPosition(scene, x, y)
+    const position = resolveDropPosition(scene, x, y, player)
     const preparedItem = prepare ? prepareDropItem(scene, position.x, position.y, item, random) : item
     const before = scene.drops?.length ?? 0
     originalSpawnDrop(position.x, position.y, preparedItem)
@@ -197,19 +203,19 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
 
   const useHealthPotion = () => {
-    const next = useStoredHealthPotion(scene.localPlayer.state)
+    const next = useStoredHealthPotion(player.state)
     if (!next.used) return false
-    scene.localPlayer.state.hp = next.hp
-    scene.localPlayer.state.healthPotions = next.healthPotions
-    scene.updateHealthBar?.(scene.localPlayer.bar, scene.localPlayer.state.x, scene.localPlayer.state.y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
-    scene.pickupBurst?.(scene.localPlayer.state.x, scene.localPlayer.state.y, { type: 'consumable.health_potion' }, next.healed)
-    scene.__dungeonInventoryStats?.(scene.localPlayer.state.healthPotions)
-    originalEmitStats()
+    player.state.hp = next.hp
+    player.state.healthPotions = next.healthPotions
+    scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
+    scene.pickupBurst?.(player.state.x, player.state.y, { type: 'consumable.health_potion' }, next.healed)
+    scene.__dungeonInventoryStats?.(player.state.healthPotions)
+    if (player === scene.localPlayer) originalEmitStats()
     return true
   }
 
   const autoUseHealthPotion = () => {
-    if (scene.localPlayer.dead || scene.runComplete || !shouldAutoUseHealthPotion(scene.localPlayer.state)) return false
+    if (player.dead || scene.runComplete || !shouldAutoUseHealthPotion(player.state)) return false
     return useHealthPotion()
   }
 
@@ -220,7 +226,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     refreshLabels() {
       for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
     },
-    getHealthPotions() { return scene.localPlayer.state.healthPotions ?? 0 },
+    getHealthPotions() { return player.state.healthPotions ?? 0 },
   }
   scene.__dungeonPickupRuntime = api
 
@@ -234,24 +240,22 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     applySelectionArt(selected, false)
     selected = next
     applySelectionArt(selected, true)
-    onSelection(next ? { current: currentWeapon(scene), candidate: next.item } : null)
+    onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
   }
 
   const equipSelected = () => {
     const candidate = selected
     if (!candidate || !scene.drops?.includes(candidate)) return
-    const distance = Math.hypot(candidate.x - scene.localPlayer.state.x, candidate.y - scene.localPlayer.state.y)
+    const distance = Math.hypot(candidate.x - player.state.x, candidate.y - player.state.y)
     if (distance > 34) return
-    const previous = currentWeapon(scene)
+    const previous = currentWeapon(player)
     const x = candidate.x
     const y = candidate.y
     const rest = scene.drops.filter((drop) => drop && drop !== candidate)
 
-    // Clear the selected texture while the visual is still alive. Keep a stable local
-    // reference because publish(null) intentionally clears the selected closure state.
     publish(null)
     scene.drops = [candidate]
-    originalUpdateDrops()
+    originalUpdateDrops(player)
     const equipped = scene.drops.length === 0
     scene.drops = equipped ? rest : [candidate, ...rest]
     if (equipped && previous) spawnDropWithMotion(x, y, previous, { prepare: false })
@@ -259,7 +263,8 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
   key?.on?.('down', equipSelected)
 
-  scene.updateDrops = function updateDropsWithConfirmation() {
+  scene.updateDrops = function updateDropsWithConfirmation(target = player) {
+    if (!target) return
     scene.drops = (scene.drops ?? []).filter(Boolean)
     const now = scene.time?.now ?? 0
     for (const drop of scene.drops) {
@@ -277,22 +282,22 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
     for (const drop of automaticDrops) {
       const potion = drop.item?.type === 'consumable.health_potion'
-      const nearby = Math.hypot((drop.x ?? 0) - scene.localPlayer.state.x, (drop.y ?? 0) - scene.localPlayer.state.y) <= 34
-      if (potion && nearby && healthPotionPickupMode(scene.localPlayer.state) === 'store') {
-        scene.localPlayer.state.healthPotions = (scene.localPlayer.state.healthPotions ?? 0) + 1
+      const nearby = Math.hypot((drop.x ?? 0) - target.state.x, (drop.y ?? 0) - target.state.y) <= 34
+      if (potion && nearby && healthPotionPickupMode(target.state) === 'store') {
+        target.state.healthPotions = (target.state.healthPotions ?? 0) + 1
         scene.destroyDrop?.(drop)
-        scene.__dungeonInventoryStats?.(scene.localPlayer.state.healthPotions)
+        scene.__dungeonInventoryStats?.(target.state.healthPotions)
         scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
-        autoUseHealthPotion()
+        if (target === player) autoUseHealthPotion()
         continue
       }
       remainingAutomatic.push(drop)
     }
 
     scene.drops = remainingAutomatic
-    originalUpdateDrops()
+    originalUpdateDrops(target)
     scene.drops = [...confirmDrops, ...(scene.drops ?? []).filter(Boolean)]
-    publish(nearestConfirmableDrop(scene.localPlayer.state, confirmDrops, 34))
+    if (target === player) publish(nearestConfirmableDrop(target.state, confirmDrops, 34))
   }
 
   const autoPotionUpdate = () => autoUseHealthPotion()
