@@ -24,12 +24,16 @@ function sceneFixture() {
   return { scene, p1, p2 }
 }
 
-test('authoritative targeted attack resolves attacker and target by stable ids', () => {
+test('attack command never bypasses host autoAttack even when a target hint is supplied', () => {
   const { scene, p2 } = sceneFixture()
-  const target = { id: 'enemy-7', x: 80, y: 0, hp: 50 }
-  scene.enemies = [target]
-  let call = null
-  scene.slash = (enemy, attacker) => { call = { enemy, attacker }; return 'slash-result' }
+  scene.enemies = [{ id: 'enemy-7', x: 80, y: 0, hp: 50 }]
+  let slashCalls = 0
+  let autoAttackCall = null
+  scene.slash = () => { slashCalls++ }
+  scene.autoAttack = (time, player) => {
+    autoAttackCall = { time, player }
+    player.lastAttackAt = time
+  }
 
   const result = executePlayerCommand(scene, {
     type: 'attack',
@@ -40,21 +44,20 @@ test('authoritative targeted attack resolves attacker and target by stable ids',
 
   assert.equal(result.accepted, true)
   assert.equal(result.applied, true)
-  assert.equal(result.result, 'slash-result')
-  assert.equal(call.enemy, target)
-  assert.equal(call.attacker, p2)
+  assert.equal(slashCalls, 0)
+  assert.deepEqual(autoAttackCall, { time: 1200, player: p2 })
 })
 
-test('authoritative untargeted attack routes through autoAttack with the resolved player', () => {
+test('attack command reports non-applied when host autoAttack declines the intent', () => {
   const { scene, p2 } = sceneFixture()
-  let call = null
-  scene.autoAttack = (time, player) => { call = { time, player } }
+  scene.autoAttack = () => {}
 
   const result = executePlayerCommand(scene, { type: 'attack', playerId: 'p2', time: 1500 })
 
   assert.equal(result.accepted, true)
-  assert.equal(result.applied, true)
-  assert.deepEqual(call, { time: 1500, player: p2 })
+  assert.equal(result.applied, false)
+  assert.equal(result.reason, 'attack-not-applied')
+  assert.equal(p2.lastAttackAt, 0)
 })
 
 test('non-authoritative command validates intent without mutating gameplay', () => {
@@ -127,17 +130,15 @@ test('pickup stays non-applied until the world exposes stable drop identity', ()
   assert.equal(result.reason, 'pickup-unavailable')
 })
 
-test('commands reject unknown, dead, malformed players or targets without mutation', () => {
+test('commands reject unknown, dead, or malformed players without mutation', () => {
   const { scene, p2 } = sceneFixture()
   let calls = 0
-  scene.slash = () => { calls++ }
   scene.autoAttack = () => { calls++ }
 
   assert.equal(executePlayerCommand(scene, { type: 'attack', playerId: 'missing' }).reason, 'player-not-found')
   p2.dead = true
   assert.equal(executePlayerCommand(scene, { type: 'attack', playerId: 'p2' }).reason, 'player-dead')
   p2.dead = false
-  assert.equal(executePlayerCommand(scene, { type: 'attack', playerId: 'p2', targetId: 'missing' }).reason, 'target-not-found')
   assert.equal(executePlayerCommand(scene, { type: 'skill', playerId: 'p2' }).reason, 'skill-required')
   assert.equal(executePlayerCommand(scene, { type: 'pickup', playerId: 'p2' }).reason, 'drop-required')
   assert.equal(executePlayerCommand(scene, { type: 'unknown', playerId: 'p2' }).reason, 'unsupported-command')
