@@ -60,6 +60,19 @@ function roomMessage(payload) {
   return { data: { topicId: 'room:ABC123', message: payload } }
 }
 
+test('network runtime rekeys the default local PlayerEntity to the authenticated player id', () => {
+  const scene = sceneFixture('local')
+  const player = scene.localPlayer
+  const socket = socketFixture()
+
+  createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'session-7', hostId: 'session-7' })
+
+  assert.equal(scene.localPlayer, player)
+  assert.equal(player.id, 'session-7')
+  assert.equal(scene.players.has('local'), false)
+  assert.equal(scene.players.get('session-7'), player)
+})
+
 test('remote snapshot trusts relay playerId instead of spoofed snapshot id', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
