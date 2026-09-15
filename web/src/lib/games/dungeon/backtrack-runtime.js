@@ -16,15 +16,15 @@ function destroyCountdown(portal) {
   }
 }
 
-function updateCountdown(scene, portal, dwell, color = '#f4f0e8') {
-  if (!portal) return
+function updateCountdown(scene, portal, dwell, player, color = '#f4f0e8') {
+  if (!portal || !player) return
   if (!dwell?.seconds) {
     portal.countdownLabel?.destroy?.()
     portal.countdownLabel = null
     return
   }
   if (!portal.countdownLabel) {
-    portal.countdownLabel = scene.add?.text?.(scene.localPlayer.state.x, scene.localPlayer.state.y - 58, String(dwell.seconds), {
+    portal.countdownLabel = scene.add?.text?.(player.state.x, player.state.y - 58, String(dwell.seconds), {
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       fontSize: '28px',
       fontStyle: 'bold',
@@ -34,7 +34,7 @@ function updateCountdown(scene, portal, dwell, color = '#f4f0e8') {
     })?.setOrigin?.(0.5)?.setDepth?.(75) ?? null
   }
   portal.countdownLabel?.setText?.(String(dwell.seconds))
-  portal.countdownLabel?.setPosition?.(scene.localPlayer.state.x, scene.localPlayer.state.y - 58)
+  portal.countdownLabel?.setPosition?.(player.state.x, player.state.y - 58)
 }
 
 function destroyBackPortal(portal) {
@@ -116,16 +116,16 @@ export function safeRestorePosition(geometry, direction = 'back') {
   return fallbacks.find((point) => validRestorePoint(point, geometry, anchor)) ?? anchor
 }
 
-function placeAfterRestore(scene, direction) {
+function placeAfterRestore(scene, direction, player) {
   const position = safeRestorePosition(scene.__roomGeometry, direction)
-  scene.localPlayer.state.x = position.x
-  scene.localPlayer.state.y = position.y
-  scene.localPlayer.actor?.setPosition?.(position.x, position.y)
-  scene.updateHealthBar?.(scene.localPlayer.bar, position.x, position.y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
+  player.state.x = position.x
+  player.state.y = position.y
+  player.actor?.setPosition?.(position.x, position.y)
+  scene.updateHealthBar?.(player.bar, position.x, position.y - 42, player.state.hp, player.state.maxHp)
 }
 
-export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}) {
-  if (!scene || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
+export function installDungeonBacktracking(scene, { onProgress = () => {}, player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
   scene.__dungeonBacktrackingInstalled = true
 
   const originalAdvanceFloor = scene.advanceFloor.bind(scene)
@@ -173,8 +173,8 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
 
     restoreChestState(scene, state.chests)
     if (state.cleared) restoreDropState(scene, state.drops)
-    if (state.cleared) scene.openPortal?.()
-    placeAfterRestore(scene, direction)
+    if (state.cleared) scene.openPortal?.(player)
+    placeAfterRestore(scene, direction, player)
     scene.showBanner?.(`${direction === 'back' ? '↩ ' : ''}${state.progress.floor}`, direction === 'back' ? '#67a8ff' : '#f4f0e8', 30)
   }
 
@@ -187,7 +187,7 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
     return true
   }
 
-  scene.advanceFloor = function advanceFloorWithHistory() {
+  scene.advanceFloor = function advanceFloorWithHistory(target = player) {
     if (backtracked) {
       previousState = capture()
       backtracked = false
@@ -199,20 +199,20 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
     }
 
     previousState = capture()
-    originalAdvanceFloor()
+    originalAdvanceFloor(target)
     currentState = null
     refreshBackPortal()
   }
 
-  scene.updatePortal = function updatePortalWithDwell(time) {
+  scene.updatePortal = function updatePortalWithDwell(time, target = player) {
     const portal = scene.portal
-    if (!portal || time < portal.unlockAt) return
-    const inside = Math.hypot(portal.x - scene.localPlayer.state.x, portal.y - scene.localPlayer.state.y) <= FORWARD_PORTAL_TRIGGER_RADIUS
+    if (!portal || !target || time < portal.unlockAt) return
+    const inside = Math.hypot(portal.x - target.state.x, portal.y - target.state.y) <= FORWARD_PORTAL_TRIGGER_RADIUS
     portal.dwell = portalDwellState(portal.dwell, { inside, now: time })
-    updateCountdown(scene, portal, portal.dwell, '#70ff9f')
+    updateCountdown(scene, portal, portal.dwell, target, '#70ff9f')
     if (!portal.dwell.complete) return
     destroyCountdown(portal)
-    scene.advanceFloor()
+    scene.advanceFloor(target)
   }
 
   const updateBackPortal = () => {
@@ -225,9 +225,9 @@ export function installDungeonBacktracking(scene, { onProgress = () => {} } = {}
     }
 
     const now = scene.time?.now ?? 0
-    const inside = Math.hypot(scene.localPlayer.state.x - backPortal.x, scene.localPlayer.state.y - backPortal.y) <= PORTAL_TRIGGER_RADIUS
+    const inside = Math.hypot(player.state.x - backPortal.x, player.state.y - backPortal.y) <= PORTAL_TRIGGER_RADIUS
     backPortal.dwell = portalDwellState(backPortal.dwell, { inside, now })
-    updateCountdown(scene, backPortal, backPortal.dwell, '#67a8ff')
+    updateCountdown(scene, backPortal, backPortal.dwell, player, '#67a8ff')
     if (!backPortal.dwell.complete) return
     destroyCountdown(backPortal)
     retreat()
