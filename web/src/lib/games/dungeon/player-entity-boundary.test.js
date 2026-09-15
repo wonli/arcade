@@ -6,8 +6,8 @@ import path from 'node:path'
 
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const aliases = 'playerState|player|playerBar|playerFacing|playerMoving|playerAttacking|lastAttackAt|skillReadyAt|lastContactAt|dead'
-const sceneAccess = new RegExp(`\\bscene\\.(${aliases})\\b`, 'g')
-const dungeonSceneAccess = new RegExp(`\\bthis\\.(${aliases})\\b`, 'g')
+const sceneAccess = new RegExp(`\\bscene(?:\\?\\.|\\.)(${aliases})\\b`, 'g')
+const dungeonSceneAccess = new RegExp(`\\bthis(?:\\?\\.|\\.)(${aliases})\\b`, 'g')
 
 async function productionFiles() {
   const entries = await readdir(directory, { withFileTypes: true })
