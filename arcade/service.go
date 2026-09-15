@@ -86,13 +86,19 @@ func roomBounds(bounds []int) (int, int, error) {
 }
 
 func (s *Service) Get(roomID string) (*room.Room, bool) { return s.rooms.Get(roomID) }
-func (s *Service) CanRelayDungeon(roomID string, playerID game.PlayerID, hostOnly bool) bool {
-	r, ok := s.rooms.Get(roomID)
-	if !ok || r.GameName != "dungeon" || !r.Started() || !r.HasPlayer(playerID) {
-		return false
+
+// DungeonPeer validates that a player belongs to a started Dungeon room and
+// returns whether that player owns the room host role. The server never owns
+// Dungeon gameplay state; it only authenticates relay participants and the
+// room host for authoritative fact publication.
+func (s *Service) DungeonPeer(roomID string, playerID game.PlayerID) (isHost bool, ok bool) {
+	r, exists := s.rooms.Get(roomID)
+	if !exists || r.GameName != "dungeon" || !r.Started() || !r.HasPlayer(playerID) {
+		return false, false
 	}
-	return !hostOnly || r.HostID == playerID
+	return r.HostID == playerID, true
 }
+
 func (s *Service) Join(roomID string, playerID game.PlayerID, name string) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok {
