@@ -17,6 +17,8 @@
 - Preserve single-player behavior.
 - Never serialize Phaser objects or arbitrary `player.runtime` values.
 - Keep guest/non-authoritative command execution mutation-free.
+- Attack target selection and cadence remain Host-authoritative; command target hints may not call `slash()` directly.
+- Do not invent drop identity from array indexes; pickup stays non-applied until stable host-owned drop ids exist.
 
 ---
 
@@ -30,27 +32,22 @@
 - Produces: `serializePlayerSnapshot(player) -> plain object`
 - Produces: `applyPlayerSnapshot(player, snapshot) -> player`
 
-- [ ] **Step 1: Write failing snapshot tests**
+- [x] **Step 1: Write failing snapshot tests**
 
 Cover serialization of id/state/facing/movement/combat timestamps/death/cooldowns, exclusion of actor/bar/non-skill runtime values, deep-copy behavior, and state object identity after apply.
 
 - [ ] **Step 2: Run focused test**
 
 Run: `cd web && node --test src/lib/games/dungeon/player-snapshot.test.js`
-Expected: FAIL because the module does not exist.
+Expected: PASS after implementation; local execution is delegated to the developer workstation.
 
-- [ ] **Step 3: Implement snapshot functions**
+- [x] **Step 3: Implement snapshot functions**
 
 Use `structuredClone` for `state`; normalize booleans/number timestamps; copy only `runtime.skills.cooldowns` into `skillCooldowns`. Apply state via the existing `PlayerEntity.state` setter and rebuild only the cooldown namespace.
 
-- [ ] **Step 4: Run focused test**
+- [x] **Step 4: Commit implementation**
 
-Run: `cd web && node --test src/lib/games/dungeon/player-snapshot.test.js`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-Commit message: `feat(dungeon): add player snapshot boundary`
+Implemented in `player-snapshot.js` after the contract tests.
 
 ---
 
@@ -59,34 +56,24 @@ Commit message: `feat(dungeon): add player snapshot boundary`
 **Files:**
 - Create: `web/src/lib/games/dungeon/remote-player-runtime.js`
 - Create: `web/src/lib/games/dungeon/remote-player-runtime.test.js`
-- Modify only if necessary: `web/src/lib/games/dungeon/player-entity.js`
 
 **Interfaces:**
-- Consumes: `serialize/applyPlayerSnapshot`, `attachPlayerEntity`, `detachPlayerEntity`
+- Consumes: `applyPlayerSnapshot`, `attachPlayerEntity`, `detachPlayerEntity`
 - Produces: `spawnRemotePlayer(scene, snapshot) -> PlayerEntity`
 - Produces: `despawnRemotePlayer(scene, playerOrId) -> PlayerEntity|null`
 
-- [ ] **Step 1: Write failing lifecycle tests**
+- [x] **Step 1: Write lifecycle contract tests**
 
 Cover remote creation in `scene.players`, actor/bar creation when factories exist, local isolation, duplicate/local-id rejection, runtime `restore()` calls, actor/bar destroy, and registry removal.
 
-- [ ] **Step 2: Run focused test**
-
-Run: `cd web && node --test src/lib/games/dungeon/remote-player-runtime.test.js`
-Expected: FAIL because the module does not exist.
-
-- [ ] **Step 3: Implement remote lifecycle**
+- [x] **Step 2: Implement remote lifecycle**
 
 Create from snapshot id/state, apply snapshot, then attach presentation objects. On despawn, restore each distinct runtime helper exposing `restore()`, destroy actor/bar, then detach from registry. Never despawn `scene.localPlayer`.
 
-- [ ] **Step 4: Run focused test**
+- [ ] **Step 3: Run focused test**
 
 Run: `cd web && node --test src/lib/games/dungeon/remote-player-runtime.test.js`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-Commit message: `feat(dungeon): add remote player lifecycle`
+Expected: PASS on the developer workstation.
 
 ---
 
@@ -95,54 +82,44 @@ Commit message: `feat(dungeon): add remote player lifecycle`
 **Files:**
 - Create: `web/src/lib/games/dungeon/player-command-runtime.js`
 - Create: `web/src/lib/games/dungeon/player-command-runtime.test.js`
-- Modify: `web/src/lib/games/dungeon/pickup-runtime.js` only to expose an explicit pickup-by-player/drop command if required.
 
 **Interfaces:**
 - Consumes: `scene.players`, `castPlayerSkill(scene, player, skillId, time)`
 - Produces: `executePlayerCommand(scene, command, { authoritative }) -> { accepted, applied, type, playerId, reason?, result? }`
 
-- [ ] **Step 1: Write failing command tests**
+- [x] **Step 1: Write command contract tests**
 
-Cover explicit player resolution, targeted attack ownership, skill ownership, unknown/dead player rejection, malformed command rejection, non-authoritative no-mutation behavior, and pickup delegation.
+Cover explicit player resolution, Host-owned attack targeting/cadence, skill ownership, unknown/dead player rejection, malformed command rejection, non-authoritative no-mutation behavior, and pickup delegation.
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Implement command dispatcher**
 
-Run: `cd web && node --test src/lib/games/dungeon/player-command-runtime.test.js`
-Expected: FAIL because the module does not exist.
+Validate command/type/player first. With `authoritative:false`, return accepted intent without invoking gameplay methods. With authority, route attack exclusively through `autoAttack(time, player)`, route skill to `castPlayerSkill`, and delegate pickup only to an explicit stable-id pickup API when available.
 
-- [ ] **Step 3: Implement command dispatcher**
-
-Validate command/type/player first. With `authoritative:false`, return accepted intent without invoking gameplay methods. With authority, route attack to `slash` or `autoAttack`, skill to `castPlayerSkill`, and pickup to the explicit pickup runtime API.
-
-- [ ] **Step 4: Run focused test**
+- [ ] **Step 3: Run focused test**
 
 Run: `cd web && node --test src/lib/games/dungeon/player-command-runtime.test.js`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-Commit message: `feat(dungeon): add player authority boundary`
+Expected: PASS on the developer workstation.
 
 ---
 
 ### Task 4: Boundary regression pass
 
-**Files:**
-- Modify if needed: `web/src/lib/games/dungeon/player-architecture-boundaries.test.js`
+- [ ] **Step 1: Run focused boundary tests**
 
-**Interfaces:**
-- Consumes all three new boundaries.
+Run:
 
-- [ ] **Step 1: Add architecture assertions**
+```bash
+cd web
+node --test \
+  src/lib/games/dungeon/player-snapshot.test.js \
+  src/lib/games/dungeon/remote-player-runtime.test.js \
+  src/lib/games/dungeon/player-command-runtime.test.js \
+  src/lib/games/dungeon/player-architecture-boundaries.test.js
+```
 
-Assert snapshots are JSON-safe, remote lifecycle uses the existing registry, and non-authoritative commands do not mutate player/enemy/drop state.
-
-- [ ] **Step 2: Run focused Dungeon tests**
-
-Run: `cd web && node --test src/lib/games/dungeon/player-snapshot.test.js src/lib/games/dungeon/remote-player-runtime.test.js src/lib/games/dungeon/player-command-runtime.test.js src/lib/games/dungeon/player-architecture-boundaries.test.js`
 Expected: PASS.
 
-- [ ] **Step 3: Hand off full verification**
+- [ ] **Step 2: Run full project verification**
 
 Run locally: `make test`
-Expected: PASS before this branch is considered ready for transport work.
+Expected: PASS before transport work begins.
