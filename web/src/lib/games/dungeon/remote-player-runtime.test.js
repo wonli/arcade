@@ -73,6 +73,61 @@ test('spawning a remote player registers an independent entity and presentation'
   assert.equal(syncs.at(-1).player, remote)
 })
 
+test('remote player replaces the fallback light ball with the loaded local sprite visual', () => {
+  const { scene, local } = sceneFixture()
+  let fallback = null
+  let copied = null
+
+  local.actor = {
+    texture: { key: 'dungeon-player-down-idle' },
+    frame: { name: 3 },
+    scaleX: 1.5,
+    scaleY: 1.5,
+  }
+  scene.makeActor = (x, y) => {
+    fallback = {
+      x,
+      y,
+      destroyed: false,
+      getData(key) { return key === 'usesTexture' ? false : undefined },
+      setDepth() { return this },
+      destroy() { this.destroyed = true },
+    }
+    return fallback
+  }
+  scene.add = {
+    sprite(x, y, key, frame) {
+      copied = {
+        x,
+        y,
+        key,
+        frame,
+        depth: 0,
+        scaleX: 1,
+        scaleY: 1,
+        data: {},
+        setScale(scaleX, scaleY) { this.scaleX = scaleX; this.scaleY = scaleY; return this },
+        setData(keyName, value) { this.data[keyName] = value; return this },
+        getData(keyName) { return this.data[keyName] },
+        setDepth(depth) { this.depth = depth; return this },
+        setPosition(nextX, nextY) { this.x = nextX; this.y = nextY; return this },
+        destroy() { this.destroyed = true },
+      }
+      return copied
+    },
+  }
+
+  const remote = spawnRemotePlayer(scene, snapshot())
+
+  assert.equal(fallback.destroyed, true)
+  assert.equal(remote.actor, copied)
+  assert.equal(remote.actor.key, 'dungeon-player-down-idle')
+  assert.equal(remote.actor.frame, 3)
+  assert.equal(remote.actor.scaleX, 1.5)
+  assert.equal(remote.actor.scaleY, 1.5)
+  assert.equal(remote.actor.getData('usesTexture'), true)
+})
+
 test('spawning rejects the local player id and duplicate remote ids', () => {
   const { scene } = sceneFixture()
 

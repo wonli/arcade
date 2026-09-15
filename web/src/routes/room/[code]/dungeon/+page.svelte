@@ -10,10 +10,11 @@
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
   import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
+  import { setProceduralRunSeed } from '$lib/games/dungeon/spatial.js'
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
   import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
-  import { createDungeonNetworkRuntime } from '$lib/games/dungeon/network-runtime.js'
+  import { createDungeonNetworkRuntime, dungeonSceneReadyForNetwork } from '$lib/games/dungeon/network-runtime.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
 
   export let data
@@ -42,6 +43,10 @@
   $: isHost = room?.hostId === identity.sessionId
   $: waiting = room?.status !== 'playing'
 
+  function currentPlayerSlot() {
+    return (room?.players ?? []).findIndex((player) => String(player?.id ?? '') === identity.sessionId)
+  }
+
   async function loadResources() {
     if (resources) return resources
     const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
@@ -66,13 +71,16 @@
   }
 
   function ensureNetwork() {
-    if (networkRuntime || !scene || !room || room.status !== 'playing') return
+    const playerSlot = currentPlayerSlot()
+    if (networkRuntime || !ready || !dungeonSceneReadyForNetwork(scene) || !room || room.status !== 'playing' || playerSlot < 0) return
     networkRuntime = createDungeonNetworkRuntime({
       socket,
       scene,
       roomId: room.id,
+      runSeed: roomCode,
       localPlayerId: identity.sessionId,
       hostId: room.hostId,
+      playerSlot,
       onFact(fact) {
         if (fact?.type) eventText = `FACT · ${fact.type}`
       },
@@ -99,6 +107,7 @@
     const { Phaser, assets, vfxManifest } = await loadResources()
     if (!mount) return
 
+    setProceduralRunSeed(roomCode)
     const runGame = createDungeonGame({
       Phaser,
       parent: mount,
@@ -112,7 +121,7 @@
     const install = () => {
       if (game !== runGame) return
       const nextScene = runGame.scene?.getScene?.('Dungeon')
-      if (!nextScene) {
+      if (!dungeonSceneReadyForNetwork(nextScene)) {
         if (attempts++ < 90) requestAnimationFrame(install)
         return
       }
@@ -200,6 +209,7 @@
       scene = null
       game?.destroy(true)
       game = null
+      setProceduralRunSeed(null)
     }
   })
 </script>

@@ -58,12 +58,28 @@ const TEMPLATES = {
 }
 
 let proceduralRunSeed = null
+let pinnedProceduralRunSeed = null
 let highestProceduralFloor = 0
 const proceduralCache = new Map()
 
+export function setProceduralRunSeed(runSeed = null) {
+  const value = String(runSeed ?? '').trim().toUpperCase()
+  pinnedProceduralRunSeed = value || null
+  proceduralRunSeed = pinnedProceduralRunSeed
+  highestProceduralFloor = 0
+  proceduralCache.clear()
+  return pinnedProceduralRunSeed
+}
+
 function proceduralGeometry(floor, random) {
   const normalizedFloor = Math.max(1, Math.floor(floor || 1))
-  if (proceduralRunSeed == null || (normalizedFloor === 1 && highestProceduralFloor > 1)) {
+  if (pinnedProceduralRunSeed != null) {
+    if (proceduralRunSeed !== pinnedProceduralRunSeed) {
+      proceduralRunSeed = pinnedProceduralRunSeed
+      highestProceduralFloor = 0
+      proceduralCache.clear()
+    }
+  } else if (proceduralRunSeed == null || (normalizedFloor === 1 && highestProceduralFloor > 1)) {
     const roll = typeof random === 'function' ? random() : Math.random()
     proceduralRunSeed = Math.max(1, Math.floor(Math.abs(Number(roll) || 0.5) * 0xffffffff))
     highestProceduralFloor = 0

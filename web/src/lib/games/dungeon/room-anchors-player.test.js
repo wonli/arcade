@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createPlayerEntity } from './player-entity.js'
-import { placePlayerAtRoomSpawn } from './room-anchors.js'
+import { placePlayerAtRoomSpawn, playerRoomSpawn } from './room-anchors.js'
 
 function actor() {
   return {
@@ -43,4 +43,24 @@ test('room spawn placement only mutates the provided PlayerEntity', () => {
   assert.deepEqual({ x: local.state.x, y: local.state.y }, { x: 10, y: 20 })
   assert.deepEqual({ x: local.actor.x, y: local.actor.y }, { x: 0, y: 0 })
   assert.deepEqual(healthUpdates, [[target.bar, 222, 291, 60, 90]])
+})
+
+test('co-op player slots derive distinct deterministic room spawn positions', () => {
+  const geometry = {
+    width: 960,
+    height: 600,
+    spawn: { x: 480, y: 300 },
+    spawnPoints: [],
+    solids: [],
+    water: [],
+    bridges: [],
+  }
+
+  const p1 = playerRoomSpawn(geometry, 0)
+  const p2 = playerRoomSpawn(geometry, 1)
+
+  assert.deepEqual(p1, { x: 480, y: 300 })
+  assert.deepEqual(p2, { x: 514, y: 300 })
+  assert.notDeepEqual(p2, p1)
+  assert.deepEqual(playerRoomSpawn(geometry, 1), p2)
 })
