@@ -1,4 +1,5 @@
 import { healFromHit, modifiedDamage, rollDamage } from './combat.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { rangedProjectileArt } from './weapon-art.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
@@ -21,9 +22,9 @@ function directionFromTarget(player, target, fallback = 'down') {
   return fallback
 }
 
-function weaponIdentity(player) {
-  const item = player?.equippedWeapon
-  return [item?.type ?? player?.weapon ?? '', item?.archetype ?? '', item?.signature ?? ''].join('|')
+function weaponIdentity(state) {
+  const item = currentWeapon(state)
+  return [item?.type ?? '', item?.archetype ?? '', item?.signature ?? ''].join('|')
 }
 
 export function weaponProjectileSpec(player) {
@@ -232,7 +233,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       ? rolled.damage
       : modifiedDamage(player.state, target, rolled.damage)
     const damage = powerShot ? Math.max(1, Math.round(baseDamage * 1.6)) : baseDamage
-    const vfxProfile = weaponVfxProfile(player.state.equippedWeapon ?? { rarity: player.state.weaponRarity ?? 'common' })
+    const vfxProfile = weaponVfxProfile(currentWeapon(player.state) ?? { rarity: 'common' })
     const visuals = makeVisual(spec, start, angle, vfxProfile)
 
     if (!secondary) {
@@ -269,7 +270,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     const projectile = projectiles.at(-1)
 
     if (powerShot) {
-      const effects = player.state.effects ?? {}
+      const effects = currentEffects(player.state)
       if ((effects.volley ?? 0) > 0) {
         const radius = Math.round(190 * (1 + (effects.skillRadius ?? 0)))
         const targets = bowVolleyTargets(target, scene.enemies ?? [], radius, 2)
