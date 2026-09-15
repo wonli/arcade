@@ -14,19 +14,19 @@ export function meleeBehavior(player) {
   return { kind: 'default' }
 }
 
-function secondaryDamage(scene, multiplier) {
-  const base = weaponAttackDamage(scene.localPlayer.state, scene.localPlayer.state.damage ?? 1)
+function secondaryDamage(player, multiplier) {
+  const base = weaponAttackDamage(player.state, player.state.damage ?? 1)
   return Math.max(1, Math.round(base * multiplier))
 }
 
-function damageSecondary(scene, enemies, primary, damage, knockback, source) {
+function damageSecondary(scene, enemies, primary, damage, knockback, source, player) {
   for (const enemy of enemies) {
     if (!enemy || enemy === primary || enemy.id === primary?.id || enemy.hp <= 0) continue
     scene.damageEnemy?.(enemy, damage, false, knockback, {
       direct: false,
       canProc: false,
       source,
-    })
+    }, player)
   }
 }
 
@@ -35,45 +35,45 @@ export function installDungeonWeaponMelee(scene) {
   const originalSlash = scene.slash?.bind(scene)
   if (!originalSlash) return null
 
-  scene.slash = function archetypeMeleeAttack(target) {
-    if (!target || target.hp <= 0) return
-    const behavior = meleeBehavior(scene.localPlayer.state)
-    const profile = weaponProfile(scene.localPlayer.state)
+  scene.slash = function archetypeMeleeAttack(target, player = scene.localPlayer) {
+    if (!target || target.hp <= 0 || !player) return
+    const behavior = meleeBehavior(player.state)
+    const profile = weaponProfile(player.state)
 
     if (behavior.kind === 'thrust') {
       const attack = thrustAttack(
-        scene.localPlayer.state,
+        player.state,
         target,
         profile.range,
         30,
         scene.__roomGeometry ?? scene.__dungeonSpatial?.getGeometry?.(),
       )
-      const result = originalSlash(target)
+      const result = originalSlash(target, player)
       const secondary = targetsInBeam(attack, scene.enemies ?? [])
-      damageSecondary(scene, secondary, target, secondaryDamage(scene, behavior.secondaryDamage), 10, 'weapon_thrust')
+      damageSecondary(scene, secondary, target, secondaryDamage(player, behavior.secondaryDamage), 10, 'weapon_thrust', player)
       scene.__dungeonVfx?.beam?.(attack, { alpha: 0.28 })
       return result
     }
 
     if (behavior.kind === 'cleave') {
-      const attack = cleaveAttack(scene.localPlayer.state, target, profile.range, 118)
-      const result = originalSlash(target)
+      const attack = cleaveAttack(player.state, target, profile.range, 118)
+      const result = originalSlash(target, player)
       const secondary = targetsInArc(attack, scene.enemies ?? [])
-      damageSecondary(scene, secondary, target, secondaryDamage(scene, behavior.secondaryDamage), 18, 'weapon_cleave')
+      damageSecondary(scene, secondary, target, secondaryDamage(player, behavior.secondaryDamage), 18, 'weapon_cleave', player)
       scene.__dungeonVfx?.whirlwind?.({ center: attack.center, radius: Math.min(112, profile.range * 0.58) }, { alpha: 0.32 })
       return result
     }
 
     if (behavior.kind === 'heavy') {
       const originalDamageEnemy = scene.damageEnemy
-      scene.damageEnemy = function heavyAxeDamage(enemy, damage, critical, knockback, context) {
+      scene.damageEnemy = function heavyAxeDamage(enemy, damage, critical, knockback, context, attacker = player) {
         const heavyKnockback = context?.source === 'weapon'
           ? knockback * behavior.knockbackMultiplier
           : knockback
-        return originalDamageEnemy.call(scene, enemy, damage, critical, heavyKnockback, context)
+        return originalDamageEnemy.call(scene, enemy, damage, critical, heavyKnockback, context, attacker ?? player)
       }
       try {
-        const result = originalSlash(target)
+        const result = originalSlash(target, player)
         scene.cameras?.main?.shake?.(115, 0.007)
         scene.__dungeonVfx?.smoke?.(target.x, target.y, { alpha: 0.42 })
         return result
@@ -82,7 +82,7 @@ export function installDungeonWeaponMelee(scene) {
       }
     }
 
-    return originalSlash(target)
+    return originalSlash(target, player)
   }
 
   const restore = () => {
@@ -92,7 +92,7 @@ export function installDungeonWeaponMelee(scene) {
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { behavior: () => meleeBehavior(scene.localPlayer.state), restore }
+  const api = { behavior: (player = scene.localPlayer) => meleeBehavior(player.state), restore }
   scene.__dungeonWeaponMelee = api
   return api
 }
