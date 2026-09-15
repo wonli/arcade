@@ -12,19 +12,19 @@ function floatingText(scene, x, y, text, color, duration, size = 14) {
   scene.tweens.add({ targets: label, y: y - 30, alpha: 0, duration, ease: 'Quad.Out', onComplete: () => label.destroy() })
 }
 
-export function installAffixVisuals(scene) {
-  if (!scene || scene.__affixVisualsInstalled) return scene
+export function installAffixVisuals(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__affixVisualsInstalled) return scene
   scene.__affixVisualsInstalled = true
 
   const originalHealPlayer = scene.healPlayer?.bind(scene)
   if (originalHealPlayer) {
-    scene.healPlayer = (amount) => {
-      const before = scene.localPlayer.state?.hp ?? 0
-      originalHealPlayer(amount)
-      const healed = Math.max(0, (scene.localPlayer.state?.hp ?? 0) - before)
+    scene.healPlayer = (amount, target = player) => {
+      const before = target?.state?.hp ?? 0
+      originalHealPlayer(amount, target)
+      const healed = Math.max(0, (target?.state?.hp ?? 0) - before)
       if (healed > 0) {
         const cue = combatVisualCue('heal')
-        floatingText(scene, scene.localPlayer.state.x, scene.localPlayer.state.y - 44, `+${healed} HP`, cue.color, cue.duration, 13)
+        floatingText(scene, target.state.x, target.state.y - 44, `+${healed} HP`, cue.color, cue.duration, 13)
       }
     }
   }
