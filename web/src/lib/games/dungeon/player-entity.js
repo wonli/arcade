@@ -17,6 +17,7 @@ export class PlayerEntity {
     this.state = cloneGameplayState(state)
     this.actor = actor
     this.bar = bar
+    this.runtime = {}
     this.facing = facing
     this.moving = false
     this.attacking = false
