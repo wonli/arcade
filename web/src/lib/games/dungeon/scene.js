@@ -217,7 +217,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.localPlayer.bar = this.createHealthBar(this.localPlayer.state.x, this.localPlayer.state.y - 42, 54, 6, 0x55e879)
       this.setupPlayerAnimations()
       this.syncPlayerAnimation()
-      this.startFloor(true)
+      this.startFloor(true, this.localPlayer)
       const startAmbient = () => this.ambient.start().catch(() => {})
       this.input.once('pointerdown', startAmbient)
       this.input.keyboard.once('keydown', startAmbient)
@@ -368,7 +368,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       return this.add.circle(x, y, kind === 'player' ? 18 : 16, color, 1).setStrokeStyle(3, kind === 'player' ? 0xf5ffe7 : 0xcab8ff, 0.9).setData('usesTexture', false)
     }
 
-    startFloor(initial = false) {
+    startFloor(initial = false, player = this.localPlayer) {
       this.floorCleared = false
       this.floorKills = 0
       this.destroyPortal()
@@ -377,7 +377,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
         this.clearEnemyProjectiles()
         this.clearDrops()
         this.drawArena()
-        placePlayerAtRoomSpawn(this)
+        placePlayerAtRoomSpawn(this, player)
       }
       const wave = floorWave(this.floor)
       for (let i = 0; i < wave.count; i++) this.spawnEnemy(i, { elite: i < wave.eliteCount })
@@ -443,15 +443,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     update(time, delta) {
-      if (this.localPlayer.dead || this.runComplete) return
+      const player = this.localPlayer
+      if (player.dead || this.runComplete) return
       const dt = Math.min(delta, 40) / 1000
-      this.updatePlayer(dt)
-      this.updateEnemies(time, dt)
-      this.updateEnemyProjectiles(dt)
-      this.updateDrops()
-      this.updatePortal(time)
-      this.autoAttack(time)
-      this.trySkill(time)
+      this.updatePlayer(dt, player)
+      this.updateEnemies(time, dt, player)
+      this.updateEnemyProjectiles(dt, player)
+      this.updateDrops(player)
+      this.updatePortal(time, player)
+      this.autoAttack(time, player)
+      this.trySkill(time, player)
     }
 
     updatePlayer(dt, player = this.localPlayer) {
@@ -810,7 +811,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (potion) this.spawnDrop(enemy.x + (equipment ? 12 : 0), enemy.y, potion)
 
       if (player === this.localPlayer) this.emitStats()
-      this.checkFloorClear()
+      this.checkFloorClear(player)
       this.time.delayedCall(350, () => {
         const index = this.enemies.indexOf(enemy)
         if (index >= 0) this.enemies.splice(index, 1)
@@ -818,16 +819,16 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       })
     }
 
-    checkFloorClear() {
-      if (this.floorCleared || this.localPlayer.dead || this.runComplete) return
+    checkFloorClear(player = this.localPlayer) {
+      if (this.floorCleared || player.dead || this.runComplete) return
       const living = this.enemies.filter((enemy) => enemy.hp > 0).length
       const outcome = floorOutcome(this.floor, living)
       if (outcome === 'combat') return
       this.floorCleared = true
       this.showBanner(text.floorClear(), '#c1ff56', 34)
       onEvent({ type: 'floorclear', floor: this.floor })
-      if (outcome === 'complete') this.time.delayedCall(900, () => this.completeRun())
-      else this.time.delayedCall(750, () => this.openPortal())
+      if (outcome === 'complete') this.time.delayedCall(900, () => this.completeRun(player))
+      else this.time.delayedCall(750, () => this.openPortal(player))
     }
 
     deathBurst(x, y, color = 0xa980ff) {
@@ -883,19 +884,19 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       onEvent({ type: 'drop', item })
     }
 
-    updateDrops() {
+    updateDrops(player = this.localPlayer) {
       for (let i = this.drops.length - 1; i >= 0; i--) {
         const drop = this.drops[i]
-        if (Math.hypot(drop.x - this.localPlayer.state.x, drop.y - this.localPlayer.state.y) > 34) continue
-        const beforeHp = this.localPlayer.state.hp
-        this.localPlayer.state = applyPickup(this.localPlayer.state, drop.item, this.localPlayer.state.baseStats)
+        if (Math.hypot(drop.x - player.state.x, drop.y - player.state.y) > 34) continue
+        const beforeHp = player.state.hp
+        player.state = applyPickup(player.state, drop.item, player.state.baseStats)
         this.destroyDrop(drop)
         this.drops.splice(i, 1)
-        const healed = Math.max(0, this.localPlayer.state.hp - beforeHp)
+        const healed = Math.max(0, player.state.hp - beforeHp)
         this.pickupBurst(drop.x, drop.y, drop.item, healed)
-        this.updateHealthBar(this.localPlayer.bar, this.localPlayer.state.x, this.localPlayer.state.y - 42, this.localPlayer.state.hp, this.localPlayer.state.maxHp)
+        this.updateHealthBar(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
         onEvent({ type: 'pickup', item: drop.item, healed })
-        this.emitStats()
+        if (player === this.localPlayer) this.emitStats()
       }
     }
 
@@ -926,8 +927,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.tweens.add({ targets: label, y: y - 64, alpha: 0, duration: 700, onComplete: () => label.destroy() })
     }
 
-    openPortal() {
-      if (this.portal || this.localPlayer.dead || this.runComplete || this.floor >= 5) return
+    openPortal(player = this.localPlayer) {
+      if (this.portal || player.dead || this.runComplete || this.floor >= 5) return
       const { x, y } = roomAnchor(this.__roomGeometry, 'exit')
       const glow = this.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth(8)
       const ring = this.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle(4, 0x70ff9f, 0.9).setDepth(9)
@@ -939,10 +940,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       onEvent({ type: 'portal', floor: this.floor })
     }
 
-    updatePortal(time) {
+    updatePortal(time, player = this.localPlayer) {
       if (!this.portal || time < this.portal.unlockAt) return
-      if (Math.hypot(this.portal.x - this.localPlayer.state.x, this.portal.y - this.localPlayer.state.y) > 38) return
-      this.advanceFloor()
+      if (Math.hypot(this.portal.x - player.state.x, this.portal.y - player.state.y) > 38) return
+      this.advanceFloor(player)
     }
 
     destroyPortal() {
@@ -953,12 +954,12 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.portal = null
     }
 
-    advanceFloor() {
-      if (this.floor >= 5 || this.localPlayer.dead || this.runComplete) return
+    advanceFloor(player = this.localPlayer) {
+      if (this.floor >= 5 || player.dead || this.runComplete) return
       this.destroyPortal()
       this.floor++
-      this.localPlayer.lastContactAt = this.time.now
-      this.startFloor(false)
+      player.lastContactAt = this.time.now
+      this.startFloor(false, player)
     }
 
     showBanner(message, color = '#f4f0e8', size = 38) {
@@ -974,8 +975,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (player === this.localPlayer) this.cameras.main.shake(70, 0.003)
     }
 
-    completeRun() {
-      if (this.runComplete || this.localPlayer.dead) return
+    completeRun(player = this.localPlayer) {
+      if (this.runComplete || player.dead) return
       this.runComplete = true
       this.destroyPortal()
       this.clearEnemyProjectiles()
