@@ -78,14 +78,23 @@ test('terrain renderer batches tile plan into render textures instead of one gam
         return { setDepth() { return this }, fillStyle() { return this }, fillRect() { return this }, destroy() {} }
       },
     },
-    events: { on(name, fn) { if (name === 'update') update = fn }, off() {}, once() {} },
-    time: { now: 0 },
+    events: {
+      on(name, handler) { if (name === 'update') update = handler },
+      off() {},
+    },
   }
 
   renderer.renderDungeon3Terrain(scene, geometry)
-  assert.ok(renderTextures.length > 0)
-  assert.ok(groups.size > 0)
+
   assert.equal(imageCalls, 0)
-  assert.equal(typeof update, 'function')
-  assert.ok(tracked.length <= renderTextures.length + 2)
+  assert.ok(tiles.length > 1000)
+  assert.ok(renderTextures.length <= groups.length)
+  assert.ok(renderTextures.length <= 24)
+  assert.ok(tracked.length <= 25)
+  assert.ok(renderTextures.every(target => target.renders >= 1))
+
+  if (update) {
+    update(150)
+    assert.ok(renderTextures.some(target => target.clears > 0))
+  }
 })
