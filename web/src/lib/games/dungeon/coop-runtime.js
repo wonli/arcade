@@ -71,6 +71,11 @@ export function repositionRemotePlayerForGeometryChange(playerRuntime, version, 
   return true
 }
 
+export function geometrySnapshotChange(geometry, currentVersion = '') {
+  const version = geometrySignature(geometry)
+  return { version, changed: Boolean(geometry && version && version !== currentVersion) }
+}
+
 function destroyPortalMirror(scene) {
   const portal = scene.__coopPortalMirror
   portal?.glow?.destroy?.(); portal?.ring?.destroy?.(); portal?.core?.destroy?.()
@@ -123,6 +128,8 @@ export function installDungeonCoop(scene, {
   let remoteInput = normalizeDungeonInput(), inputSequence = 0, snapshotSequence = 0
   let lastInputSentAt = -Infinity, lastSnapshotSentAt = -Infinity, lastSnapshotSequence = 0
   let lastGeometryVersion = geometrySignature(scene.__roomGeometry)
+  let appliedGeometryVersion = lastGeometryVersion
+  let guestGeometryVersion = lastGeometryVersion
   let pendingSkill = false, pendingInteract = false, destroyed = false
 
   const originals = role === 'guest' ? { updateEnemies: scene.updateEnemies?.bind(scene), updateEnemyProjectiles: scene.updateEnemyProjectiles?.bind(scene), updateDrops: scene.updateDrops?.bind(scene), updatePortal: scene.updatePortal?.bind(scene), autoAttack: scene.autoAttack?.bind(scene), trySkill: scene.trySkill?.bind(scene) } : null
@@ -135,13 +142,13 @@ export function installDungeonCoop(scene, {
   const hostUpdate = (time, delta) => {
     if (destroyed || role !== 'host' || scene.dead || scene.runComplete) return
     refreshRemoteActorVisual(scene, playerRuntime, remotePlayer)
+    const version = geometrySignature(scene.__roomGeometry)
+    if (repositionRemotePlayerForGeometryChange(playerRuntime, version, appliedGeometryVersion)) appliedGeometryVersion = version
     const dt = Math.min(Number(delta) || 0, 40) / 1000
     const consumed = consumeRemoteInput(remoteInput); remoteInput = consumed.remaining
     simulateAuthoritativeRemotePlayer(scene, remotePlayer, consumed.current, time, dt)
     if (time - lastSnapshotSentAt < SNAPSHOT_INTERVAL_MS) return
     lastSnapshotSentAt = time; snapshotSequence++
-    const version = geometrySignature(scene.__roomGeometry)
-    repositionRemotePlayerForGeometryChange(playerRuntime, version, lastGeometryVersion)
     const includeGeometry = shouldIncludeGeometry(snapshotSequence, version, lastGeometryVersion)
     const snapshot = createDungeonCoopSnapshot(scene, getProgress(), { sequence: snapshotSequence, includeGeometry })
     if (includeGeometry) lastGeometryVersion = version
@@ -170,9 +177,12 @@ export function installDungeonCoop(scene, {
 
   const receiveState = (snapshot) => {
     if (role !== 'guest' || !snapshot || Number(snapshot.sequence) <= lastSnapshotSequence) return false
+    const firstSnapshot = lastSnapshotSequence === 0
     lastSnapshotSequence = Number(snapshot.sequence) || lastSnapshotSequence
-    const geometryChanged = Boolean(snapshot.geometry)
-    if (snapshot.geometry) scene.__dungeonSpatial?.refreshRoom?.({ geometry: snapshot.geometry })
+    const geometryChange = geometrySnapshotChange(snapshot.geometry, guestGeometryVersion)
+    const geometryChanged = geometryChange.changed
+    if (geometryChanged) scene.__dungeonSpatial?.refreshRoom?.({ geometry: snapshot.geometry })
+    if (snapshot.geometry && geometryChange.version) guestGeometryVersion = geometryChange.version
     if (snapshot.progress) onProgress(snapshot.progress)
     if (Number.isFinite(Number(snapshot.floor))) scene.floor = Number(snapshot.floor)
     scene.floorCleared = Boolean(snapshot.floorCleared); scene.runComplete = Boolean(snapshot.runComplete)
@@ -182,7 +192,7 @@ export function installDungeonCoop(scene, {
     const remoteSnapshot = players.find((player) => player?.id === remotePlayerId)
     if (localSnapshot) {
       const previousAttackAt = localPlayer.lastAttackAt
-      if (geometryChanged) applyPlayerContextSnapshot(localPlayer, localSnapshot); else reconcilePredictedPlayer(localPlayer, localSnapshot)
+      if (geometryChanged || firstSnapshot) applyPlayerContextSnapshot(localPlayer, localSnapshot); else reconcilePredictedPlayer(localPlayer, localSnapshot)
       syncPlayerSnapshotPresentation(playerRuntime, localPlayer, localSnapshot, previousAttackAt); scene.emitStats?.()
     }
     if (remoteSnapshot && remotePlayer) {
