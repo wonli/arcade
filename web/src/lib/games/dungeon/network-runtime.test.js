@@ -60,6 +60,10 @@ function roomMessage(payload) {
   return { data: { topicId: 'room:ABC123', message: payload } }
 }
 
+function nextTurn() {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
 test('network runtime rekeys the default local PlayerEntity to the authenticated player id', () => {
   const scene = sceneFixture('local')
   const player = scene.localPlayer
@@ -154,6 +158,68 @@ test('snapshot flush sends only the local serializable player state', async () =
   assert.equal(socket.calls[0].params.snapshot.id, 'guest')
   assert.equal('actor' in socket.calls[0].params.snapshot, false)
   assert.equal('runtime' in socket.calls[0].params.snapshot, false)
+})
+
+test('fresh guest start explicitly requests canonical world state exactly on bootstrap snapshot', async () => {
+  const scene = sceneFixture('guest')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'guest',
+    hostId: 'host',
+    setIntervalImpl: () => 77,
+    clearIntervalImpl: () => {},
+  })
+
+  runtime.start()
+  await nextTurn()
+
+  const bootstrap = socket.calls.find((call) => call.action === 'dungeon.snapshot')
+  assert.equal(bootstrap?.params.snapshot.syncWorld, true)
+
+  socket.calls.length = 0
+  await runtime.flushSnapshot()
+  assert.equal(socket.calls[0].action, 'dungeon.snapshot')
+  assert.equal('syncWorld' in socket.calls[0].params.snapshot, false)
+  runtime.stop()
+})
+
+test('host answers reconnect sync request even when the remote player entity already exists', async () => {
+  const scene = sceneFixture('host')
+  scene.floor = 4
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'host',
+    hostId: 'host',
+    setIntervalImpl: () => 77,
+    clearIntervalImpl: () => {},
+  })
+  runtime.start()
+  await nextTurn()
+  socket.calls.length = 0
+
+  runtime.handleMessage(roomMessage({ type: 'dungeon.snapshot', playerId: 'guest', snapshot: { id: 'guest', state: state(100) } }))
+  assert.ok(scene.players.get('guest'))
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.fact'), false)
+
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.snapshot',
+    playerId: 'guest',
+    snapshot: { id: 'guest', state: state(120), syncWorld: true },
+  }))
+  await nextTurn()
+
+  const fact = socket.calls.find((call) => call.action === 'dungeon.fact')?.params.fact
+  assert.equal(fact?.type, 'world.state')
+  assert.equal(fact?.floor, 4)
+  assert.equal(fact?.runSeed, 'ABC123')
+  assert.equal(scene.players.get('guest').state.x, 120)
+  runtime.stop()
 })
 
 test('guest mirrors only real local attacks as semantic commands', async () => {
