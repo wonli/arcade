@@ -6,6 +6,7 @@ import {
   HEALTH_POTION_HEAL_RATIO,
   healthPotionPickupMode,
   shouldAutoUseHealthPotion,
+  storeHealthPotion,
   useStoredHealthPotion,
 } from './inventory.js'
 
@@ -13,6 +14,14 @@ test('potion pickups are stored before any automatic use decision', () => {
   assert.equal(healthPotionPickupMode({ hp: 100, maxHp: 100, healthPotions: 0 }), 'store')
   assert.equal(healthPotionPickupMode({ hp: 72, maxHp: 100, healthPotions: 0 }), 'store')
   assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 0 }), 'store')
+})
+
+test('storing a potion increments inventory without changing health', () => {
+  assert.deepEqual(storeHealthPotion({ hp: 40, maxHp: 100, healthPotions: 2 }), {
+    hp: 40,
+    maxHp: 100,
+    healthPotions: 3,
+  })
 })
 
 test('auto potion triggers at thirty percent health when inventory is available', () => {
