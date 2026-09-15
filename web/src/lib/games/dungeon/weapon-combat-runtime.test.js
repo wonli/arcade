@@ -1,6 +1,7 @@
 import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createPlayerEntity } from './player-entity.js'
 import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
 
 function sceneFor(archetype) {
@@ -8,8 +9,8 @@ function sceneFor(archetype) {
   const scene = {
     playerState: { x: 0, y: 0, damage: 20, hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype } },
     enemies: [], lastAttackAt: 0, events: { once() {} },
-    damageEnemy(enemy, damage, critical, knockback, context) { calls.push({ enemy, damage, knockback, context }) },
-    slash(target) { this.damageEnemy(target, this.localPlayer.state.damage, false, 22, { direct: true, source: 'weapon' }) },
+    damageEnemy(enemy, damage, critical, knockback, context, player) { calls.push({ enemy, damage, knockback, context, player }) },
+    slash(target, player = this.localPlayer) { this.damageEnemy(target, player.state.damage, false, 22, { direct: true, source: 'weapon' }, player) },
     autoAttack() {},
   }
   return { scene, calls }
@@ -54,6 +55,25 @@ test('direct melee slash cannot damage an enemy through solid room geometry', ()
   scene.slash({ id: 'blocked', hp: 10, x: 100, y: 0 })
 
   assert.equal(calls.length, 0)
+})
+
+test('runtime keeps auto attack and damage owned by the provided PlayerEntity', () => {
+  const { scene, calls } = sceneFor('dagger')
+  attachLegacyTestPlayer(scene)
+  const remote = createPlayerEntity({
+    id: 'remote',
+    state: { x: 0, y: 0, damage: 30, hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype: 'katana' } },
+  })
+  scene.enemies = [{ id: 'target', hp: 10, x: 190, y: 0 }]
+  installDungeonWeaponCombat(scene)
+
+  scene.autoAttack(1000, remote)
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].player, remote)
+  assert.ok(calls[0].damage > 30)
+  assert.equal(remote.lastAttackAt, 1000)
+  assert.equal(scene.localPlayer.lastAttackAt, 0)
 })
 
 test('runtime exposes current auto attack range', () => { const { scene } = sceneFor('katana'); assert.equal(installDungeonWeaponCombat(attachLegacyTestPlayer(scene)).range(), 196) })
