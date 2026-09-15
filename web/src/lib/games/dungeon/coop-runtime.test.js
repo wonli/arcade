@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { acceptRemoteInput, consumeRemoteInput, nextGuestInput } from './coop-runtime.js'
@@ -30,4 +31,13 @@ test('guest packet sequence increases and pending actions survive the 20Hz send 
   assert.equal(packet.seq, 12)
   assert.equal(packet.skill, true)
   assert.equal(packet.interact, true)
+})
+
+test('co-op runtime no longer contains mirror renderers or geometry snapshots', () => {
+  const source = readFileSync(new URL('./coop-runtime.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /applyDropSnapshot|applyEnemySnapshot|__coopPortalMirror|snapshot\.geometry/)
+  assert.match(source, /generateDungeonGeometry/)
+  assert.match(source, /spawnExact/)
+  assert.match(source, /drop\.spawn/)
+  assert.match(source, /dungeonPlayerRuntime/)
 })
