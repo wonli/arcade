@@ -19,9 +19,16 @@ import {
   secondaryTarget,
 } from './combat.js'
 import { AFFIXES, affixSlots } from './affixes.js'
+import { currentWeapon } from './player-loadout.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
 
 const sequence = (values) => { let index = 0; return () => values[index++ % values.length] }
+const withModifiers = (values = {}) => ({ modifiers: { test: values } })
+const withWeapon = (archetype) => ({
+  equipment: {
+    weapon: { type: `weapon.test_${archetype}`, archetype, rarity: 'common', damage: 0, affixes: [] },
+  },
+})
 
 test('nearestTarget ignores dead enemies and picks the closest living target', () => {
   const player = { x: 0, y: 0 }
@@ -103,36 +110,50 @@ test('boss reward uses a five percent legendary branch and otherwise returns rar
 
 test('weapon pickups replace equipment-derived power and preserve archetype', () => {
   const baseStats = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
-  const player = { ...baseStats, hp: 100, baseStats, weapon: null, weaponRarity: null }
+  const player = { ...baseStats, hp: 100, baseStats, equipment: { weapon: null }, modifiers: {} }
   const first = applyPickup(player, { type: 'weapon.dungeon_blade', archetype: 'katana', rarity: 'rare', damage: 12, affixes: [{ id: 'power', tier: 2, value: 0.2 }, { id: 'critical', tier: 2, value: 0.05 }] }, baseStats)
   const replacement = applyPickup(first, { type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'uncommon', damage: 4, affixes: [{ id: 'movement_speed', tier: 1, value: 0.08 }] }, baseStats)
-  assert.ok(first.damage > replacement.damage); assert.equal(replacement.damage, 14); assert.equal(replacement.critChance, 0.18); assert.equal(replacement.weaponRarity, 'uncommon'); assert.equal(replacement.weaponAffixes.length, 1); assert.equal(replacement.equippedWeapon.archetype, 'dagger')
+  const replacementWeapon = currentWeapon(replacement)
+  assert.ok(first.damage > replacement.damage)
+  assert.equal(replacement.damage, 14)
+  assert.equal(replacement.critChance, 0.18)
+  assert.equal(replacementWeapon.rarity, 'uncommon')
+  assert.equal(replacementWeapon.affixes.length, 1)
+  assert.equal(replacementWeapon.archetype, 'dagger')
 })
 
 test('target-aware modifiers reward low-health and executioner builds', () => {
-  assert.equal(modifiedDamage({ hp: 100, maxHp: 100, effects: {} }, { hp: 100, maxHp: 100 }, 20), 20); assert.equal(modifiedDamage({ hp: 35, maxHp: 100, effects: { lowHealthDamage: 0.25 } }, { hp: 100, maxHp: 100 }, 20), 25); assert.equal(modifiedDamage({ hp: 100, maxHp: 100, effects: { executioner: 0.5 } }, { hp: 20, maxHp: 100 }, 20), 30)
+  assert.equal(modifiedDamage({ hp: 100, maxHp: 100, ...withModifiers() }, { hp: 100, maxHp: 100 }, 20), 20)
+  assert.equal(modifiedDamage({ hp: 35, maxHp: 100, ...withModifiers({ lowHealthDamage: 0.25 }) }, { hp: 100, maxHp: 100 }, 20), 25)
+  assert.equal(modifiedDamage({ hp: 100, maxHp: 100, ...withModifiers({ executioner: 0.5 }) }, { hp: 20, maxHp: 100 }, 20), 30)
 })
 
 test('attack interval keeps haste behavior and applies weapon cadence', () => {
-  const sword = attackInterval({ hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype: 'sword' } }, 1000)
-  const dagger = attackInterval({ hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype: 'dagger' } }, 1000)
-  const katana = attackInterval({ hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype: 'katana' } }, 1000)
-  const geared = attackInterval({ hp: 100, maxHp: 100, effects: { attackSpeed: 0.2 }, equippedWeapon: { archetype: 'sword' } }, 1000)
+  const sword = attackInterval({ hp: 100, maxHp: 100, ...withModifiers(), ...withWeapon('sword') }, 1000)
+  const dagger = attackInterval({ hp: 100, maxHp: 100, ...withModifiers(), ...withWeapon('dagger') }, 1000)
+  const katana = attackInterval({ hp: 100, maxHp: 100, ...withModifiers(), ...withWeapon('katana') }, 1000)
+  const geared = attackInterval({ hp: 100, maxHp: 100, ...withModifiers({ attackSpeed: 0.2 }), ...withWeapon('sword') }, 1000)
   assert.ok(dagger < sword); assert.ok(katana > sword); assert.ok(geared < sword)
 })
 
 test('weapon profiles produce distinct direct-hit damage, knockback, and range', () => {
-  const dagger = { equippedWeapon: { archetype: 'dagger' } }, sword = { equippedWeapon: { archetype: 'sword' } }, katana = { equippedWeapon: { archetype: 'katana' } }
+  const dagger = withWeapon('dagger'), sword = withWeapon('sword'), katana = withWeapon('katana')
   assert.equal(weaponProfile(dagger).range, 132); assert.equal(weaponProfile(sword).range, 165); assert.equal(weaponProfile(katana).range, 196)
   assert.ok(weaponAttackDamage(dagger, 20) < weaponAttackDamage(sword, 20)); assert.ok(weaponAttackDamage(katana, 20) > weaponAttackDamage(sword, 20)); assert.ok(weaponAttackKnockback(dagger, 22) < 22); assert.ok(weaponAttackKnockback(katana, 22) > 22)
 })
 
 test('skill profile scales radius up and cooldown down', () => {
-  assert.deepEqual(skillProfile({ effects: {} }), { radius: 130, cooldown: 4200 }); const boosted = skillProfile({ effects: { skillRadius: 0.25, skillHaste: 0.2 } }); assert.equal(boosted.radius, 163); assert.equal(boosted.cooldown, 3360)
+  assert.deepEqual(skillProfile(withModifiers()), { radius: 130, cooldown: 4200 })
+  const boosted = skillProfile(withModifiers({ skillRadius: 0.25, skillHaste: 0.2 }))
+  assert.equal(boosted.radius, 163)
+  assert.equal(boosted.cooldown, 3360)
 })
 
 test('hit healing combines direct life steal and critical heal only for direct hits', () => {
-  const player = { effects: { lifeSteal: 0.1, criticalHeal: 6 } }; assert.equal(healFromHit(player, 50, false, { direct: true }), 5); assert.equal(healFromHit(player, 50, true, { direct: true }), 11); assert.equal(healFromHit(player, 50, true, { direct: false }), 0)
+  const player = withModifiers({ lifeSteal: 0.1, criticalHeal: 6 })
+  assert.equal(healFromHit(player, 50, false, { direct: true }), 5)
+  assert.equal(healFromHit(player, 50, true, { direct: true }), 11)
+  assert.equal(healFromHit(player, 50, true, { direct: false }), 0)
 })
 
 test('secondaryTarget excludes dead and primary enemies and respects range', () => {
