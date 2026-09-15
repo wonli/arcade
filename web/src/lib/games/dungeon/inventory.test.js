@@ -5,15 +5,34 @@ import {
   AUTO_POTION_THRESHOLD,
   HEALTH_POTION_HEAL_RATIO,
   healthPotionPickupMode,
+  pickupHealthPotion,
   shouldAutoUseHealthPotion,
   storeHealthPotion,
   useStoredHealthPotion,
 } from './inventory.js'
 
-test('potion pickups are stored before any automatic use decision', () => {
+test('damaged players consume ground potions while full-health players store them', () => {
   assert.equal(healthPotionPickupMode({ hp: 100, maxHp: 100, healthPotions: 0 }), 'store')
-  assert.equal(healthPotionPickupMode({ hp: 72, maxHp: 100, healthPotions: 0 }), 'store')
-  assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 0 }), 'store')
+  assert.equal(healthPotionPickupMode({ hp: 72, maxHp: 100, healthPotions: 0 }), 'consume')
+  assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 0 }), 'consume')
+})
+
+test('picking up a potion while damaged heals to full without changing inventory', () => {
+  const result = pickupHealthPotion({ hp: 40, maxHp: 100, healthPotions: 2 })
+
+  assert.equal(result.state.hp, 100)
+  assert.equal(result.state.healthPotions, 2)
+  assert.equal(result.healed, 60)
+  assert.equal(result.stored, false)
+})
+
+test('picking up a potion at full health stores it without healing', () => {
+  const result = pickupHealthPotion({ hp: 100, maxHp: 100, healthPotions: 2 })
+
+  assert.equal(result.state.hp, 100)
+  assert.equal(result.state.healthPotions, 3)
+  assert.equal(result.healed, 0)
+  assert.equal(result.stored, true)
 })
 
 test('storing a potion increments inventory without changing health', () => {
