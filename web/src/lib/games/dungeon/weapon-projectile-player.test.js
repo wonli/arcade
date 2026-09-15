@@ -12,8 +12,8 @@ function bowPlayer(id, x = 10, y = 20) {
       damage: 20,
       critChance: 0,
       critMultiplier: 2,
-      effects: {},
-      equippedWeapon: { type: `weapon.${id}_bow`, archetype: 'bow', rarity: 'rare' },
+      modifiers: {},
+      equipment: { weapon: { type: `weapon.${id}_bow`, archetype: 'bow', rarity: 'rare' } },
     },
     facing: 'right',
   })
