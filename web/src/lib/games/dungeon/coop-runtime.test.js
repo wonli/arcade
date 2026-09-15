@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { acceptRemoteInput, consumeRemoteInput, nextGuestInput } from './coop-runtime.js'
+import {
+  acceptRemoteInput,
+  consumeRemoteInput,
+  nextGuestInput,
+  simulateAuthoritativeRemotePlayer,
+} from './coop-runtime.js'
 
 test('host accepts only newer normalized intent and ignores guest position fields', () => {
   const first = acceptRemoteInput(null, { seq: 4, moveX: 2, moveY: 0, x: 900, y: 500, skill: true })
@@ -30,4 +35,25 @@ test('guest packet sequence increases and pending actions survive the 20Hz send 
   assert.equal(packet.seq, 12)
   assert.equal(packet.skill, true)
   assert.equal(packet.interact, true)
+})
+
+test('host remote player uses the same movement pickup interaction attack and skill pipeline', () => {
+  const calls = []
+  const player = { id: 'p2', dead: false, state: { hp: 100 } }
+  const input = { moveX: 1, moveY: 0, interact: true, skill: true }
+  const scene = {
+    dead: false,
+    runComplete: false,
+    updatePlayer(dt, target, intent) { calls.push(['move', dt, target.id, intent]) },
+    __dungeonPickupRuntime: { updatePlayer(target, intent) { calls.push(['pickup', target.id, intent]) } },
+    __dungeonSpatial: { interactPlayer(target) { calls.push(['interact', target.id]) } },
+    autoAttack(time, target) { calls.push(['attack', time, target.id]) },
+    trySkill(time, target, intent) { calls.push(['skill', time, target.id, intent]) },
+  }
+
+  simulateAuthoritativeRemotePlayer(scene, player, input, 1200, 0.016)
+
+  assert.deepEqual(calls.map((entry) => entry[0]), ['move', 'pickup', 'interact', 'attack', 'skill'])
+  assert.equal(calls[0][2], 'p2')
+  assert.equal(calls[2][1], 'p2')
 })
