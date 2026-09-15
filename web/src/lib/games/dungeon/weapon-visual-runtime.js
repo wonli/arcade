@@ -4,6 +4,7 @@ import { installDungeonWeaponMelee } from './weapon-melee-runtime.js'
 import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
 import { installDungeonWeaponVfx } from './weapon-vfx-runtime.js'
 import { namedWeaponArt, namedWeaponArtEntries } from './weapon-art.js'
+import { currentWeapon } from './player-loadout.js'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
 import { DEFAULT_WEAPON_PRESENTATION, resolveWeaponPresentation, transformWeaponAnchor } from './weapon-presentation.js'
 
@@ -180,11 +181,7 @@ export function setWeaponVisualSelected(scene, visual, item, selected) {
 }
 
 function equippedItem(player) {
-  if (!player?.state?.weapon) return null
-  return player.state.equippedWeapon ?? {
-    type: player.state.weapon,
-    rarity: player.state.weaponRarity ?? 'common',
-  }
+  return currentWeapon(player?.state)
 }
 
 function presentationConfig(scene) {
@@ -192,7 +189,9 @@ function presentationConfig(scene) {
 }
 
 export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer } = {}) {
-  if (!scene || !player || scene.__dungeonWeaponVisuals) return scene?.__dungeonWeaponVisuals ?? null
+  if (!scene || !player) return null
+  if (player.runtime?.weaponVisuals) return player.runtime.weaponVisuals
+  if (scene.__dungeonWeaponVisuals) return scene.__dungeonWeaponVisuals
   const weaponCatalog = installDungeonWeaponCatalog(scene)
   installDungeonWeaponCombat(scene)
   let visual = null
@@ -311,12 +310,15 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
     weaponVfx?.restore?.()
     scene.__dungeonWeaponCombat?.restore?.()
     weaponCatalog?.restore?.()
-    scene.__dungeonWeaponVisuals = null
+    if (player.runtime?.weaponVisuals === api) delete player.runtime.weaponVisuals
+    if (scene.__dungeonWeaponVisuals === api) scene.__dungeonWeaponVisuals = null
   }
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
   const api = { sync, swing, anchor, presentation: presentationNow, visual: () => visual, isReady: () => ready, restore }
+  player.runtime ??= {}
+  player.runtime.weaponVisuals = api
   scene.__dungeonWeaponVisuals = api
   return api
 }
