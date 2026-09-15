@@ -4,66 +4,20 @@ on:
   push:
     branches: [ci/dungeon-player-entity-cleanup]
 
-permissions:
-  contents: write
-
 jobs:
-  migrate:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feat/dungeon-coop-foundation
+          ref: 8c69344746759eaf61b55082b2581743bc7153f8
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-      - name: Migrate production Scene aliases to localPlayer
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.x
+      - name: Verify exact feature commit
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          root = Path('web/src/lib/games/dungeon')
-          mapping = [
-              ('playerState', 'localPlayer.state'),
-              ('playerBar', 'localPlayer.bar'),
-              ('playerFacing', 'localPlayer.facing'),
-              ('playerMoving', 'localPlayer.moving'),
-              ('playerAttacking', 'localPlayer.attacking'),
-              ('lastAttackAt', 'localPlayer.lastAttackAt'),
-              ('skillReadyAt', 'localPlayer.skillReadyAt'),
-              ('lastContactAt', 'localPlayer.lastContactAt'),
-              ('dead', 'localPlayer.dead'),
-              ('player', 'localPlayer.actor'),
-          ]
-
-          for path in sorted(root.glob('*.js')):
-              if path.name.endswith('.test.js') or path.name == 'player-entity.js':
-                  continue
-              text = path.read_text()
-              before = text
-              prefixes = ('this',) if path.name == 'scene.js' else ('scene',)
-              for prefix in prefixes:
-                  for old, new in mapping:
-                      text = text.replace(f'{prefix}.{old}', f'{prefix}.{new}')
-              if text != before:
-                  path.write_text(text)
-
-          entity = root / 'player-entity.js'
-          text = entity.read_text()
-          marker = '\n\nconst SCENE_PLAYER_ALIASES = Object.freeze({'
-          start = text.find(marker)
-          if start < 0:
-              raise SystemExit('SCENE_PLAYER_ALIASES block not found')
-          text = text[:start] + "\n\nexport function attachLocalPlayerEntity(scene, options = {}) {\n  const player = createPlayerEntity({ id: 'local', ...options })\n  scene.localPlayer = player\n  return player\n}\n"
-          entity.write_text(text)
-          PY
-      - name: Run focused PlayerEntity contracts
-        working-directory: web
-        run: node --test src/lib/games/dungeon/player-entity.test.js src/lib/games/dungeon/scene-player-entity.test.js src/lib/games/dungeon/player-entity-boundary.test.js
-      - name: Commit migration
-        run: |
-          git config user.name ideaa
-          git config user.email ideaa@qq.com
-          git add web/src/lib/games/dungeon
-          git commit -m 'refactor(dungeon): remove legacy Scene player aliases'
-          git push origin HEAD:feat/dungeon-coop-foundation
+          test "$(git rev-parse HEAD)" = "8c69344746759eaf61b55082b2581743bc7153f8"
+          make test
