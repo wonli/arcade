@@ -139,9 +139,9 @@ test('secondaryTarget excludes dead and primary enemies and respects range', () 
   const primary = { id: 'primary', x: 100, y: 100, hp: 20 }; const enemies = [primary, { id: 'dead', x: 105, y: 100, hp: 0 }, { id: 'near', x: 135, y: 100, hp: 20 }, { id: 'far', x: 400, y: 100, hp: 20 }]; assert.equal(secondaryTarget(primary, enemies, 120)?.id, 'near'); assert.equal(secondaryTarget(primary, [primary, enemies[1], enemies[3]], 120), null)
 })
 
-test('picking up a health potion heals when damaged and stores when already full', () => {
+test('picking up a health potion heals thirty percent when damaged and stores when already full', () => {
   const low = applyPickup({ hp: 40, maxHp: 100, healthPotions: 0 }, { type: 'consumable.health_potion', heal: 28 })
   const full = applyPickup({ hp: 100, maxHp: 100, healthPotions: 2 }, { type: 'consumable.health_potion', heal: 28 })
-  assert.equal(low.hp, 100); assert.equal(low.healthPotions, 0)
+  assert.equal(low.hp, 70); assert.equal(low.healthPotions, 0)
   assert.equal(full.hp, 100); assert.equal(full.healthPotions, 3)
 })
