@@ -1,0 +1,17 @@
+name: Dungeon PlayerEntity Cleanup
+
+on:
+  push:
+    branches: [ci/dungeon-player-entity-cleanup]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Run PlayerEntity boundary test
+        working-directory: web
+        run: node --test src/lib/games/dungeon/player-entity-boundary.test.js
