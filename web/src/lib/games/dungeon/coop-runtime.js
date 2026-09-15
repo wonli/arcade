@@ -200,7 +200,7 @@ export function installDungeonCoop(scene, {
   const seed = String(runSeed)
   const hostPlayerId = role === 'host' ? String(localPlayerId) : String(remotePlayerId)
   const guestPlayerId = role === 'guest' ? String(localPlayerId) : String(remotePlayerId)
-  const world = installDeterministicCoopWorld(scene, { runSeed: seed })
+  const world = installDeterministicCoopWorld(scene, { runSeed: seed, role })
 
   playerRuntime.setLocalPlayerId(localPlayerId)
   const localPlayer = playerRuntime.localPlayer
@@ -375,6 +375,8 @@ export function installDungeonCoop(scene, {
         elite: Boolean(enemy.elite),
         boss: Boolean(enemy.boss),
         archetype: enemy.archetype,
+        x: enemy.x,
+        y: enemy.y,
         patch: enemySpawnPatch(enemy),
       })
     }
@@ -511,10 +513,15 @@ export function installDungeonCoop(scene, {
       case 'enemy.spawn': {
         let enemy = (scene.enemies ?? []).find((entry) => entry?.id === event.enemyId)
         if (!enemy) {
-          enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, { elite: Boolean(event.spawnElite) })
+          enemy = scene.spawnEnemy?.(event.spawnIndex ?? 0, {
+            elite: Boolean(event.spawnElite),
+            archetypeType: event.archetype,
+          })
           if (!enemy) return false
           enemy.id = event.enemyId || enemy.id
         }
+        if (Number.isFinite(Number(event.x))) enemy.x = Number(event.x)
+        if (Number.isFinite(Number(event.y))) enemy.y = Number(event.y)
         applyEnemySpawnPatch(scene, enemy, event.patch)
         return true
       }
