@@ -1,6 +1,6 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
-import { healthPotionPickupMode, shouldAutoUseHealthPotion, storeHealthPotion, useStoredHealthPotion } from './inventory.js'
+import { pickupHealthPotion, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { currentWeapon as currentPlayerWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
@@ -280,12 +280,14 @@ export function installPickupInteraction(scene, {
     for (const drop of automaticDrops) {
       const potion = drop.item?.type === 'consumable.health_potion'
       const nearby = Math.hypot((drop.x ?? 0) - target.state.x, (drop.y ?? 0) - target.state.y) <= 34
-      if (potion && nearby && healthPotionPickupMode(target.state) === 'store') {
-        target.state.healthPotions = storeHealthPotion(target.state).healthPotions
+      if (potion && nearby) {
+        const result = pickupHealthPotion(target.state)
+        target.state = result.state
         scene.destroyDrop?.(drop)
-        scene.__dungeonInventoryStats?.(target.state.healthPotions)
-        scene.pickupBurst?.(drop.x, drop.y, drop.item, 0)
-        if (target === player) autoUseHealthPotion()
+        if (result.stored) scene.__dungeonInventoryStats?.(target.state.healthPotions)
+        else scene.updateHealthBar?.(target.bar, target.state.x, target.state.y - 42, target.state.hp, target.state.maxHp)
+        scene.pickupBurst?.(drop.x, drop.y, drop.item, result.healed)
+        if (target === scene.localPlayer) originalEmitStats()
         continue
       }
       remainingAutomatic.push(drop)
