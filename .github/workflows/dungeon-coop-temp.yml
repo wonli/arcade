@@ -34,7 +34,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Run focused Dungeon ownership tests
+        run: >-
+          node --test
+          src/lib/games/dungeon/pickup-runtime-ownership.test.js
+          src/lib/games/dungeon/world-runtime.test.js
+          src/lib/games/dungeon/network-runtime.test.js
+
+      - name: Run full tests
         run: npm test
 
       - name: Build web
