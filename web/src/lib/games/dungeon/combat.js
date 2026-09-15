@@ -1,6 +1,7 @@
 import { deriveEquipment, rollAffixes } from './affixes.js'
 import { pickupHealthPotion } from './inventory.js'
 import { rollBossLegendary } from './legendary-weapons.js'
+import { currentEffects } from './player-loadout.js'
 import { weaponProfile } from './weapon-profile.js'
 
 export function nearestTarget(player, enemies) {
@@ -43,7 +44,7 @@ export function rollDamage(player, random = Math.random) {
 
 export function modifiedDamage(player, enemy, baseDamage) {
   let damage = baseDamage
-  const effects = player?.effects ?? {}
+  const effects = currentEffects(player)
   const hpRatio = (player?.maxHp ?? 0) > 0 ? (player.hp ?? 0) / player.maxHp : 1
   const enemyRatio = (enemy?.maxHp ?? 0) > 0 ? (enemy.hp ?? 0) / enemy.maxHp : 1
   if (hpRatio < 0.4) damage *= 1 + (effects.lowHealthDamage ?? 0)
@@ -52,7 +53,7 @@ export function modifiedDamage(player, enemy, baseDamage) {
 }
 
 export function attackInterval(player, now = 0, baseInterval = 430) {
-  const effects = player?.effects ?? {}
+  const effects = currentEffects(player)
   let haste = effects.attackSpeed ?? 0
   const maxHp = player?.maxHp ?? 0
   const hpRatio = maxHp > 0 ? Math.max(0, Math.min(1, (player.hp ?? maxHp) / maxHp)) : 1
@@ -63,7 +64,7 @@ export function attackInterval(player, now = 0, baseInterval = 430) {
 }
 
 export function skillProfile(player, baseRadius = 130, baseCooldown = 4200) {
-  const effects = player?.effects ?? {}
+  const effects = currentEffects(player)
   return {
     radius: Math.round(baseRadius * (1 + (effects.skillRadius ?? 0))),
     cooldown: Math.max(1200, Math.round(baseCooldown * (1 - Math.min(0.65, effects.skillHaste ?? 0)))),
@@ -72,7 +73,7 @@ export function skillProfile(player, baseRadius = 130, baseCooldown = 4200) {
 
 export function healFromHit(player, damage, critical, { direct = true } = {}) {
   if (!direct) return 0
-  const effects = player?.effects ?? {}
+  const effects = currentEffects(player)
   const lifeSteal = Math.max(0, Math.round(damage * (effects.lifeSteal ?? 0)))
   const criticalHeal = critical ? Math.max(0, Math.round(effects.criticalHeal ?? 0)) : 0
   return lifeSteal + criticalHeal
