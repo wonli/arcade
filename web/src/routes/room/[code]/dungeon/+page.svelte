@@ -11,10 +11,13 @@
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
   import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
   import { setProceduralRunSeed } from '$lib/games/dungeon/spatial.js'
+  import { setProgressionRunSeed } from '$lib/games/dungeon/progression.js'
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
   import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
+  import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { createDungeonNetworkRuntime, dungeonSceneReadyForNetwork } from '$lib/games/dungeon/network-runtime.js'
+  import { weaponHudModel } from '$lib/games/dungeon/presentation.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
 
   export let data
@@ -29,11 +32,13 @@
   let scene = null
   let touchInput = null
   let pickupRuntime = null
+  let hudRuntime = null
   let networkRuntime = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let connection = 'connecting'
   let ready = false
+  let panelOpen = false
   let error = ''
   let eventText = ''
   let stats = initialDungeonStats()
@@ -42,9 +47,53 @@
 
   $: isHost = room?.hostId === identity.sessionId
   $: waiting = room?.status !== 'playing'
+  $: weaponModel = weaponHudModel(stats, 'en')
+
+  function hudLabels() {
+    return {
+      locale: 'en',
+      hp: 'HP',
+      weapon: 'Weapon',
+      details: 'Stats',
+      none: 'None',
+      emptyWeapon: 'No weapon equipped',
+      dungeonBlade: 'Dungeon Blade',
+      baseDamage: 'Weapon damage',
+      floor: 'Floor',
+      chapter: 'Chapter',
+      boss: 'Boss',
+      'rarity:common': 'Common',
+      'rarity:uncommon': 'Uncommon',
+      'rarity:rare': 'Rare',
+      'rarity:epic': 'Epic',
+      'rarity:legendary': 'Legendary',
+    }
+  }
 
   function currentPlayerSlot() {
     return (room?.players ?? []).findIndex((player) => String(player?.id ?? '') === identity.sessionId)
+  }
+
+  function setPanel(open) {
+    panelOpen = Boolean(open)
+    if (panelOpen) touchInput?.stopMove()
+  }
+
+  function usePotion(event) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    if ((stats.healthPotions ?? 0) <= 0) {
+      eventText = 'No health potions'
+      return
+    }
+    if ((stats.hp ?? 0) >= (stats.maxHp ?? 0)) {
+      eventText = 'HP is already full'
+      return
+    }
+    if (pickupRuntime?.useHealthPotion?.()) {
+      eventText = 'Health potion used'
+      hudRuntime?.update()
+    }
   }
 
   async function loadResources() {
@@ -66,8 +115,10 @@
     else if (event.type === 'skill') eventText = `Skill · ${event.hits ?? 0} hits`
     else if (event.type === 'pickup') eventText = 'Item picked up'
     else if (event.type === 'drop') eventText = 'Loot dropped'
-    else if (event.type === 'gameover') eventText = 'Run ended'
-    else eventText = event.type
+    else if (event.type === 'gameover') {
+      panelOpen = false
+      eventText = 'Run ended'
+    } else eventText = event.type
   }
 
   function ensureNetwork() {
@@ -108,11 +159,15 @@
     if (!mount) return
 
     setProceduralRunSeed(roomCode)
+    setProgressionRunSeed(roomCode)
     const runGame = createDungeonGame({
       Phaser,
       parent: mount,
       assets,
-      onStats(next) { stats = { ...stats, ...next } },
+      onStats(next) {
+        stats = { ...stats, ...next }
+        hudRuntime?.update()
+      },
       onEvent,
     })
     game = runGame
@@ -129,10 +184,19 @@
       scene = nextScene
       installAffixVisuals(scene)
       installDungeonVfx(scene, vfxManifest)
+
+      scene.__dungeonInventoryStats = (count) => {
+        stats = { ...stats, healthPotions: count }
+        hudRuntime?.update()
+      }
+
       pickupRuntime = installPickupInteraction(scene)
       if (!scene.__infiniteDungeon) {
         scene.__infiniteDungeon = installInfiniteDungeon(scene, {
-          onProgress(next) { progress = next },
+          onProgress(next) {
+            progress = next
+            hudRuntime?.update()
+          },
           onEvent,
         })
       }
@@ -141,8 +205,20 @@
         onEvent,
       })
       installDungeonAttackRuntime(scene)
-      installDungeonBacktracking(scene, { onProgress(next) { progress = next } })
+      installDungeonBacktracking(scene, {
+        onProgress(next) {
+          progress = next
+          hudRuntime?.update()
+        },
+      })
       touchInput = installDungeonTouchInput(scene)
+      hudRuntime = installDungeonHud(scene, {
+        getStats: () => stats,
+        getProgress: () => progress,
+        getLabels: hudLabels,
+        onPotion: () => usePotion(),
+        onDetails: () => setPanel(true),
+      })
       ready = true
       ensureNetwork()
     }
@@ -173,17 +249,17 @@
   }
 
   function moveJoystick(event) {
-    touchInput?.setMove(event.detail.x, event.detail.y)
+    if (!panelOpen) touchInput?.setMove(event.detail.x, event.detail.y)
   }
 
   function useSkill(event) {
     event.preventDefault()
-    touchInput?.triggerSkill()
+    if (!panelOpen) touchInput?.triggerSkill()
   }
 
   function useInteract(event) {
     event.preventDefault()
-    touchInput?.triggerInteract()
+    if (!panelOpen) touchInput?.triggerInteract()
   }
 
   async function copyInvite() {
@@ -206,9 +282,12 @@
       unsubscribeConnection()
       touchInput?.stopMove()
       pickupRuntime = null
+      hudRuntime = null
+      panelOpen = false
       scene = null
       game?.destroy(true)
       game = null
+      setProgressionRunSeed(null)
       setProceduralRunSeed(null)
     }
   })
@@ -241,18 +320,59 @@
 
     {#if error}<div class="error">{error}</div>{/if}
 
-    <div class="touch-controls">
-      <div class="joystick"><VirtualJoystick on:move={moveJoystick}/></div>
-      <div class="touch-actions">
-        <button onpointerdown={useInteract}>USE</button>
-        <button class="skill" onpointerdown={useSkill}>SKILL</button>
+    {#if !panelOpen}
+      <div class="touch-controls">
+        <div class="joystick"><VirtualJoystick on:move={moveJoystick}/></div>
+        <div class="touch-actions">
+          <button onpointerdown={useInteract}>USE</button>
+          <button class="skill" onpointerdown={useSkill}>SKILL</button>
+        </div>
       </div>
-    </div>
+    {/if}
+
+    {#if panelOpen}
+      <div class="stats-overlay" role="dialog" aria-modal="true" aria-label="Weapon stats">
+        <div class="stats-panel">
+          <div class="panel-kicker">LIVE CO-OP · LOADOUT</div>
+          <div class="weapon-title">
+            <div>
+              <span>CURRENT WEAPON</span>
+              <h2 class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'} class:legendary={stats.weaponRarity==='legendary'}>
+                {stats.weapon ? `${weaponModel.archetypeLabel ?? 'Weapon'} · ${weaponModel.name ?? 'Dungeon Blade'}` : 'No weapon equipped'}
+              </h2>
+            </div>
+            <button class="close" onclick={() => setPanel(false)} aria-label="Close">×</button>
+          </div>
+
+          <div class="stat-grid">
+            <div><span>WEAPON DMG</span><strong>{weaponModel.damage}</strong></div>
+            <div><span>TOTAL DMG</span><strong>{stats.damage}</strong></div>
+            <div><span>HP</span><strong>{stats.hp}/{stats.maxHp}</strong></div>
+            <div><span>POTIONS</span><strong>{stats.healthPotions ?? 0}</strong></div>
+          </div>
+
+          <div class="affix-box">
+            <span>AFFIXES</span>
+            {#if weaponModel.affixes.length}
+              <div class="affix-list">{#each weaponModel.affixes as affix}<div>◆ {affix}</div>{/each}</div>
+            {:else}
+              <p>No affixes</p>
+            {/if}
+          </div>
+
+          <div class="panel-actions">
+            <button class="use-potion" disabled={(stats.healthPotions ?? 0) <= 0 || stats.hp >= stats.maxHp} onclick={usePotion}>USE POTION · {stats.healthPotions ?? 0}</button>
+            <button class="resume" onclick={() => setPanel(false)}>BACK TO GAME</button>
+          </div>
+          <p class="online-note">The online world keeps running while this panel is open.</p>
+        </div>
+      </div>
+    {/if}
   </section>
 
   <footer>
     <span>HP {stats.hp ?? 0}/{stats.maxHp ?? 0} · DMG {stats.damage ?? 0} · FLOOR {progress.floor ?? 1}</span>
-    <span>{eventText || '20Hz player snapshots · Host authoritative commands'}</span>
+    <span>{eventText || '20Hz player snapshots · Host authoritative world state'}</span>
   </footer>
 </main>
 
@@ -264,7 +384,8 @@
   .stage-shell{position:relative;justify-self:center;width:min(1180px,100%);height:100%;min-height:0;overflow:hidden;background:#050608;touch-action:none;user-select:none}.stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;max-width:100%!important;max-height:100%!important;margin:auto!important}
   .banner,.error{position:absolute;z-index:40;left:50%;top:12px;transform:translateX(-50%);padding:9px 14px;background:rgba(8,10,13,.88);font:900 10px ui-monospace,monospace;letter-spacing:.08em}.banner{color:#c1ff56}.error{color:#ff6875;top:52px}
   .touch-controls{display:none;position:absolute;inset:0;z-index:35;pointer-events:none}.joystick{position:absolute;left:16px;bottom:34px;pointer-events:auto}.touch-actions{position:absolute;right:16px;bottom:34px;display:flex;gap:12px;align-items:flex-end;pointer-events:auto}.touch-actions button{width:68px;height:68px;border-radius:50%;border:1px solid rgba(193,255,86,.55);background:rgba(15,18,23,.7);color:#c1ff56;font:900 10px ui-monospace,monospace}.touch-actions .skill{width:80px;height:80px;border-color:rgba(201,132,255,.65);color:#d7c4ff}
+  .stats-overlay{position:absolute;inset:0;z-index:90;display:grid;place-items:center;padding:18px;background:rgba(3,4,6,.76);backdrop-filter:blur(4px)}.stats-panel{width:min(520px,calc(100% - 20px));box-sizing:border-box;padding:22px;background:rgba(14,18,23,.97);box-shadow:0 20px 55px rgba(0,0,0,.55);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.panel-kicker{color:#c1ff56;font-size:9px;font-weight:900;letter-spacing:.18em}.weapon-title{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-top:10px}.weapon-title span,.affix-box>span,.stat-grid span{display:block;color:#68737f;font-size:9px;letter-spacing:.12em}.weapon-title h2{margin:5px 0 0;font-size:22px}.close{width:42px;height:42px;border:0;background:#1a2028;color:#d8dde2;font-size:24px;cursor:pointer}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;background:#090c10}.stat-grid>div{padding:12px;border-right:1px solid rgba(71,80,91,.45)}.stat-grid>div:last-child{border:0}.stat-grid strong{display:block;margin-top:4px;font-size:16px}.affix-box{margin-top:12px;padding:14px;background:#090c10}.affix-list{display:grid;gap:7px;margin-top:9px;color:#cbd3dc;font-size:12px}.affix-box p{margin:8px 0 0;color:#65707c;font-size:11px}.panel-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:16px}.panel-actions button{min-height:50px;border:0;font:900 11px ui-monospace,monospace;letter-spacing:.05em;cursor:pointer}.use-potion{background:#2a1319;color:#ff8993}.use-potion:disabled{opacity:.35;cursor:not-allowed}.resume{background:#c1ff56;color:#080a0d}.online-note{margin:10px 0 0;color:#626d78;font-size:9px}.common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}.legendary{color:#ffb347}
   footer{min-height:16px;line-height:16px}
   @media(any-pointer:coarse){.touch-controls{display:block}}
-  @media(max-width:720px){.page{padding:6px;grid-template-rows:auto minmax(0,1fr)}header strong{display:none}footer{display:none}.players span:first-child{display:none}.stage-shell{width:100%;height:100%}.joystick{left:10px;bottom:28px}.touch-actions{right:10px;bottom:28px}}
+  @media(max-width:720px){.page{padding:6px;grid-template-rows:auto minmax(0,1fr)}header strong{display:none}footer{display:none}.players span:first-child{display:none}.stage-shell{width:100%;height:100%}.joystick{left:10px;bottom:28px}.touch-actions{right:10px;bottom:28px}.stats-overlay{padding:8px;align-items:end}.stats-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}}
 </style>
