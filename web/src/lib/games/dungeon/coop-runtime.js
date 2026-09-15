@@ -353,6 +353,7 @@ export function installDungeonCoop(scene, {
     if (role !== 'host') return
 
     if (scene.floor !== lastFloor) {
+      placePlayers()
       lastFloor = scene.floor
       knownEnemies.clear()
       knownDrops.clear()
