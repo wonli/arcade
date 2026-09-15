@@ -40,7 +40,7 @@ export function simulateAuthoritativeRemotePlayer(scene, player, input, time, dt
   return true
 }
 
-function updateMirroredDropVisuals(scene) {
+export function updateMirroredDropVisuals(scene) {
   const now = scene.time?.now ?? 0
   for (const drop of scene.drops ?? []) {
     if (!drop || drop.spawnedAt == null || !drop.visual) continue
@@ -53,7 +53,7 @@ function updateMirroredDropVisuals(scene) {
 
 function actorUsesTexture(actor) { return actor?.getData?.('usesTexture') === true }
 
-function refreshRemoteActorVisual(scene, playerRuntime, player) {
+export function refreshRemoteActorVisual(scene, playerRuntime, player) {
   if (!player || actorUsesTexture(player.actor) || !actorUsesTexture(scene.player)) return false
   const next = scene.makeActor?.(player.state.x, player.state.y, 'player')?.setDepth?.(19) ?? null
   if (!next || !actorUsesTexture(next)) { next?.destroy?.(); return false }
@@ -62,6 +62,12 @@ function refreshRemoteActorVisual(scene, playerRuntime, player) {
   if (player.dead) player.actor?.setAlpha?.(0.38)
   playerRuntime.updatePlayerVisual(player)
   playerRuntime.syncAnimation(player, player.attacking ? 'attack' : null)
+  return true
+}
+
+export function repositionRemotePlayerForGeometryChange(playerRuntime, version, previousVersion) {
+  if (!previousVersion || !version || version === previousVersion) return false
+  playerRuntime?.repositionRemotePlayers?.()
   return true
 }
 
@@ -113,6 +119,7 @@ export function installDungeonCoop(scene, {
   playerRuntime.setLocalPlayerId(localPlayerId)
   const localPlayer = playerRuntime.localPlayer
   const remotePlayer = playerRuntime.addPlayer({ id: remotePlayerId })
+  remotePlayer?.label?.setText?.(role === 'host' ? 'P2' : 'P1')
   let remoteInput = normalizeDungeonInput(), inputSequence = 0, snapshotSequence = 0
   let lastInputSentAt = -Infinity, lastSnapshotSentAt = -Infinity, lastSnapshotSequence = 0
   let lastGeometryVersion = geometrySignature(scene.__roomGeometry)
@@ -134,7 +141,7 @@ export function installDungeonCoop(scene, {
     if (time - lastSnapshotSentAt < SNAPSHOT_INTERVAL_MS) return
     lastSnapshotSentAt = time; snapshotSequence++
     const version = geometrySignature(scene.__roomGeometry)
-    if (lastGeometryVersion && version && version !== lastGeometryVersion) playerRuntime.repositionRemotePlayers?.()
+    repositionRemotePlayerForGeometryChange(playerRuntime, version, lastGeometryVersion)
     const includeGeometry = shouldIncludeGeometry(snapshotSequence, version, lastGeometryVersion)
     const snapshot = createDungeonCoopSnapshot(scene, getProgress(), { sequence: snapshotSequence, includeGeometry })
     if (includeGeometry) lastGeometryVersion = version
