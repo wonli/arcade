@@ -17,12 +17,21 @@ test('damaged players consume ground potions while full-health players store the
   assert.equal(healthPotionPickupMode({ hp: 20, maxHp: 100, healthPotions: 0 }), 'consume')
 })
 
-test('picking up a potion while damaged heals to full without changing inventory', () => {
+test('picking up a potion while damaged heals thirty percent without changing inventory', () => {
   const result = pickupHealthPotion({ hp: 40, maxHp: 100, healthPotions: 2 })
+
+  assert.equal(result.state.hp, 70)
+  assert.equal(result.state.healthPotions, 2)
+  assert.equal(result.healed, 30)
+  assert.equal(result.stored, false)
+})
+
+test('ground potion healing clamps at max health', () => {
+  const result = pickupHealthPotion({ hp: 85, maxHp: 100, healthPotions: 2 })
 
   assert.equal(result.state.hp, 100)
   assert.equal(result.state.healthPotions, 2)
-  assert.equal(result.healed, 60)
+  assert.equal(result.healed, 15)
   assert.equal(result.stored, false)
 })
 
