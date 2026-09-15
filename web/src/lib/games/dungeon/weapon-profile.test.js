@@ -7,6 +7,16 @@ test('legacy weapons fall back to sword', () => {
   assert.equal(weaponArchetype({ weapon: 'weapon.rust_sword' }), 'sword')
 })
 
+test('canonical equipment weapon wins over compatibility mirrors', () => {
+  const state = {
+    equipment: { weapon: { type: 'weapon.arcane_spire', archetype: 'staff' } },
+    equippedWeapon: { type: 'weapon.old_blade', archetype: 'dagger' },
+    weaponArchetype: 'sword',
+  }
+  assert.equal(weaponArchetype(state), 'staff')
+  assert.equal(weaponProfile(state).attackMode, 'ranged')
+})
+
 test('all weapon identities resolve to an explicit combat archetype', () => {
   for (const archetype of ['dagger', 'sword', 'katana', 'greatsword', 'spear', 'axe', 'bow', 'staff']) {
     assert.equal(weaponProfile({ archetype }).archetype, archetype)
