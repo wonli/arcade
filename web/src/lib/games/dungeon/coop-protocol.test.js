@@ -41,6 +41,33 @@ test('semantic event strips presentation objects and clones gameplay data', () =
   assert.equal(event.item.rarity, 'rare')
 })
 
+test('ordinary elite presentation does not switch the replica into boss spawn mode', () => {
+  const elite = normalizeCoopEvent({
+    eventSeq: 2,
+    id: 'enemy-elite',
+    type: 'enemy.spawn',
+    enemyId: 'enemy:3:1:normal',
+    spawnIndex: 1,
+    elite: true,
+    boss: false,
+    patch: { elite: true, boss: false, archetype: 'fast' },
+  })
+  assert.equal(elite.elite, false)
+  assert.equal(elite.patch.elite, true)
+
+  const boss = normalizeCoopEvent({
+    eventSeq: 3,
+    id: 'enemy-boss',
+    type: 'enemy.spawn',
+    enemyId: 'enemy:5:0:elite',
+    spawnIndex: 0,
+    elite: true,
+    boss: true,
+    patch: { elite: true, boss: true, archetype: 'brute' },
+  })
+  assert.equal(boss.elite, true)
+})
+
 test('event sequence rejects duplicate and stale messages', () => {
   assert.ok(acceptEventSequence(4, { eventSeq: 5, id: 'e5', type: 'chest.opened', chestId: 'chest-0' }))
   assert.equal(acceptEventSequence(5, { eventSeq: 5, id: 'dup', type: 'chest.opened' }), null)
