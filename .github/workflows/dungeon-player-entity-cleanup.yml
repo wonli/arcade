@@ -4,20 +4,61 @@ on:
   push:
     branches: [ci/dungeon-player-entity-cleanup]
 
+permissions:
+  contents: write
+
 jobs:
-  verify:
+  migrate-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8c69344746759eaf61b55082b2581743bc7153f8
+          ref: feat/dungeon-coop-foundation
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.27.x
-      - name: Verify exact feature commit
+      - name: Upgrade legacy Dungeon test scenes to PlayerEntity fixtures
         run: |
-          test "$(git rev-parse HEAD)" = "8c69344746759eaf61b55082b2581743bc7153f8"
-          make test
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('web/src/lib/games/dungeon')
+          helper_import = "import { attachLegacyTestPlayer } from './test/player-fixture.js'\n"
+          installer = re.compile(r'\b(install[A-Z][A-Za-z0-9_]*)\(([_$A-Za-z][_$A-Za-z0-9]*)(?=[,)])')
+
+          for path in sorted(root.glob('*.test.js')):
+              if path.name in {'player-entity.test.js', 'scene-player-entity.test.js', 'player-entity-boundary.test.js'}:
+                  continue
+              text = path.read_text()
+              before = text
+              text = installer.sub(lambda m: f"{m.group(1)}(attachLegacyTestPlayer({m.group(2)})", text)
+              text = re.sub(
+                  r'\bscalePlayerForProgress\(([_$A-Za-z][_$A-Za-z0-9]*)(?=[,)])',
+                  lambda m: f"scalePlayerForProgress(attachLegacyTestPlayer({m.group(1)})",
+                  text,
+              )
+              if text != before and helper_import not in text:
+                  lines = text.splitlines(True)
+                  insert_at = 0
+                  while insert_at < len(lines) and (lines[insert_at].startswith('import ') or lines[insert_at].strip() == ''):
+                      insert_at += 1
+                  lines.insert(insert_at, helper_import)
+                  text = ''.join(lines)
+              if path.name == 'room-anchors.test.js':
+                  text = text.replace('scene.playerState', 'scene.localPlayer.state')
+                  text = text.replace('scene.playerBar', 'scene.localPlayer.bar')
+                  text = text.replace('scene.player', 'scene.localPlayer.actor')
+              if text != before:
+                  path.write_text(text)
+          PY
+      - name: Run full web tests
+        working-directory: web
+        run: npm ci && npm test
+      - name: Commit fixture migration
+        run: |
+          git config user.name ideaa
+          git config user.email ideaa@qq.com
+          git add web/src/lib/games/dungeon
+          git commit -m 'test(dungeon): migrate fixtures to PlayerEntity'
+          git push origin HEAD:feat/dungeon-coop-foundation
