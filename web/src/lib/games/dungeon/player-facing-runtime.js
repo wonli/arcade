@@ -10,10 +10,10 @@ export function installDungeonPlayerFacing(scene, { player = scene?.localPlayer 
   scene.__dungeonPlayerFacingInstalled = true
 
   const sync = (forceAction = null, target = player) => {
-  const result = originalSync(forceAction, target)
-  target.actor?.setFlipX?.(playerFlipX(target.facing))
-  return result
-}
+    const result = originalSync(forceAction, target)
+    target.actor?.setFlipX?.(playerFlipX(target.facing))
+    return result
+  }
 
   scene.syncPlayerAnimation = sync
   sync()

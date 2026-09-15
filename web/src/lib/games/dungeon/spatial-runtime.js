@@ -515,27 +515,27 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
 
   scene.drawArena = function drawSpatialArena() { refreshRoom() }
   scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
-  const before = { x: target.state.x, y: target.state.y }
-  if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
-    target.moving = false
-    if (!target.attacking) scene.syncPlayerAnimation?.(null, target)
-    return
+    const before = { x: target.state.x, y: target.state.y }
+    if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
+      target.moving = false
+      if (!target.attacking) scene.syncPlayerAnimation?.(null, target)
+      return
+    }
+    originalUpdatePlayer(dt, target)
+    const desired = { x: target.state.x, y: target.state.y }
+    const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
+    target.state.x = next.x; target.state.y = next.y
+    target.actor?.setPosition?.(next.x, next.y)
+    scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)
+    const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
+    if (trap && scene.time.now >= trapCooldownUntil) {
+      trapCooldownUntil = scene.time.now + 850
+      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)
+      onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
+    }
   }
-  originalUpdatePlayer(dt, target)
-  const desired = { x: target.state.x, y: target.state.y }
-  const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
-  target.state.x = next.x; target.state.y = next.y
-  target.actor?.setPosition?.(next.x, next.y)
-  scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)
-  const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
-  if (trap && scene.time.now >= trapCooldownUntil) {
-    trapCooldownUntil = scene.time.now + 850
-    scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)
-    onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
-  }
-}
 
-function navigateEnemy(enemy, target, time, dt) {
+  function navigateEnemy(enemy, target, time, dt) {
     const geometry = scene.__roomGeometry
     if (!geometry || (scene.__hitStopUntil ?? 0) > time) return
     const flying = enemyIsFlying(enemy)
