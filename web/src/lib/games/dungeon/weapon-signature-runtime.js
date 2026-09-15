@@ -10,13 +10,13 @@ function signatureFor(player) {
   return player?.equippedWeapon?.signature ?? 'arcane_burst'
 }
 
-function damageSignatureTarget(scene, target, damage, source = 'staff_signature') {
+function damageSignatureTarget(scene, player, target, damage, source = 'staff_signature') {
   if (!target || target.hp <= 0 || damage <= 0) return false
   scene.damageEnemy?.(target, Math.max(1, Math.round(damage)), false, 0, {
     direct: false,
     canProc: false,
     source,
-  })
+  }, player)
   return true
 }
 
@@ -40,16 +40,16 @@ function nearestVisibleChainTarget(scene, from, excluded) {
   return best
 }
 
-export function installDungeonWeaponSignatures(scene) {
-  if (!scene || scene.__dungeonWeaponSignatures) return scene?.__dungeonWeaponSignatures ?? null
+export function installDungeonWeaponSignatures(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonWeaponSignatures) return scene?.__dungeonWeaponSignatures ?? null
 
-  let identity = weaponIdentity(scene.localPlayer.state)
+  let identity = weaponIdentity(player.state)
   let staffHits = 0
   const blizzards = []
   const slowStates = new Map()
 
   const syncWeapon = () => {
-    const next = weaponIdentity(scene.localPlayer.state)
+    const next = weaponIdentity(player.state)
     if (next === identity) return false
     identity = next
     staffHits = 0
@@ -96,21 +96,21 @@ export function installDungeonWeaponSignatures(scene) {
   }
 
   const arcaneBurst = (primary, baseDamage) => {
-    const effects = scene.localPlayer.state?.effects ?? {}
+    const effects = player.state?.effects ?? {}
     const radius = 88 * (1 + (effects.skillRadius ?? 0))
-    damageSignatureTarget(scene, primary, baseDamage * 0.60)
+    damageSignatureTarget(scene, player, primary, baseDamage * 0.60)
     for (const enemy of scene.enemies ?? []) {
       if (!enemy || enemy === primary || enemy.hp <= 0) continue
       if (Math.hypot(enemy.x - primary.x, enemy.y - primary.y) > radius) continue
-      damageSignatureTarget(scene, enemy, baseDamage * 0.35)
+      damageSignatureTarget(scene, player, enemy, baseDamage * 0.35)
     }
     scene.__dungeonWeaponVfx?.nova?.(primary.x, primary.y, { radius, signature: 'arcane_burst' })
   }
 
   const stormPalm = (primary, baseDamage) => {
     const excluded = new Set([primary])
-    scene.__dungeonVfx?.lightning?.(scene.localPlayer.state, primary, { primary: true, resourceOnly: true })
-    damageSignatureTarget(scene, primary, baseDamage * 0.60)
+    scene.__dungeonVfx?.lightning?.(player.state, primary, { primary: true, resourceOnly: true })
+    damageSignatureTarget(scene, player, primary, baseDamage * 0.60)
 
     let from = primary
     const scales = [0.35, 0.20]
@@ -118,14 +118,14 @@ export function installDungeonWeaponSignatures(scene) {
       const target = nearestVisibleChainTarget(scene, from, excluded)
       if (!target) break
       scene.__dungeonVfx?.lightning?.(from, target, { primary: false, resourceOnly: true })
-      damageSignatureTarget(scene, target, baseDamage * scales[index])
+      damageSignatureTarget(scene, player, target, baseDamage * scales[index])
       excluded.add(target)
       from = target
     }
   }
 
   const frostBlizzard = (primary, baseDamage) => {
-    const effects = scene.localPlayer.state?.effects ?? {}
+    const effects = player.state?.effects ?? {}
     const blizzard = {
       x: primary.x,
       y: primary.y,
@@ -144,7 +144,7 @@ export function installDungeonWeaponSignatures(scene) {
   }
 
   const arcaneNova = (primary, baseDamage) => {
-    const effects = scene.localPlayer.state?.effects ?? {}
+    const effects = player.state?.effects ?? {}
     const amount = effects.arcaneNova ?? 0
     if (!(amount > 0)) return
 
@@ -156,12 +156,12 @@ export function installDungeonWeaponSignatures(scene) {
     for (const enemy of scene.enemies ?? []) {
       if (!enemy || enemy === primary || enemy.hp <= 0) continue
       if (Math.hypot(enemy.x - primary.x, enemy.y - primary.y) > radius) continue
-      damageSignatureTarget(scene, enemy, baseDamage * (0.20 + amount), 'arcane_nova')
+      damageSignatureTarget(scene, player, enemy, baseDamage * (0.20 + amount), 'arcane_nova')
     }
   }
 
   const trigger = (primary, baseDamage) => {
-    const signature = signatureFor(scene.localPlayer.state)
+    const signature = signatureFor(player.state)
     if (signature === 'storm_palm') stormPalm(primary, baseDamage)
     else if (signature === 'frost_blizzard') frostBlizzard(primary, baseDamage)
     else arcaneBurst(primary, baseDamage)
@@ -171,7 +171,7 @@ export function installDungeonWeaponSignatures(scene) {
 
   const onStaffHit = (primary, baseDamage) => {
     syncWeapon()
-    if (weaponArchetype(scene.localPlayer.state) !== 'staff' || !primary) return false
+    if (weaponArchetype(player.state) !== 'staff' || !primary) return false
     staffHits = (staffHits + 1) % 3
     if (staffHits !== 0) return false
     trigger(primary, baseDamage)
@@ -188,7 +188,7 @@ export function installDungeonWeaponSignatures(scene) {
       while (blizzard.ticks < 3 && blizzard.elapsed >= (blizzard.ticks + 1) * 400) {
         for (const enemy of scene.enemies ?? []) {
           if (!insideBlizzard(enemy, blizzard)) continue
-          damageSignatureTarget(scene, enemy, blizzard.baseDamage * 0.20)
+          damageSignatureTarget(scene, player, enemy, blizzard.baseDamage * 0.20)
         }
         blizzard.ticks += 1
       }
