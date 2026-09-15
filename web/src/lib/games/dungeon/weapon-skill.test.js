@@ -4,7 +4,11 @@ import assert from 'node:assert/strict'
 import { bowVolleyTargets, weaponGroupSkill } from './weapon-skill.js'
 
 function player(archetype) {
-  return { equippedWeapon: { archetype } }
+  return {
+    equipment: {
+      weapon: { type: `weapon.test_${archetype}`, archetype, rarity: 'common', damage: 0, affixes: [] },
+    },
+  }
 }
 
 test('group skill follows weapon archetype instead of a shared whirlwind proc', () => {

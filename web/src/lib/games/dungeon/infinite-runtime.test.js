@@ -49,7 +49,7 @@ test('player runtime baseline follows floor progression without compounding twic
       critChance: 0.18,
       speed: 190,
       baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
-      equippedWeapon: null,
+      equipment: { weapon: null },
     },
   }
   scalePlayerForProgress(attachLegacyTestPlayer(scene), { floor: 1, chapter: 1 })

@@ -7,8 +7,10 @@ function frostScene(skillRadius = 0) {
   const hits = []
   const scene = {
     playerState: {
-      x: 0, y: 0, effects: { skillRadius },
-      equippedWeapon: { type: 'weapon.frost_staff', archetype: 'staff', signature: 'frost_blizzard' },
+      x: 0,
+      y: 0,
+      modifiers: { test: { skillRadius } },
+      equipment: { weapon: { type: 'weapon.frost_staff', archetype: 'staff', signature: 'frost_blizzard' } },
     },
     enemies: [],
     damageEnemy(target, damage, critical, knockback, context) {

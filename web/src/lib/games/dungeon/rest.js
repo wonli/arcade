@@ -1,5 +1,6 @@
 import { deriveEquipment } from './affixes.js'
 import { growLegendary, isLegendaryWeapon } from './legendary-growth.js'
+import { currentWeapon } from './player-loadout.js'
 
 const BASIC = new Set(['power', 'attack_speed', 'critical', 'movement_speed', 'vitality', 'life_steal'])
 const DEFAULT_BASE = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
@@ -15,7 +16,7 @@ function cloneWeapon(weapon) {
 
 function temperWeapon(playerState, random = Math.random) {
   const baseStats = { ...DEFAULT_BASE, ...(playerState?.baseStats ?? {}) }
-  const weapon = cloneWeapon(playerState?.equippedWeapon)
+  const weapon = cloneWeapon(currentWeapon(playerState))
   if (!weapon) {
     const nextBase = { ...baseStats, damage: (baseStats.damage ?? 10) + 1 }
     return { ...deriveEquipment(nextBase, null, playerState), baseStats: nextBase }
@@ -47,9 +48,10 @@ export function applyRestChoice(playerState, choice, random = Math.random) {
     }
   }
 
-  if (choice === 'temper' && isLegendaryWeapon(playerState?.equippedWeapon)) {
+  const equippedWeapon = currentWeapon(playerState)
+  if (choice === 'temper' && isLegendaryWeapon(equippedWeapon)) {
     const baseStats = { ...DEFAULT_BASE, ...(playerState?.baseStats ?? {}) }
-    const weapon = growLegendary(playerState.equippedWeapon)
+    const weapon = growLegendary(equippedWeapon)
     return {
       playerState: { ...deriveEquipment(baseStats, weapon, playerState), baseStats },
       fortunePending: false,

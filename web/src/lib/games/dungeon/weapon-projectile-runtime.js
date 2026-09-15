@@ -1,4 +1,5 @@
 import { healFromHit, modifiedDamage, rollDamage } from './combat.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { rangedProjectileArt } from './weapon-art.js'
 import { weaponAttackDamage, weaponAttackKnockback, weaponProfile } from './weapon-profile.js'
@@ -21,9 +22,9 @@ function directionFromTarget(player, target, fallback = 'down') {
   return fallback
 }
 
-function weaponIdentity(player) {
-  const item = player?.equippedWeapon
-  return [item?.type ?? player?.weapon ?? '', item?.archetype ?? '', item?.signature ?? ''].join('|')
+function weaponIdentity(state) {
+  const item = currentWeapon(state)
+  return [item?.type ?? '', item?.archetype ?? '', item?.signature ?? ''].join('|')
 }
 
 export function weaponProjectileSpec(player) {
@@ -110,20 +111,50 @@ function createSpellVisual(scene, start, angle, profile) {
   return { visual, rotationOffset: 0 }
 }
 
-export function installDungeonWeaponProjectiles(scene, { random = Math.random, anchor = null, player = scene?.localPlayer } = {}) {
-  if (!scene || !player || scene.__dungeonWeaponProjectiles) return scene?.__dungeonWeaponProjectiles ?? null
+function ensureProjectileDispatcher(scene) {
+  if (!scene) return null
+  if (scene.__dungeonWeaponProjectileDispatcher) return scene.__dungeonWeaponProjectileDispatcher
   const originalSlash = scene.slash?.bind(scene)
   if (!originalSlash) return null
+
+  const runtimes = new Set()
+  const dispatch = (target, attacker = scene.localPlayer) => {
+    const runtime = attacker?.runtime?.weaponProjectiles
+    if (runtime) return runtime.fire(target)
+    return originalSlash(target, attacker)
+  }
+
+  let restored = false
+  const restore = () => {
+    if (restored) return
+    restored = true
+    if (scene.slash === dispatch) scene.slash = originalSlash
+    if (scene.__dungeonWeaponProjectileDispatcher === api) scene.__dungeonWeaponProjectileDispatcher = null
+  }
+
+  const api = { originalSlash, runtimes, dispatch, restore }
+  scene.slash = dispatch
+  scene.__dungeonWeaponProjectileDispatcher = api
+  scene.events?.once?.('shutdown', restore)
+  scene.events?.once?.('destroy', restore)
+  return api
+}
+
+export function installDungeonWeaponProjectiles(scene, { random = Math.random, anchor = null, player = scene?.localPlayer } = {}) {
+  if (!scene || !player) return null
+  player.runtime ??= {}
+  if (player.runtime.weaponProjectiles) return player.runtime.weaponProjectiles
+
+  const dispatcher = ensureProjectileDispatcher(scene)
+  if (!dispatcher) return null
+  const originalSlash = dispatcher.originalSlash
   preloadProjectileArt(scene)
   const projectiles = []
   const signatures = installDungeonWeaponSignatures(scene, { player })
-  const originalVfxSlash = scene.__dungeonVfx?.slash?.bind(scene.__dungeonVfx)
   let cadenceWeapon = weaponIdentity(player.state)
   let bowLaunches = 0
 
-  if (originalVfxSlash) {
-    scene.__dungeonVfx.slash = (...args) => weaponProjectileSpec(player.state) ? null : originalVfxSlash(...args)
-  }
+  const playerWeaponVfx = () => player.runtime?.weaponVfx ?? scene.__dungeonWeaponVfx
 
   const destroyProjectile = (projectile) => {
     projectile.visual?.destroy?.()
@@ -137,10 +168,11 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     source = projectile.source,
   } = {}) => {
     if (!target || target.hp <= 0) return false
-    scene.damageEnemy?.(target, damage, projectile.critical, projectile.knockback, { direct, canProc, source }, player)
-    if (heal) scene.healPlayer?.(healFromHit(player.state, damage, projectile.critical, { direct: true }), player)
-    if (canProc) scene.applyWeaponProcs?.(target, damage, projectile.critical, player)
-    scene.__dungeonWeaponVfx?.impact?.(target.x, target.y, { critical: projectile.critical })
+    const attacker = projectile.attacker ?? player
+    scene.damageEnemy?.(target, damage, projectile.critical, projectile.knockback, { direct, canProc, source }, attacker)
+    if (heal) scene.healPlayer?.(healFromHit(attacker.state, damage, projectile.critical, { direct: true }), attacker)
+    if (canProc) scene.applyWeaponProcs?.(target, damage, projectile.critical, attacker)
+    ;(attacker.runtime?.weaponVfx ?? scene.__dungeonWeaponVfx)?.impact?.(target.x, target.y, { critical: projectile.critical })
     if (projectile.archetype === 'staff' && direct && canProc && source === 'weapon') {
       signatures?.onStaffHit?.(target, damage)
     }
@@ -187,7 +219,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       powerShot = bowLaunches === 0
     }
 
-    const visualAnchor = player === scene.localPlayer ? scene.__dungeonWeaponVisuals?.anchor?.() : null
+    const visualAnchor = player.runtime?.weaponVisuals?.anchor?.() ?? (player === scene.localPlayer ? scene.__dungeonWeaponVisuals?.anchor?.() : null)
     const start = anchor?.(player) ?? visualAnchor ?? { x: player.state.x, y: player.state.y }
     const dx = target.x - start.x
     const dy = target.y - start.y
@@ -201,7 +233,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
       ? rolled.damage
       : modifiedDamage(player.state, target, rolled.damage)
     const damage = powerShot ? Math.max(1, Math.round(baseDamage * 1.6)) : baseDamage
-    const vfxProfile = weaponVfxProfile(player.state.equippedWeapon ?? { rarity: player.state.weaponRarity ?? 'common' })
+    const vfxProfile = weaponVfxProfile(currentWeapon(player.state) ?? { rarity: 'common' })
     const visuals = makeVisual(spec, start, angle, vfxProfile)
 
     if (!secondary) {
@@ -217,6 +249,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
 
     projectiles.push({
       ...spec,
+      attacker: player,
       x: start.x,
       y: start.y,
       vx: (dx / distance) * spec.speed,
@@ -237,7 +270,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     const projectile = projectiles.at(-1)
 
     if (powerShot) {
-      const effects = player.state.effects ?? {}
+      const effects = currentEffects(player.state)
       if ((effects.volley ?? 0) > 0) {
         const radius = Math.round(190 * (1 + (effects.skillRadius ?? 0)))
         const targets = bowVolleyTargets(target, scene.enemies ?? [], radius, 2)
@@ -259,7 +292,7 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     const livingTargets = targets.filter((target) => target?.hp > 0)
     if (!livingTargets.length) return []
 
-    scene.__dungeonWeaponVfx?.volley?.(livingTargets)
+    playerWeaponVfx()?.volley?.(livingTargets)
     const shotDamage = Math.max(1, Math.round(damage * damageScale))
     return livingTargets
       .map((target) => fire(target, {
@@ -302,8 +335,6 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
     }
     return best
   }
-
-  scene.slash = fire
 
   const update = (_time, delta = 16) => {
     const elapsed = Math.min(40, Math.max(0, delta))
@@ -373,19 +404,23 @@ export function installDungeonWeaponProjectiles(scene, { random = Math.random, a
 
   scene.events?.on?.('update', update)
 
+  let api = null
   const restore = () => {
     scene.events?.off?.('update', update)
     for (const projectile of projectiles) destroyProjectile(projectile)
     projectiles.length = 0
     signatures?.restore?.()
-    scene.slash = originalSlash
-    if (originalVfxSlash && scene.__dungeonVfx) scene.__dungeonVfx.slash = originalVfxSlash
-    scene.__dungeonWeaponProjectiles = null
+    dispatcher.runtimes.delete(api)
+    if (player.runtime?.weaponProjectiles === api) delete player.runtime.weaponProjectiles
+    if (scene.__dungeonWeaponProjectiles === api) scene.__dungeonWeaponProjectiles = null
+    if (dispatcher.runtimes.size === 0) dispatcher.restore()
   }
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { fire, volley: (...args) => volley(...args), update, restore, count: () => projectiles.length }
-  scene.__dungeonWeaponProjectiles = api
+  api = { fire, volley: (...args) => volley(...args), update, restore, count: () => projectiles.length }
+  player.runtime.weaponProjectiles = api
+  dispatcher.runtimes.add(api)
+  if (player === scene.localPlayer || !scene.localPlayer) scene.__dungeonWeaponProjectiles = api
   return api
 }

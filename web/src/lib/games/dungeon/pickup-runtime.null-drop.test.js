@@ -16,7 +16,7 @@ test('equipping never replaces the selected drop with null', () => {
   }
   const scene = {
     floor: 1,
-    playerState: { x: 0, y: 0, hp: 100, maxHp: 100, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 } },
+    playerState: { x: 0, y: 0, hp: 100, maxHp: 100, baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }, equipment: { weapon: null } },
     drops: [candidate],
     time: { now: 0 },
     input: { keyboard: { addKey: () => ({ on(_event, fn) { onDown = fn }, off() {} }) } },
@@ -31,11 +31,7 @@ test('equipping never replaces the selected drop with null', () => {
       if (!drop) return
       equippedCalls++
       assert.equal(drop, candidate, 'confirmed pickup must pass the selected drop to the original updater')
-      this.localPlayer.state.weapon = drop.item.type
-      this.localPlayer.state.weaponRarity = drop.item.rarity
-      this.localPlayer.state.weaponDamage = drop.item.damage
-      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
-      this.localPlayer.state.equippedWeapon = drop.item
+      this.localPlayer.state.equipment = { weapon: drop.item }
       this.drops.splice(0, 1)
     },
     clearDrops() { this.drops = [] },
@@ -48,5 +44,5 @@ test('equipping never replaces the selected drop with null', () => {
   assert.doesNotThrow(() => onDown())
   assert.equal(equippedCalls, 1)
   assert.equal(scene.drops.some((drop) => drop == null), false)
-  assert.equal(scene.localPlayer.state.weapon, candidate.item.type)
+  assert.equal(scene.localPlayer.state.equipment.weapon.type, candidate.item.type)
 })

@@ -12,13 +12,15 @@ function actor(archetype) {
     damage: 20,
     critChance: 0,
     critMultiplier: 2,
-    effects: {},
-    equippedWeapon: {
-      type: staff ? 'weapon.arcane_spire' : bow ? 'weapon.tempest_bow' : 'weapon.test',
-      archetype,
-      rarity: 'rare',
-      vfxTheme: staff ? 'arcane' : 'storm',
-      vfxVariant: staff || bow ? 1 : 0,
+    modifiers: {},
+    equipment: {
+      weapon: {
+        type: staff ? 'weapon.arcane_spire' : bow ? 'weapon.tempest_bow' : 'weapon.test',
+        archetype,
+        rarity: 'rare',
+        vfxTheme: staff ? 'arcane' : 'storm',
+        vfxVariant: staff || bow ? 1 : 0,
+      },
     },
   }
 }
@@ -131,6 +133,17 @@ test('ranged slash delays damage until projectile reaches target', () => {
   update(40, 40)
   assert.equal(hits.length, 1)
   assert.equal(runtime.count(), 0)
+})
+
+test('projectiles carry their attacker and runtime ownership explicitly', () => {
+  const { scene, runtime } = rangedScene('bow')
+  const target = { x: 80, y: 0, hp: 100, hitRadius: 10 }
+  scene.enemies = [target]
+
+  const projectile = scene.slash(target)
+
+  assert.equal(projectile.attacker, scene.localPlayer)
+  assert.equal(scene.localPlayer.runtime.weaponProjectiles, runtime)
 })
 
 test('every fourth primary bow launch is a deterministic Power Shot with 160 percent primary damage', () => {

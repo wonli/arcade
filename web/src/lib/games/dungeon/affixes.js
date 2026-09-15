@@ -1,3 +1,5 @@
+import { applyEquipmentState } from './player-loadout.js'
+
 const tierForFloor = (floor) => floor >= 5 ? 3 : floor >= 3 ? 2 : 1
 
 const rangedValue = (ranges, tier, random) => {
@@ -176,20 +178,14 @@ export function deriveEquipment(base, item = null, current = {}) {
   const gainedMaxHp = Math.max(0, maxHp - previousMaxHp)
   const hp = Math.min(maxHp, Math.max(0, previousHp + gainedMaxHp))
 
-  return {
+  return applyEquipmentState({
     ...current,
     damage,
     critChance,
     speed,
     maxHp,
     hp,
-    weapon: equippedItem?.type ?? null,
-    weaponRarity: equippedItem?.rarity ?? null,
-    weaponDamage,
-    weaponAffixes: equippedItem?.affixes ? [...equippedItem.affixes] : [],
-    equippedWeapon: equippedItem ? { ...equippedItem, affixes: [...(equippedItem.affixes ?? [])] } : null,
-    effects,
-  }
+  }, equippedItem, effects)
 }
 
 export function affixSummary(item) {

@@ -2,9 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { weaponArchetype, weaponProfile } from './weapon-profile.js'
 
-test('legacy weapons fall back to sword', () => {
+test('weapons without an explicit archetype fall back to sword', () => {
   assert.equal(weaponArchetype({ type: 'weapon.dungeon_blade' }), 'sword')
-  assert.equal(weaponArchetype({ weapon: 'weapon.rust_sword' }), 'sword')
+  assert.equal(weaponArchetype(null), 'sword')
+})
+
+test('canonical equipment weapon drives player weapon profile', () => {
+  const state = {
+    equipment: { weapon: { type: 'weapon.arcane_spire', archetype: 'staff' } },
+  }
+  assert.equal(weaponArchetype(state), 'staff')
+  assert.equal(weaponProfile(state).attackMode, 'ranged')
 })
 
 test('all weapon identities resolve to an explicit combat archetype', () => {

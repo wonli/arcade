@@ -9,6 +9,7 @@ import {
   affixSummary,
   specializeWeaponAffixes,
 } from './affixes.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 
 const sequence = (values) => {
   let index = 0
@@ -64,7 +65,7 @@ test('weapon build slot specializes by archetype without changing its rolled pow
   assert.deepEqual(sword.affixes[0], whirlwind)
 })
 
-test('deriving old ranged equipment never exposes whirlwind at runtime', () => {
+test('deriving old ranged equipment specializes canonical affixes and modifiers', () => {
   const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
   const bow = deriveEquipment(base, {
     type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'epic', damage: 9,
@@ -75,12 +76,12 @@ test('deriving old ranged equipment never exposes whirlwind at runtime', () => {
     affixes: [{ id: 'whirlwind', tier: 2, value: 0.26 }],
   }, { hp: 100, maxHp: 100 })
 
-  assert.equal(bow.effects.whirlwind, 0)
-  assert.equal(bow.effects.volley, 0.26)
-  assert.equal(bow.equippedWeapon.affixes[0].id, 'volley')
-  assert.equal(staff.effects.whirlwind, 0)
-  assert.equal(staff.effects.arcaneNova, 0.26)
-  assert.equal(staff.equippedWeapon.affixes[0].id, 'arcane_nova')
+  assert.equal(currentEffects(bow).whirlwind, 0)
+  assert.equal(currentEffects(bow).volley, 0.26)
+  assert.equal(currentWeapon(bow).affixes[0].id, 'volley')
+  assert.equal(currentEffects(staff).whirlwind, 0)
+  assert.equal(currentEffects(staff).arcaneNova, 0.26)
+  assert.equal(currentWeapon(staff).affixes[0].id, 'arcane_nova')
 })
 
 test('deriving equipment rebuilds stats instead of accumulating old weapon bonuses', () => {
@@ -110,7 +111,7 @@ test('vitality increases max hp and grants the newly gained max hp on equip', ()
   assert.equal(result.hp, 75)
 })
 
-test('derived effects expose normalized combat hooks and summary is compact', () => {
+test('derived modifiers expose normalized combat hooks and summary is compact', () => {
   const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
   const item = {
     type: 'weapon.dungeon_blade', rarity: 'epic', damage: 9,
@@ -121,8 +122,38 @@ test('derived effects expose normalized combat hooks and summary is compact', ()
     ],
   }
   const result = deriveEquipment(base, item, { hp: 100, maxHp: 100 })
-  assert.equal(result.effects.lifeSteal, 0.08)
-  assert.equal(result.effects.skillHaste, 0.16)
-  assert.equal(result.effects.thunder, 0.45)
+  const effects = currentEffects(result)
+  assert.equal(effects.lifeSteal, 0.08)
+  assert.equal(effects.skillHaste, 0.16)
+  assert.equal(effects.thunder, 0.45)
   assert.equal(affixSummary(item).length, 3)
+})
+
+test('equipping a weapon preserves passive and temporary modifier layers', () => {
+  const base = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+  const current = {
+    hp: 80,
+    maxHp: 100,
+    modifiers: {
+      passive: { skillRadius: 0.1 },
+      temporary: { attackSpeed: 0.15 },
+      equipment: { lifeSteal: 0.03 },
+    },
+  }
+  const result = deriveEquipment(base, {
+    type: 'weapon.dungeon_blade', archetype: 'sword', rarity: 'rare', damage: 7,
+    affixes: [
+      { id: 'attack_speed', tier: 1, value: 0.12 },
+      { id: 'life_steal', tier: 1, value: 0.05 },
+    ],
+  }, current)
+  const effects = currentEffects(result)
+
+  assert.equal(result.equipment.weapon.type, 'weapon.dungeon_blade')
+  assert.equal(result.modifiers.passive.skillRadius, 0.1)
+  assert.equal(result.modifiers.temporary.attackSpeed, 0.15)
+  assert.equal(result.modifiers.equipment.attackSpeed, 0.12)
+  assert.equal(effects.attackSpeed, 0.27)
+  assert.equal(effects.skillRadius, 0.1)
+  assert.equal(effects.lifeSteal, 0.05)
 })

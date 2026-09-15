@@ -4,14 +4,20 @@ import assert from 'node:assert/strict'
 import { PlayerEntity } from './player-entity.js'
 import { installDungeonWeaponSignatures } from './weapon-signature-runtime.js'
 
+function staffState(type, signature, x = 0, y = 0) {
+  return {
+    x,
+    y,
+    modifiers: {},
+    equipment: { weapon: { type, archetype: 'staff', signature } },
+  }
+}
+
 function signatureScene(signature = 'storm_palm', player = null) {
   const hits = []
   const lightning = []
   const scene = {
-    playerState: {
-      x: 0, y: 0, effects: {},
-      equippedWeapon: { type: `weapon.${signature}`, archetype: 'staff', signature },
-    },
+    playerState: staffState(`weapon.${signature}`, signature),
     enemies: [],
     damageEnemy(target, damage, critical, knockback, context, attacker) {
       hits.push({ target, damage, context, attacker })
@@ -68,12 +74,7 @@ test('Storm Palm renders one resource lightning segment for the primary and each
 test('weapon signatures use the explicitly supplied PlayerEntity instead of localPlayer', () => {
   const player = new PlayerEntity({
     id: 'remote',
-    state: {
-      x: 180,
-      y: 40,
-      effects: {},
-      equippedWeapon: { type: 'weapon.remote_staff', archetype: 'staff', signature: 'storm_palm' },
-    },
+    state: staffState('weapon.remote_staff', 'storm_palm', 180, 40),
   })
   const { scene, runtime, hits, lightning } = signatureScene('arcane_burst', player)
   const primary = { id: 'primary', x: 220, y: 40, hp: 1000 }
@@ -86,4 +87,36 @@ test('weapon signatures use the explicitly supplied PlayerEntity instead of loca
   assert.ok(hits.length > 0)
   assert.ok(hits.every((hit) => hit.attacker === player))
   assert.equal(lightning[0]?.from, player.state)
+})
+
+test('weapon signature progress is isolated per PlayerEntity', () => {
+  const first = new PlayerEntity({
+    id: 'first',
+    state: staffState('weapon.first_staff', 'storm_palm', 0, 0),
+  })
+  const second = new PlayerEntity({
+    id: 'second',
+    state: staffState('weapon.second_staff', 'storm_palm', 20, 0),
+  })
+  const scene = {
+    localPlayer: first,
+    enemies: [],
+    damageEnemy() {},
+    __dungeonVfx: { lightning() {} },
+    __dungeonWeaponVfx: { nova() {} },
+  }
+
+  const firstRuntime = installDungeonWeaponSignatures(scene, { player: first })
+  const secondRuntime = installDungeonWeaponSignatures(scene, { player: second })
+
+  firstRuntime.onStaffHit({ id: 'a', x: 40, y: 0, hp: 100 }, 20)
+  firstRuntime.onStaffHit({ id: 'b', x: 40, y: 0, hp: 100 }, 20)
+  secondRuntime.onStaffHit({ id: 'c', x: 60, y: 0, hp: 100 }, 20)
+
+  assert.notEqual(firstRuntime, secondRuntime)
+  assert.equal(first.runtime.weaponSignatures, firstRuntime)
+  assert.equal(second.runtime.weaponSignatures, secondRuntime)
+  assert.equal(firstRuntime.progress(), 2)
+  assert.equal(secondRuntime.progress(), 1)
+  assert.equal(scene.__dungeonWeaponSignatures, firstRuntime)
 })

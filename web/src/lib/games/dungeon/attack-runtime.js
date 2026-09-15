@@ -2,6 +2,7 @@ import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwind
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
+import { currentEffects } from './player-loadout.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
@@ -10,6 +11,7 @@ import { installDungeonPlayerFacing } from './player-facing-runtime.js'
 import { installDungeonEnemyFeedback } from './enemy-feedback-runtime.js'
 import { installDungeonEnemyBehaviors } from './enemy-behavior-runtime.js'
 import { weaponGroupSkill } from './weapon-skill.js'
+import { weaponProfile } from './weapon-profile.js'
 
 function createImpactAudio(windowImpl = globalThis.window) {
   let context = null
@@ -51,7 +53,7 @@ function createImpactAudio(windowImpl = globalThis.window) {
       now,
     )
     lowGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration)
-    lowGain.connect(master)
+    lowGain.connect(ctx.destination)
 
     const low = ctx.createOscillator()
     low.type = 'sine'
@@ -93,11 +95,13 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   scene.slash = function spatialSlash(target, attacker = player) {
     if (!target || target.hp <= 0 || !attacker) return
 
-    const bladeTip = attacker === player
-      ? (scene.__dungeonWeaponVisuals?.swing?.() ?? attacker.state)
-      : attacker.state
-    scene.__dungeonVfx?.slash?.(bladeTip, target, false)
-    originalSlash(target, attacker)
+    const weaponVisuals = attacker.runtime?.weaponVisuals
+      ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
+    const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
+    if (weaponProfile(attacker.state).attackMode !== 'ranged') {
+      scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+    }
+    return originalSlash(target, attacker)
   }
 
   scene.damageEnemy = function spatialDamageEnemy(
@@ -200,7 +204,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
 
   scene.applyWeaponProcs = function spatialWeaponProcs(primary, damage, critical, attacker = player) {
     if (!attacker) return
-    const effects = attacker.state.effects ?? {}
+    const effects = currentEffects(attacker.state)
     const groupSkill = weaponGroupSkill(attacker.state)
 
     if (primary?.hp > 0 && effects.piercing > 0 && random() < effects.piercing) {

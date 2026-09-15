@@ -4,10 +4,17 @@ import assert from 'node:assert/strict'
 import { createPlayerEntity } from './player-entity.js'
 import { installDungeonWeaponCombat } from './weapon-combat-runtime.js'
 
+function weaponState(archetype) {
+  return {
+    modifiers: {},
+    equipment: { weapon: { type: `weapon.test_${archetype}`, archetype, rarity: 'common', damage: 0, affixes: [] } },
+  }
+}
+
 function sceneFor(archetype) {
   const calls = []
   const scene = {
-    playerState: { x: 0, y: 0, damage: 20, hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype } },
+    playerState: { x: 0, y: 0, damage: 20, hp: 100, maxHp: 100, ...weaponState(archetype) },
     enemies: [], lastAttackAt: 0, events: { once() {} },
     damageEnemy(enemy, damage, critical, knockback, context, player) { calls.push({ enemy, damage, knockback, context, player }) },
     slash(target, player = this.localPlayer) { this.damageEnemy(target, player.state.damage, false, 22, { direct: true, source: 'weapon' }, player) },
@@ -62,7 +69,7 @@ test('runtime keeps auto attack and damage owned by the provided PlayerEntity', 
   attachLegacyTestPlayer(scene)
   const remote = createPlayerEntity({
     id: 'remote',
-    state: { x: 0, y: 0, damage: 30, hp: 100, maxHp: 100, effects: {}, equippedWeapon: { archetype: 'katana' } },
+    state: { x: 0, y: 0, damage: 30, hp: 100, maxHp: 100, ...weaponState('katana') },
   })
   scene.enemies = [{ id: 'target', hp: 10, x: 190, y: 0 }]
   installDungeonWeaponCombat(scene)
@@ -74,6 +81,28 @@ test('runtime keeps auto attack and damage owned by the provided PlayerEntity', 
   assert.ok(calls[0].damage > 30)
   assert.equal(remote.lastAttackAt, 1000)
   assert.equal(scene.localPlayer.lastAttackAt, 0)
+})
+
+test('weapon combat routes attack and impact vfx to the attacking PlayerEntity', () => {
+  const { scene } = sceneFor('sword')
+  attachLegacyTestPlayer(scene)
+  const localVfx = { attacks: 0, impacts: 0, attack() { this.attacks++ }, impact() { this.impacts++ } }
+  const remoteVfx = { attacks: 0, impacts: 0, attack() { this.attacks++ }, impact() { this.impacts++ } }
+  scene.localPlayer.runtime.weaponVfx = localVfx
+  scene.__dungeonWeaponVfx = localVfx
+  const remote = createPlayerEntity({
+    id: 'remote',
+    state: { x: 0, y: 0, damage: 30, hp: 100, maxHp: 100, ...weaponState('sword') },
+  })
+  remote.runtime.weaponVfx = remoteVfx
+  installDungeonWeaponCombat(scene)
+
+  scene.slash({ id: 'target', hp: 10, x: 80, y: 0 }, remote)
+
+  assert.equal(remoteVfx.attacks, 1)
+  assert.equal(remoteVfx.impacts, 1)
+  assert.equal(localVfx.attacks, 0)
+  assert.equal(localVfx.impacts, 0)
 })
 
 test('runtime exposes current auto attack range', () => { const { scene } = sceneFor('katana'); assert.equal(installDungeonWeaponCombat(attachLegacyTestPlayer(scene)).range(), 196) })

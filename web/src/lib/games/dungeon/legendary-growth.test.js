@@ -7,6 +7,7 @@ import {
   materializeLegendary,
   normalizeLegendary,
 } from './legendary-growth.js'
+import { currentWeapon } from './player-loadout.js'
 
 const sample = {
   type: 'weapon.stormcrown',
@@ -60,12 +61,14 @@ test('room growth re-derives player combat stats from the grown legendary', asyn
   const player = {
     hp: 100, maxHp: 100, damage: 110, critChance: 0.18, speed: 190,
     baseStats: { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 },
-    equippedWeapon: weapon,
+    equipment: { weapon },
+    modifiers: {},
   }
   const result = growPlayerLegendaryForRoom(player, 'combat')
+  const grown = currentWeapon(result.playerState)
   assert.equal(result.grew, true)
-  assert.equal(result.playerState.equippedWeapon.legendaryLevel, 2)
-  assert.equal(result.playerState.weaponDamage, result.playerState.equippedWeapon.damage)
+  assert.equal(grown.legendaryLevel, 2)
+  assert.equal(grown.damage, result.weapon.damage)
   assert.ok(result.playerState.damage > player.damage)
   assert.equal(result.level, 2)
 

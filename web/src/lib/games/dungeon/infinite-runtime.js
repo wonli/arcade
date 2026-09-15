@@ -3,6 +3,7 @@ import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { growPlayerLegendaryForRoom } from './legendary-growth.js'
+import { currentWeapon } from './player-loadout.js'
 import { applyRestChoice, consumeFortune, restChoices } from './rest.js'
 import { renderRestStatue, restStatuePlan } from './rest-statue.js'
 
@@ -64,7 +65,7 @@ export function scalePlayerForProgress(scene, progress, player = scene?.localPla
     damage: Math.max(1, Math.round((naturalBase.damage ?? 10) * profile.damageMultiplier + permanent.damage)),
     maxHp: Math.max(1, Math.round((naturalBase.maxHp ?? 100) * profile.maxHpMultiplier + permanent.maxHp)),
   }
-  const next = deriveEquipment(nextBase, state.equippedWeapon, state)
+  const next = deriveEquipment(nextBase, currentWeapon(state), state)
   next.baseStats = nextBase
   player.state = next
   scene.__dungeonLastScaledPlayerBase = { ...nextBase }

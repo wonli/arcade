@@ -1,13 +1,14 @@
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { weaponArchetype } from './weapon-profile.js'
 import { hasWeaponLineOfSight } from './weapon-targeting.js'
 
-function weaponIdentity(player) {
-  const item = player?.equippedWeapon
-  return [item?.type ?? player?.weapon ?? '', item?.archetype ?? '', item?.signature ?? 'arcane_burst'].join('|')
+function weaponIdentity(state) {
+  const item = currentWeapon(state)
+  return [item?.type ?? '', item?.archetype ?? '', item?.signature ?? 'arcane_burst'].join('|')
 }
 
-function signatureFor(player) {
-  return player?.equippedWeapon?.signature ?? 'arcane_burst'
+function signatureFor(state) {
+  return currentWeapon(state)?.signature ?? 'arcane_burst'
 }
 
 function damageSignatureTarget(scene, player, target, damage, source = 'staff_signature') {
@@ -41,12 +42,16 @@ function nearestVisibleChainTarget(scene, from, excluded) {
 }
 
 export function installDungeonWeaponSignatures(scene, { player = scene?.localPlayer } = {}) {
-  if (!scene || !player || scene.__dungeonWeaponSignatures) return scene?.__dungeonWeaponSignatures ?? null
+  if (!scene || !player) return null
+  player.runtime ??= {}
+  if (player.runtime.weaponSignatures) return player.runtime.weaponSignatures
 
   let identity = weaponIdentity(player.state)
   let staffHits = 0
   const blizzards = []
   const slowStates = new Map()
+
+  const weaponVfx = () => player.runtime?.weaponVfx ?? scene.__dungeonWeaponVfx
 
   const syncWeapon = () => {
     const next = weaponIdentity(player.state)
@@ -96,7 +101,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
   }
 
   const arcaneBurst = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const radius = 88 * (1 + (effects.skillRadius ?? 0))
     damageSignatureTarget(scene, player, primary, baseDamage * 0.60)
     for (const enemy of scene.enemies ?? []) {
@@ -104,7 +109,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
       if (Math.hypot(enemy.x - primary.x, enemy.y - primary.y) > radius) continue
       damageSignatureTarget(scene, player, enemy, baseDamage * 0.35)
     }
-    scene.__dungeonWeaponVfx?.nova?.(primary.x, primary.y, { radius, signature: 'arcane_burst' })
+    weaponVfx()?.nova?.(primary.x, primary.y, { radius, signature: 'arcane_burst' })
   }
 
   const stormPalm = (primary, baseDamage) => {
@@ -125,7 +130,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
   }
 
   const frostBlizzard = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const blizzard = {
       x: primary.x,
       y: primary.y,
@@ -137,19 +142,19 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
     }
     blizzards.push(blizzard)
     syncBlizzardSlow(blizzard)
-    scene.__dungeonWeaponVfx?.nova?.(primary.x, primary.y, {
+    weaponVfx()?.nova?.(primary.x, primary.y, {
       radius: blizzard.radius,
       signature: 'frost_blizzard',
     })
   }
 
   const arcaneNova = (primary, baseDamage) => {
-    const effects = player.state?.effects ?? {}
+    const effects = currentEffects(player.state)
     const amount = effects.arcaneNova ?? 0
     if (!(amount > 0)) return
 
     const radius = 76 * (1 + (effects.skillRadius ?? 0))
-    scene.__dungeonWeaponVfx?.nova?.(primary.x, primary.y, {
+    weaponVfx()?.nova?.(primary.x, primary.y, {
       radius,
       signature: 'arcane_nova',
     })
@@ -199,6 +204,7 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
     }
   }
 
+  let api = null
   const restore = () => {
     staffHits = 0
     for (const blizzard of blizzards) {
@@ -206,10 +212,12 @@ export function installDungeonWeaponSignatures(scene, { player = scene?.localPla
     }
     blizzards.length = 0
     slowStates.clear()
-    scene.__dungeonWeaponSignatures = null
+    if (player.runtime?.weaponSignatures === api) delete player.runtime.weaponSignatures
+    if (scene.__dungeonWeaponSignatures === api) scene.__dungeonWeaponSignatures = null
   }
 
-  const api = { onStaffHit, syncWeapon, update, restore, progress: () => staffHits, activeCount: () => blizzards.length }
-  scene.__dungeonWeaponSignatures = api
+  api = { onStaffHit, syncWeapon, update, restore, progress: () => staffHits, activeCount: () => blizzards.length }
+  player.runtime.weaponSignatures = api
+  if (player === scene.localPlayer || !scene.localPlayer) scene.__dungeonWeaponSignatures = api
   return api
 }

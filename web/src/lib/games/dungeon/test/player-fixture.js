@@ -12,9 +12,8 @@ export function attachLegacyTestPlayer(scene) {
     facing: scene.playerFacing ?? 'down',
   })
 
-  // Tests often retain the original fixture object and assert mutations on it.
-  // Preserve that reference here; production PlayerEntity still defensively clones inputs.
-  player.state = state
+  // Keep legacy tests reading scene.playerState on the canonical PlayerEntity state.
+  scene.playerState = player.state
   player.moving = scene.playerMoving ?? false
   player.attacking = scene.playerAttacking ?? false
   player.lastAttackAt = scene.lastAttackAt ?? 0

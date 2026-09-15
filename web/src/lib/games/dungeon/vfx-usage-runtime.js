@@ -1,3 +1,5 @@
+import { currentWeapon } from './player-loadout.js'
+
 const RARITY_TINT = {
   uncommon: 0x70ff9f,
   rare: 0x67a8ff,
@@ -34,7 +36,9 @@ function sparkle(scene, x, y, item, phase) {
 }
 
 function equipmentSignature(playerState = {}) {
-  return [playerState.weapon, playerState.weaponRarity, playerState.weaponDamage, ...(playerState.weaponAffixes ?? [])].join('|')
+  const weapon = currentWeapon(playerState)
+  if (!weapon) return ''
+  return [weapon.type, weapon.rarity, weapon.damage, ...(weapon.affixes ?? []).map((entry) => `${entry.id}:${entry.value}`)].join('|')
 }
 
 export function installDungeonWorldVfx(scene, { player = scene?.localPlayer } = {}) {
@@ -99,10 +103,11 @@ export function installDungeonWorldVfx(scene, { player = scene?.localPlayer } = 
     if (isRest && !restActive) startRestFlame()
     else if (!isRest && restActive) stopRestFlame()
 
+    const weapon = currentWeapon(player.state)
     const nextEquipment = equipmentSignature(player.state)
     if (lastEquipment && nextEquipment && nextEquipment !== lastEquipment) {
       scene.__dungeonVfx?.aura?.(player.state?.x ?? 480, player.state?.y ?? 300, {
-        tint: RARITY_TINT[player.state?.weaponRarity] ?? null,
+        tint: RARITY_TINT[weapon?.rarity] ?? null,
         seed: `equip:${nextEquipment}`,
       })
     }

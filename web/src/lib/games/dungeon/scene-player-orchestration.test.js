@@ -36,11 +36,13 @@ function player(id, x = 100, y = 100) {
       y,
       hp: 20,
       maxHp: 100,
+      healthPotions: 0,
       damage: 10,
       speed: 190,
       critChance: 0.18,
       baseStats: { damage: 10, speed: 190, critChance: 0.18, maxHp: 100 },
-      effects: {},
+      equipment: { weapon: null },
+      modifiers: {},
     },
   })
 }
@@ -62,7 +64,7 @@ test('scene update routes the local PlayerEntity through player-sensitive system
   for (const [, target] of calls) assert.equal(target, scene.localPlayer)
 })
 
-test('drop pickup mutates only the provided PlayerEntity', () => {
+test('potion pickup heals only the provided PlayerEntity when damaged', () => {
   const scene = sceneFixture()
   const local = scene.localPlayer
   const target = player('target', 100, 100)
@@ -70,6 +72,7 @@ test('drop pickup mutates only the provided PlayerEntity', () => {
   local.state.y = 500
   local.state.hp = 20
   local.state.maxHp = 100
+  local.state.healthPotions = 0
   scene.drops = [{ x: 100, y: 100, item: { type: 'consumable.health_potion', heal: 28 } }]
   scene.destroyDrop = () => {}
   scene.pickupBurst = () => {}
@@ -79,8 +82,10 @@ test('drop pickup mutates only the provided PlayerEntity', () => {
 
   scene.updateDrops(target)
 
-  assert.equal(target.state.hp, 48)
+  assert.equal(target.state.hp, 50)
+  assert.equal(target.state.healthPotions, 0)
   assert.equal(local.state.hp, 20)
+  assert.equal(local.state.healthPotions, 0)
   assert.equal(scene.drops.length, 0)
   assert.equal(stats, 0)
 })

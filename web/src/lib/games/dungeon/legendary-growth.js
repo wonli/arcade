@@ -1,4 +1,5 @@
 import { deriveEquipment } from './affixes.js'
+import { currentWeapon } from './player-loadout.js'
 
 const LEVEL_CAP = 20
 const VFX_SIZES = [16, 18, 20, 22, 24]
@@ -68,9 +69,8 @@ export function growLegendaryForRoom(item, roomRole) {
   return growLegendary(item)
 }
 
-
 export function growPlayerLegendaryForRoom(playerState, roomRole) {
-  const current = playerState?.equippedWeapon
+  const current = currentWeapon(playerState)
   const grown = growLegendaryForRoom(current, roomRole)
   if (!current || grown === current || grown.legendaryLevel === current.legendaryLevel) {
     return { playerState, grew: false, level: current?.legendaryLevel ?? null, awakening: current ? legendaryAwakening(current.legendaryLevel) : 0, weapon: current ?? null }

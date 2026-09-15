@@ -2,6 +2,7 @@ import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonEditorRuntime } from './editor-runtime.js'
+import { currentWeapon } from './player-loadout.js'
 
 function fakeScene() {
   const calls = { floor: 0, ai: 0, hit: 0, damage: 0, refresh: 0, sync: 0 }
@@ -107,8 +108,9 @@ test('equip weapon uses the real equipment derivation and refreshes visuals', ()
   const { scene, calls } = fakeScene()
   const runtime = installDungeonEditorRuntime(attachLegacyTestPlayer(scene))
   runtime.equipWeapon({ type: 'weapon.kings_ruin', rarity: 'legendary', archetype: 'sword', damage: 7, affixes: [] })
-  assert.equal(scene.localPlayer.state.weapon, 'weapon.kings_ruin')
-  assert.equal(scene.localPlayer.state.weaponRarity, 'legendary')
+  const weapon = currentWeapon(scene.localPlayer.state)
+  assert.equal(weapon.type, 'weapon.kings_ruin')
+  assert.equal(weapon.rarity, 'legendary')
   assert.equal(scene.localPlayer.state.damage, 17)
   assert.equal(calls.sync, 1)
 })

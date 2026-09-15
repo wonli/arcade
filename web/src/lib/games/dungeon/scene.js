@@ -1,6 +1,8 @@
 import { placePlayerAtRoomSpawn, roomAnchor, safeEnemySpawn } from './room-anchors.js'
 import { createDungeonAmbient } from './ambient.js'
 import { attachLocalPlayerEntity } from './player-entity.js'
+import { castPlayerSkill } from './player-skill-runtime.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { affixSummary } from './affixes.js'
 import {
   applyPickup,
@@ -15,7 +17,6 @@ import {
   rollEquipment,
   rollPotion,
   secondaryTarget,
-  skillProfile,
 } from './combat.js'
 
 const WIDTH = 960
@@ -160,11 +161,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
           ...BASE_STATS,
           baseStats: { ...BASE_STATS },
           critMultiplier: 2,
-          weapon: null,
-          weaponRarity: null,
-          weaponDamage: 0,
-          weaponAffixes: [],
-          effects: {},
+          equipment: { weapon: null },
+          modifiers: {},
           hasteUntil: 0,
         },
         facing: 'down',
@@ -463,7 +461,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       if (this.keys.S.isDown) dy += 1
       player.facing = directionFromInput(dx, dy, player.facing)
       player.moving = Boolean(dx || dy)
-      const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (player.state.effects?.hurtHaste ?? 0) : 1
+      const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (currentEffects(player.state).hurtHaste ?? 0) : 1
       if (dx || dy) {
         const length = Math.hypot(dx, dy) || 1
         player.state.x += (dx / length) * player.state.speed * hurtBoost * dt
@@ -622,7 +620,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     hitPlayer(damage, player = this.localPlayer) {
       player.lastContactAt = this.time.now
       player.state.hp = Math.max(0, player.state.hp - damage)
-      if ((player.state.effects?.hurtHaste ?? 0) > 0) player.state.hasteUntil = this.time.now + 1800
+      if ((currentEffects(player.state).hurtHaste ?? 0) > 0) player.state.hasteUntil = this.time.now + 1800
       this.updateHealthBar(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
       this.flashPlayer(player)
       if (player === this.localPlayer) this.emitStats()
@@ -667,20 +665,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     trySkill(time, player = this.localPlayer) {
-      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || time < player.skillReadyAt) return
-      const profile = skillProfile(player.state)
-      player.skillReadyAt = time + profile.cooldown
-      const ring = this.add.circle(player.state.x, player.state.y, 20, 0xc1ff56, 0.1).setStrokeStyle(4, 0xc1ff56, 0.9)
-      this.tweens.add({ targets: ring, radius: profile.radius, alpha: 0, duration: 320, onComplete: () => ring.destroy() })
-      let hits = 0
-      for (const enemy of this.enemies) {
-        if (enemy.hp > 0 && Math.hypot(enemy.x - player.state.x, enemy.y - player.state.y) <= profile.radius) {
-          this.damageEnemy(enemy, Math.round(player.state.damage * 1.6), true, 28, { direct: false, canProc: false, source: 'skill' }, player)
-          hits++
-        }
-      }
-      this.cameras.main.shake(100, 0.006)
-      onEvent({ type: 'skill', hits, playerId: player.id })
+      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) return
+      const result = castPlayerSkill(this, player, 'primary', time)
+      if (!result.cast) return
+      onEvent({ type: 'skill', hits: result.hits, playerId: player.id })
       if (player === this.localPlayer) this.emitStats(time)
     }
 
@@ -721,7 +709,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     applyWeaponProcs(primary, damage, critical, player = this.localPlayer) {
-      const effects = player.state.effects ?? {}
+      const effects = currentEffects(player.state)
       if (primary.hp > 0 && effects.piercing > 0 && Math.random() < effects.piercing) {
         const target = secondaryTarget(primary, this.enemies, 145)
         if (target) {
@@ -791,7 +779,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const deathColor = enemy.boss ? 0xffd86b : enemy.archetype === 'fast' ? 0x83c8ff : enemy.archetype === 'brute' ? 0xff9e72 : enemy.archetype === 'ranged' ? 0x70f2ce : 0xa980ff
       this.deathBurst(enemy.x, enemy.y, deathColor)
 
-      const corpseBurst = player.state.effects?.corpseBurst ?? 0
+      const corpseBurst = currentEffects(player.state).corpseBurst ?? 0
       if (corpseBurst > 0 && context.source !== 'corpse_burst') {
         const radius = 110
         const burst = this.add.circle(enemy.x, enemy.y, 18, 0xff8f68, 0.18).setStrokeStyle(3, 0xffb08c, 0.9).setDepth(27)
@@ -1000,16 +988,17 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     emitStats(now = this.time?.now ?? 0) {
+      const weapon = currentWeapon(this.localPlayer.state)
       onStats({
         hp: this.localPlayer.state.hp,
         maxHp: this.localPlayer.state.maxHp,
         damage: this.localPlayer.state.damage,
         kills: this.kills,
         floor: this.floor,
-        weapon: this.localPlayer.state.weapon,
-        weaponRarity: this.localPlayer.state.weaponRarity,
-        weaponDamage: this.localPlayer.state.weaponDamage ?? 0,
-        weaponAffixes: [...(this.localPlayer.state.weaponAffixes ?? [])],
+        weapon: weapon?.type ?? null,
+        weaponRarity: weapon?.rarity ?? null,
+        weaponDamage: weapon?.damage ?? 0,
+        weaponAffixes: [...(weapon?.affixes ?? [])],
         skillCooldown: Math.max(0, this.localPlayer.skillReadyAt - now),
       })
     }
