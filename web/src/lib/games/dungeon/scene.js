@@ -1,6 +1,7 @@
 import { placePlayerAtRoomSpawn, roomAnchor, safeEnemySpawn } from './room-anchors.js'
 import { createDungeonAmbient } from './ambient.js'
 import { attachLocalPlayerEntity } from './player-entity.js'
+import { castPlayerSkill } from './player-skill-runtime.js'
 import { affixSummary } from './affixes.js'
 import {
   applyPickup,
@@ -15,7 +16,6 @@ import {
   rollEquipment,
   rollPotion,
   secondaryTarget,
-  skillProfile,
 } from './combat.js'
 
 const WIDTH = 960
@@ -667,20 +667,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     trySkill(time, player = this.localPlayer) {
-      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || time < player.skillReadyAt) return
-      const profile = skillProfile(player.state)
-      player.skillReadyAt = time + profile.cooldown
-      const ring = this.add.circle(player.state.x, player.state.y, 20, 0xc1ff56, 0.1).setStrokeStyle(4, 0xc1ff56, 0.9)
-      this.tweens.add({ targets: ring, radius: profile.radius, alpha: 0, duration: 320, onComplete: () => ring.destroy() })
-      let hits = 0
-      for (const enemy of this.enemies) {
-        if (enemy.hp > 0 && Math.hypot(enemy.x - player.state.x, enemy.y - player.state.y) <= profile.radius) {
-          this.damageEnemy(enemy, Math.round(player.state.damage * 1.6), true, 28, { direct: false, canProc: false, source: 'skill' }, player)
-          hits++
-        }
-      }
-      this.cameras.main.shake(100, 0.006)
-      onEvent({ type: 'skill', hits, playerId: player.id })
+      if (!Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) return
+      const result = castPlayerSkill(this, player, 'primary', time)
+      if (!result.cast) return
+      onEvent({ type: 'skill', hits: result.hits, playerId: player.id })
       if (player === this.localPlayer) this.emitStats(time)
     }
 
