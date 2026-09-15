@@ -63,7 +63,7 @@ test('scene update routes the local PlayerEntity through player-sensitive system
   for (const [, target] of calls) assert.equal(target, scene.localPlayer)
 })
 
-test('potion pickup mutates only the provided PlayerEntity inventory', () => {
+test('potion pickup heals only the provided PlayerEntity when damaged', () => {
   const scene = sceneFixture()
   const local = scene.localPlayer
   const target = player('target', 100, 100)
@@ -81,8 +81,8 @@ test('potion pickup mutates only the provided PlayerEntity inventory', () => {
 
   scene.updateDrops(target)
 
-  assert.equal(target.state.hp, 20)
-  assert.equal(target.state.healthPotions, 1)
+  assert.equal(target.state.hp, 100)
+  assert.equal(target.state.healthPotions, 0)
   assert.equal(local.state.hp, 20)
   assert.equal(local.state.healthPotions, 0)
   assert.equal(scene.drops.length, 0)
