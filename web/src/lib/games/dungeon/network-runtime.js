@@ -1,22 +1,10 @@
 import { getPlayerSkillReadyAt } from './player-entity.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
-import { despawnRemotePlayer, spawnRemotePlayer } from './remote-player-runtime.js'
+import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
 import { placePlayerAtRoomSpawn } from './room-anchors.js'
 import { normalizeRunSeed } from './world-seed.js'
 import { createDungeonWorldRuntime } from './world-runtime.js'
-
-function syncRemotePresentation(scene, player) {
-  player.actor?.setPosition?.(player.state.x, player.state.y)
-  scene.updateHealthBar?.(
-    player.bar,
-    player.state.x,
-    player.state.y - 42,
-    player.state.hp,
-    player.state.maxHp,
-  )
-  scene.syncPlayerAnimation?.(null, player)
-}
 
 function bindLocalPlayerId(scene, playerId) {
   const player = scene.localPlayer
@@ -36,6 +24,28 @@ function wireCommand(command = {}) {
   const next = { ...command }
   delete next.playerId
   return next
+}
+
+function createLocalPlayerLabel(scene, player) {
+  if (!scene.add?.text || player.label) return player.label ?? null
+  const slot = Number.isInteger(player.slot) ? player.slot + 1 : '?'
+  player.label = scene.add.text(player.state.x, player.state.y - 58, `P${slot} · YOU`, {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '10px',
+    fontStyle: 'bold',
+    color: '#c1ff56',
+    stroke: '#08090b',
+    strokeThickness: 3,
+  }).setOrigin?.(0.5)?.setDepth?.(32) ?? null
+  return player.label
+}
+
+function syncLocalPlayerLabel(player) {
+  player?.label?.setPosition?.(player.state.x, player.state.y - 58)
+  if (player?.label?.setText) {
+    const slot = Number.isInteger(player.slot) ? player.slot + 1 : '?'
+    player.label.setText(`P${slot} · YOU`)
+  }
 }
 
 export function dungeonSceneReadyForNetwork(scene) {
@@ -69,6 +79,7 @@ export function createDungeonNetworkRuntime({
 
   if (Number.isInteger(playerSlot) && playerSlot >= 0) {
     scene.__dungeonPlayerSlot = playerSlot
+    scene.localPlayer.slot = playerSlot
     placePlayerAtRoomSpawn(scene, scene.localPlayer, playerSlot)
   }
 
@@ -92,6 +103,7 @@ export function createDungeonNetworkRuntime({
   async function flushSnapshot() {
     if (snapshotInFlight) return false
     snapshotInFlight = true
+    syncLocalPlayerLabel(scene.localPlayer)
     try {
       await socket.request('dungeon.snapshot', {
         roomId: normalizedRoomId,
@@ -144,9 +156,13 @@ export function createDungeonNetworkRuntime({
     if (!id || id === normalizedLocalId || !snapshot || typeof snapshot !== 'object') return null
     const trustedSnapshot = { ...snapshot, id }
     const existing = scene.players.get(id)
-    if (!existing) return spawnRemotePlayer(scene, trustedSnapshot)
+    if (!existing) {
+      const player = spawnRemotePlayer(scene, trustedSnapshot)
+      if (isHost) worldRuntime?.publishState?.()
+      return player
+    }
     applyPlayerSnapshot(existing, trustedSnapshot)
-    syncRemotePresentation(scene, existing)
+    syncRemotePlayerPresentation(scene, existing)
     return existing
   }
 
@@ -223,6 +239,7 @@ export function createDungeonNetworkRuntime({
   function start() {
     if (started) return api
     started = true
+    createLocalPlayerLabel(scene, scene.localPlayer)
     worldRuntime = createDungeonWorldRuntime(scene, {
       runSeed: normalizedRunSeed,
       isHost,
@@ -251,6 +268,8 @@ export function createDungeonNetworkRuntime({
     for (const player of [...scene.players.values()]) {
       if (player !== scene.localPlayer) despawnRemotePlayer(scene, player)
     }
+    scene.localPlayer?.label?.destroy?.()
+    if (scene.localPlayer) scene.localPlayer.label = null
     started = false
   }
 
