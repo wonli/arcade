@@ -1,0 +1,72 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { createPlayerEntity } from './player-entity.js'
+
+function baseState(x) {
+  return {
+    x,
+    y: 200,
+    hp: 100,
+    maxHp: 100,
+    damage: 10,
+    speed: 190,
+    critChance: 0.18,
+    baseStats: { damage: 10, speed: 190, maxHp: 100 },
+    weapon: null,
+    weaponAffixes: [],
+    effects: {},
+  }
+}
+
+test('player entity keeps gameplay and presentation state together without scene globals', () => {
+  const player = createPlayerEntity({ id: 'p1', state: baseState(100) })
+  assert.equal(player.id, 'p1')
+  assert.equal(player.state.x, 100)
+  assert.equal(player.facing, 'down')
+  assert.equal(player.moving, false)
+  assert.equal(player.attacking, false)
+  assert.equal(player.lastAttackAt, 0)
+  assert.equal(player.skillReadyAt, 0)
+  assert.equal(player.lastContactAt, 0)
+  assert.equal(player.dead, false)
+  assert.equal(player.actor, null)
+  assert.equal(player.bar, null)
+})
+
+test('two players never share mutable gameplay state', () => {
+  const original = baseState(100)
+  const p1 = createPlayerEntity({ id: 'p1', state: original })
+  const p2 = createPlayerEntity({ id: 'p2', state: original })
+
+  p1.state.x = 999
+  p1.state.baseStats.damage = 77
+  p1.state.weaponAffixes.push({ id: 'crit', value: 0.2 })
+  p1.state.effects.poison = 1
+
+  assert.equal(p2.state.x, 100)
+  assert.equal(p2.state.baseStats.damage, 10)
+  assert.deepEqual(p2.state.weaponAffixes, [])
+  assert.deepEqual(p2.state.effects, {})
+  assert.equal(original.x, 100)
+  assert.equal(original.baseStats.damage, 10)
+})
+
+test('runtime combat timestamps and presentation refs are independent per player', () => {
+  const p1 = createPlayerEntity({ id: 'p1', state: baseState(100) })
+  const p2 = createPlayerEntity({ id: 'p2', state: baseState(200), facing: 'left' })
+
+  p1.lastAttackAt = 1200
+  p1.skillReadyAt = 5000
+  p1.attacking = true
+  p1.actor = { name: 'actor-1' }
+
+  assert.equal(p2.lastAttackAt, 0)
+  assert.equal(p2.skillReadyAt, 0)
+  assert.equal(p2.attacking, false)
+  assert.equal(p2.actor, null)
+  assert.equal(p2.facing, 'left')
+})
+
+test('player id is mandatory', () => {
+  assert.throws(() => createPlayerEntity({ state: baseState(100) }), /player id/i)
+})
