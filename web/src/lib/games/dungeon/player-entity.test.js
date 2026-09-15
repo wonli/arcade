@@ -58,6 +58,16 @@ test('two players never share mutable gameplay state', () => {
   assert.equal(original.baseStats.damage, 10)
 })
 
+test('replacing gameplay state preserves the PlayerEntity state object identity', () => {
+  const player = createPlayerEntity({ id: 'p1', state: baseState(100) })
+  const reference = player.state
+
+  player.state = { x: 300, y: 400, hp: 50 }
+
+  assert.equal(player.state, reference)
+  assert.deepEqual(player.state, { x: 300, y: 400, hp: 50 })
+})
+
 test('runtime combat timestamps and presentation refs are independent per player', () => {
   const p1 = createPlayerEntity({ id: 'p1', state: baseState(100) })
   const p2 = createPlayerEntity({ id: 'p2', state: baseState(200), facing: 'left' })
