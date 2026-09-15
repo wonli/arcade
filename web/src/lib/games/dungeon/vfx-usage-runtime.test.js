@@ -17,7 +17,11 @@ test('world vfx translates loot, heal, portal, rest, equip, floor clear and elit
     portal: null,
     floorCleared: false,
     enemies: [],
-    playerState: { x: 100, y: 110, weapon: 'weapon.sword', weaponDamage: 5 },
+    playerState: {
+      x: 100,
+      y: 110,
+      equipment: { weapon: { type: 'weapon.sword', rarity: 'common', damage: 5, affixes: [] } },
+    },
     __roomGeometry: { rest: { x: 300, y: 220 } },
     __dungeonVfx: Object.fromEntries(['sparkle', 'flame', 'heal', 'portal', 'aura'].map((kind) => [kind, (...args) => calls.push([kind, ...args])])),
     spawnDrop() {},
@@ -37,7 +41,7 @@ test('world vfx translates loot, heal, portal, rest, equip, floor clear and elit
   scene.portal = { x: 480, y: 500 }
   scene.enemies = [{ x: 600, y: 300, hp: 40, elite: true }]
   scene.floorCleared = true
-  scene.localPlayer.state.weaponDamage = 9
+  scene.localPlayer.state.equipment.weapon = { ...scene.localPlayer.state.equipment.weapon, damage: 9 }
   update()
 
   assert.ok(calls.some(([kind]) => kind === 'sparkle'))
