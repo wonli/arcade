@@ -1,5 +1,5 @@
 import { deriveEquipment, rollAffixes } from './affixes.js'
-import { storeHealthPotion } from './inventory.js'
+import { pickupHealthPotion } from './inventory.js'
 import { rollBossLegendary } from './legendary-weapons.js'
 import { weaponProfile } from './weapon-profile.js'
 
@@ -221,6 +221,6 @@ export function applyPickup(player, item, baseStats = player?.baseStats ?? DEFAU
       baseStats: { ...baseStats },
     }
   }
-  if (item.type === 'consumable.health_potion') return storeHealthPotion(player)
+  if (item.type === 'consumable.health_potion') return pickupHealthPotion(player).state
   return { ...player }
 }
