@@ -104,6 +104,26 @@ export function createDungeonWorldRuntime(scene, {
     else publishNow(next)
   }
 
+  const removeDropById = (id) => {
+    const normalized = String(id ?? '').trim()
+    if (!normalized) return null
+    const owned = scene.__dungeonPickupRuntime?.removeById?.(normalized)
+    if (owned) return owned
+    const drop = findDrop(scene, normalized)
+    if (!drop) return null
+    originals.destroyDrop?.(drop)
+    scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
+    return drop
+  }
+
+  const clearWorldDrops = () => {
+    if (typeof scene.__dungeonPickupRuntime?.clearAll === 'function') {
+      scene.__dungeonPickupRuntime.clearAll()
+      return
+    }
+    originals.clearDrops?.()
+  }
+
   const observeDropId = (id, floor = scene.floor) => {
     const level = normalizeFloor(floor)
     const prefix = `${stableWorldEntityId(seed, level, 'drop', 0).split(':').slice(0, -1).join(':')}:`
@@ -164,8 +184,7 @@ export function createDungeonWorldRuntime(scene, {
 
     pickupPlayer = player
     try {
-      originals.destroyDrop?.(drop)
-      scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
+      removeDropById(drop.id)
       emitFact({
         type: 'drop.pickup',
         entityId: drop.id,
@@ -234,11 +253,7 @@ export function createDungeonWorldRuntime(scene, {
   }
 
   const applyDropPickup = (fact) => {
-    const drop = findDrop(scene, fact.entityId)
-    if (drop) {
-      originals.destroyDrop?.(drop)
-      scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
-    }
+    const drop = removeDropById(fact.entityId)
     const id = String(fact.playerId ?? fact.player?.id ?? '')
     const player = scene.players instanceof Map ? scene.players.get(id) : null
     if (player && fact.player) {
@@ -336,7 +351,7 @@ export function createDungeonWorldRuntime(scene, {
     }
     scene.enemies = synchronizedEnemies
 
-    originals.clearDrops?.()
+    clearWorldDrops()
     for (const drop of fact.drops ?? []) {
       applyDropSpawn({
         type: 'drop.spawn',
@@ -527,9 +542,6 @@ export function createDungeonWorldRuntime(scene, {
         const toFloor = normalizeFloor(scene.floor)
         if (isHost && !applyingFact && toFloor !== fromFloor) {
           emitFact({ type: 'floor.transition', fromFloor, toFloor })
-          // The transition is only an event boundary. The newly generated floor
-          // is durable world state and must be published immediately so peers do
-          // not reconstruct enemies or drops from their own random stream.
           publishState()
         }
         assignExistingEnemyIds()
