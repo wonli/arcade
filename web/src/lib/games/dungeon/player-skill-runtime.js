@@ -1,13 +1,8 @@
 import { skillProfile } from './combat.js'
 import { getPlayerSkillReadyAt, startPlayerSkillCooldown } from './player-entity.js'
 
-export function castPlayerSkill(scene, player, skillId = 'primary', time = scene?.time?.now ?? 0) {
-  if (!scene || !player || skillId !== 'primary') return { cast: false, hits: 0, skillId }
-  if (time < getPlayerSkillReadyAt(player, skillId)) return { cast: false, hits: 0, skillId }
-
+function castPrimarySkill(scene, player) {
   const profile = skillProfile(player.state)
-  startPlayerSkillCooldown(player, skillId, time, profile.cooldown)
-
   const ring = scene.add?.circle?.(player.state.x, player.state.y, 20, 0xc1ff56, 0.1)
   ring?.setStrokeStyle?.(4, 0xc1ff56, 0.9)
   if (ring) {
@@ -36,5 +31,23 @@ export function castPlayerSkill(scene, player, skillId = 'primary', time = scene
   }
 
   scene.cameras?.main?.shake?.(100, 0.006)
-  return { cast: true, hits, skillId, profile }
+  return { hits, profile }
+}
+
+const SKILL_HANDLERS = {
+  primary: castPrimarySkill,
+}
+
+export function playerSkillHandler(skillId = 'primary') {
+  return SKILL_HANDLERS[skillId] ?? null
+}
+
+export function castPlayerSkill(scene, player, skillId = 'primary', time = scene?.time?.now ?? 0) {
+  const handler = playerSkillHandler(skillId)
+  if (!scene || !player || !handler) return { cast: false, hits: 0, skillId }
+  if (time < getPlayerSkillReadyAt(player, skillId)) return { cast: false, hits: 0, skillId }
+
+  const result = handler(scene, player)
+  startPlayerSkillCooldown(player, skillId, time, result.profile.cooldown)
+  return { cast: true, hits: result.hits, skillId, profile: result.profile }
 }
