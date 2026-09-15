@@ -1,3 +1,5 @@
+import { currentWeapon } from './player-loadout.js'
+
 const PROFILES = {
   dagger: {
     archetype: 'dagger', attackMode: 'melee', intervalMultiplier: 0.76, range: 132,
@@ -34,7 +36,9 @@ const PROFILES = {
 }
 
 export function weaponArchetype(itemOrPlayer = null) {
-  const source = itemOrPlayer?.equippedWeapon ?? itemOrPlayer
+  const source = itemOrPlayer?.equipment || itemOrPlayer?.equippedWeapon || itemOrPlayer?.weapon
+    ? currentWeapon(itemOrPlayer)
+    : itemOrPlayer
   const archetype = source?.archetype ?? source?.weaponArchetype
   return PROFILES[archetype] ? archetype : 'sword'
 }
