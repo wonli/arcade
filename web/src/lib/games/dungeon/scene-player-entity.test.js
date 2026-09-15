@@ -24,45 +24,35 @@ function phaserHarness() {
 
 test('single-player scene stores player state in one local PlayerEntity', () => {
   const Phaser = phaserHarness()
-  const game = createDungeonGame({ Phaser, parent: null })
-  const scene = game.scene
+  const scene = createDungeonGame({ Phaser, parent: null }).scene
 
   assert.ok(scene.localPlayer instanceof PlayerEntity)
   assert.equal(scene.localPlayer.id, 'local')
-  assert.equal(scene.playerState, scene.localPlayer.state)
-  assert.equal(scene.player, scene.localPlayer.actor)
-  assert.equal(scene.playerBar, scene.localPlayer.bar)
-  assert.equal(scene.playerFacing, scene.localPlayer.facing)
-  assert.equal(scene.playerMoving, scene.localPlayer.moving)
-  assert.equal(scene.playerAttacking, scene.localPlayer.attacking)
-  assert.equal(scene.lastAttackAt, scene.localPlayer.lastAttackAt)
-  assert.equal(scene.skillReadyAt, scene.localPlayer.skillReadyAt)
-  assert.equal(scene.lastContactAt, scene.localPlayer.lastContactAt)
-  assert.equal(scene.dead, scene.localPlayer.dead)
+  assert.equal(scene.localPlayer.state.hp, 100)
+  assert.equal(scene.localPlayer.facing, 'down')
+  assert.equal(scene.localPlayer.moving, false)
+  assert.equal(scene.localPlayer.attacking, false)
+  assert.equal(scene.localPlayer.lastAttackAt, 0)
+  assert.equal(scene.localPlayer.skillReadyAt, 0)
+  assert.equal(scene.localPlayer.lastContactAt, 0)
+  assert.equal(scene.localPlayer.dead, false)
 })
 
-test('legacy scene player aliases and PlayerEntity stay bidirectionally synchronized', () => {
+test('single-player scene exposes no legacy player state aliases', () => {
   const Phaser = phaserHarness()
   const scene = createDungeonGame({ Phaser, parent: null }).scene
+  const aliases = [
+    'playerState',
+    'player',
+    'playerBar',
+    'playerFacing',
+    'playerMoving',
+    'playerAttacking',
+    'lastAttackAt',
+    'skillReadyAt',
+    'lastContactAt',
+    'dead',
+  ]
 
-  scene.playerFacing = 'left'
-  scene.playerMoving = true
-  scene.lastAttackAt = 1234
-  scene.playerState = { ...scene.playerState, hp: 42 }
-  const actor = { id: 'actor' }
-  scene.player = actor
-
-  assert.equal(scene.localPlayer.facing, 'left')
-  assert.equal(scene.localPlayer.moving, true)
-  assert.equal(scene.localPlayer.lastAttackAt, 1234)
-  assert.equal(scene.localPlayer.state.hp, 42)
-  assert.equal(scene.localPlayer.actor, actor)
-
-  scene.localPlayer.attacking = true
-  scene.localPlayer.skillReadyAt = 9876
-  scene.localPlayer.dead = true
-
-  assert.equal(scene.playerAttacking, true)
-  assert.equal(scene.skillReadyAt, 9876)
-  assert.equal(scene.dead, true)
+  for (const alias of aliases) assert.equal(Object.prototype.hasOwnProperty.call(scene, alias), false, alias)
 })
