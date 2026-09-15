@@ -19,11 +19,11 @@ test('host and guest install the same gameplay runtimes with authority flags', (
 })
 
 test('multiplayer keeps the solo runtime order before installing the network adapter', () => {
-  const pickup = source.indexOf('installPickupInteraction(scene')
-  const infinite = source.indexOf('installInfiniteDungeon(scene')
-  const spatial = source.indexOf('installSpatialForRole(scene)')
-  const attack = source.indexOf('installDungeonAttackRuntime(scene)')
-  const coop = source.indexOf('installDungeonCoop(scene')
+  const pickup = source.indexOf('\n        pickupRuntime = installPickupInteraction(scene')
+  const infinite = source.indexOf('\n        scene.__infiniteDungeon = installInfiniteDungeon(scene')
+  const spatial = source.indexOf('\n        installSpatialForRole(scene)')
+  const attack = source.indexOf('\n        installDungeonAttackRuntime(scene)')
+  const coop = source.indexOf('\n        coopRuntime = installDungeonCoop(scene')
   assert.ok(pickup >= 0 && pickup < infinite)
   assert.ok(infinite < spatial)
   assert.ok(spatial < attack)
