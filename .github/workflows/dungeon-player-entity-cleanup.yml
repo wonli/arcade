@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.x
       - name: Upgrade legacy Dungeon test scenes to PlayerEntity fixtures
         run: |
           python - <<'PY'
@@ -25,36 +28,55 @@ jobs:
 
           root = Path('web/src/lib/games/dungeon')
           helper_import = "import { attachLegacyTestPlayer } from './test/player-fixture.js'\n"
-          installer = re.compile(r'\b(install[A-Z][A-Za-z0-9_]*)\(([_$A-Za-z][_$A-Za-z0-9]*)(?=[,)])')
+          expr = r'[_$A-Za-z][_$A-Za-z0-9]*(?:\.[_$A-Za-z][_$A-Za-z0-9]*)*'
+          installer = re.compile(rf'\b(install[A-Z][A-Za-z0-9_]*)\(({expr})(?=[,)])')
+          scaler = re.compile(rf'\b(scalePlayerForProgress)\(({expr})(?=[,)])')
+          alias_replacements = [
+              ('.playerState', '.localPlayer.state'),
+              ('.playerBar', '.localPlayer.bar'),
+              ('.playerFacing', '.localPlayer.facing'),
+              ('.playerMoving', '.localPlayer.moving'),
+              ('.playerAttacking', '.localPlayer.attacking'),
+              ('.lastAttackAt', '.localPlayer.lastAttackAt'),
+              ('.skillReadyAt', '.localPlayer.skillReadyAt'),
+              ('.lastContactAt', '.localPlayer.lastContactAt'),
+          ]
 
           for path in sorted(root.glob('*.test.js')):
               if path.name in {'player-entity.test.js', 'scene-player-entity.test.js', 'player-entity-boundary.test.js'}:
                   continue
               text = path.read_text()
               before = text
-              text = installer.sub(lambda m: f"{m.group(1)}(attachLegacyTestPlayer({m.group(2)})", text)
-              text = re.sub(
-                  r'\bscalePlayerForProgress\(([_$A-Za-z][_$A-Za-z0-9]*)(?=[,)])',
-                  lambda m: f"scalePlayerForProgress(attachLegacyTestPlayer({m.group(1)})",
-                  text,
-              )
-              if text != before and helper_import not in text:
-                  lines = text.splitlines(True)
-                  insert_at = 0
-                  while insert_at < len(lines) and (lines[insert_at].startswith('import ') or lines[insert_at].strip() == ''):
-                      insert_at += 1
-                  lines.insert(insert_at, helper_import)
-                  text = ''.join(lines)
-              if path.name == 'room-anchors.test.js':
-                  text = text.replace('scene.playerState', 'scene.localPlayer.state')
-                  text = text.replace('scene.playerBar', 'scene.localPlayer.bar')
+              used_helper = False
+
+              def wrap_installer(match):
+                  nonlocal_used[0] = True
+                  return f"{match.group(1)}(attachLegacyTestPlayer({match.group(2)})"
+
+              nonlocal_used = [False]
+              text = installer.sub(wrap_installer, text)
+              text = scaler.sub(wrap_installer, text)
+              used_helper = nonlocal_used[0]
+
+              if used_helper:
+                  for old, new in alias_replacements:
+                      text = text.replace(old, new)
+                  text = text.replace('scene.dead', 'scene.localPlayer.dead')
                   text = text.replace('scene.player', 'scene.localPlayer.actor')
+                  text = text.replace('this.player', 'this.localPlayer.actor')
+                  if helper_import not in text:
+                      text = helper_import + text
+
+              if path.name == 'room-anchors.test.js':
+                  for old, new in alias_replacements:
+                      text = text.replace(old, new)
+                  text = text.replace('scene.player', 'scene.localPlayer.actor')
+
               if text != before:
                   path.write_text(text)
           PY
-      - name: Run full web tests
-        working-directory: web
-        run: npm ci && npm test
+      - name: Run full regression
+        run: make test
       - name: Commit fixture migration
         run: |
           git config user.name ideaa
