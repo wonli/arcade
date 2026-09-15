@@ -62,7 +62,7 @@ function addText(scene, container, x, y, text, style = {}) {
 
 export function createComparisonCard(
   scene,
-  { getLocale = () => 'en', label = (key) => key, rarityName = (rarity) => rarity } = {},
+  { getLocale = () => 'en', label = (key) => key, rarityName = (rarity) => rarity, player = scene?.localPlayer } = {},
 ) {
   if (!scene) return { setSelection() {}, destroy() {} }
 
@@ -192,8 +192,8 @@ export function createComparisonCard(
   }
 
   const syncPosition = () => {
-    if (!container || !scene.localPlayer.state) return
-    const position = comparisonCardPosition(scene.localPlayer.state, cardSize, {
+    if (!container || !player?.state) return
+    const position = comparisonCardPosition(player.state, cardSize, {
       width: scene.scale?.width ?? 960,
       height: scene.scale?.height ?? 600,
     })
