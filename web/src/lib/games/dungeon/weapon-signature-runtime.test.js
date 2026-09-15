@@ -87,3 +87,35 @@ test('weapon signatures use the explicitly supplied PlayerEntity instead of loca
   assert.ok(hits.every((hit) => hit.attacker === player))
   assert.equal(lightning[0]?.from, player.state)
 })
+
+test('weapon signature progress is isolated per PlayerEntity', () => {
+  const first = new PlayerEntity({
+    id: 'first',
+    state: { x: 0, y: 0, effects: {}, equippedWeapon: { type: 'weapon.first_staff', archetype: 'staff', signature: 'storm_palm' } },
+  })
+  const second = new PlayerEntity({
+    id: 'second',
+    state: { x: 20, y: 0, effects: {}, equippedWeapon: { type: 'weapon.second_staff', archetype: 'staff', signature: 'storm_palm' } },
+  })
+  const scene = {
+    localPlayer: first,
+    enemies: [],
+    damageEnemy() {},
+    __dungeonVfx: { lightning() {} },
+    __dungeonWeaponVfx: { nova() {} },
+  }
+
+  const firstRuntime = installDungeonWeaponSignatures(scene, { player: first })
+  const secondRuntime = installDungeonWeaponSignatures(scene, { player: second })
+
+  firstRuntime.onStaffHit({ id: 'a', x: 40, y: 0, hp: 100 }, 20)
+  firstRuntime.onStaffHit({ id: 'b', x: 40, y: 0, hp: 100 }, 20)
+  secondRuntime.onStaffHit({ id: 'c', x: 60, y: 0, hp: 100 }, 20)
+
+  assert.notEqual(firstRuntime, secondRuntime)
+  assert.equal(first.runtime.weaponSignatures, firstRuntime)
+  assert.equal(second.runtime.weaponSignatures, secondRuntime)
+  assert.equal(firstRuntime.progress(), 2)
+  assert.equal(secondRuntime.progress(), 1)
+  assert.equal(scene.__dungeonWeaponSignatures, firstRuntime)
+})
