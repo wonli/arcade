@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponCatalog, weaponizeDrop } from './weapon-catalog-runtime.js'
@@ -63,7 +64,7 @@ test('runtime wraps scene drops and restores original spawn function', () => {
     spawnDrop(x, y, item) { dropped.push({ x, y, item }); return item },
     events: { once() {} },
   }
-  const runtime = installDungeonWeaponCatalog(scene, { random: () => 0 })
+  const runtime = installDungeonWeaponCatalog(attachLegacyTestPlayer(scene), { random: () => 0 })
   scene.spawnDrop(10, 20, { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 12, affixes: [] })
   assert.equal(dropped[0].item.type, 'weapon.iron_fang')
   runtime.restore()

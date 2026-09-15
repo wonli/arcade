@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDungeonGame } from './scene.js'
@@ -14,7 +15,7 @@ function sceneFixture() {
   const Phaser = { Scene: class {}, Game: class { constructor(config) { return new config.scene() } }, Scale: {}, Math: { Clamp: (v, min, max) => Math.max(min, Math.min(max, v)) } }
   const scene = createDungeonGame({ Phaser })
   scene.add = new Proxy({}, { get: () => display })
-  scene.player = display()
+  scene.localPlayer.actor = display()
   scene.time = { now: 0, delayedCall() {} }
   scene.tweens = { add() {} }
   scene.updateHandlers = []
@@ -30,15 +31,15 @@ function sceneFixture() {
 
 test('spatial installation places initial player and visual at generated spawn without teleporting on texture refresh', () => {
   const scene = sceneFixture()
-  const api = installDungeonSpatial(scene, { random: () => 0.31 })
-  assert.equal(scene.playerState.x, api.getGeometry().spawn.x)
-  assert.equal(scene.playerState.y, api.getGeometry().spawn.y)
-  assert.equal(scene.player.x, scene.playerState.x)
-  scene.playerState.x += 7
-  scene.player.setPosition(scene.playerState.x, scene.playerState.y)
-  const before = { x: scene.playerState.x, y: scene.playerState.y }
+  const api = installDungeonSpatial(attachLegacyTestPlayer(scene), { random: () => 0.31 })
+  assert.equal(scene.localPlayer.state.x, api.getGeometry().spawn.x)
+  assert.equal(scene.localPlayer.state.y, api.getGeometry().spawn.y)
+  assert.equal(scene.localPlayer.actor.x, scene.localPlayer.state.x)
+  scene.localPlayer.state.x += 7
+  scene.localPlayer.actor.setPosition(scene.localPlayer.state.x, scene.localPlayer.state.y)
+  const before = { x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }
   api.refreshRoom({ geometry: api.getGeometry() })
-  assert.deepEqual({ x: scene.playerState.x, y: scene.playerState.y }, before)
+  assert.deepEqual({ x: scene.localPlayer.state.x, y: scene.localPlayer.state.y }, before)
 })
 
 test('base and infinite portals use generated exit and subsequent floors use generated spawn', () => {
@@ -47,13 +48,13 @@ test('base and infinite portals use generated exit and subsequent floors use gen
   scene.openPortal()
   assert.deepEqual({ x: scene.portal.x, y: scene.portal.y }, scene.__roomGeometry.exit)
   scene.destroyPortal()
-  const infinite = installInfiniteDungeon(scene, { random: () => 0.31 })
-  const spatial = installDungeonSpatial(scene, { getProgress: infinite.getProgress, random: () => 0.31 })
+  const infinite = installInfiniteDungeon(attachLegacyTestPlayer(scene), { random: () => 0.31 })
+  const spatial = installDungeonSpatial(attachLegacyTestPlayer(scene), { getProgress: infinite.getProgress, random: () => 0.31 })
   scene.openPortal()
   assert.deepEqual({ x: scene.portal.x, y: scene.portal.y }, spatial.getGeometry().exit)
   scene.advanceFloor()
-  assert.equal(scene.playerState.x, spatial.getGeometry().spawn.x)
-  assert.equal(scene.playerState.y, spatial.getGeometry().spawn.y)
+  assert.equal(scene.localPlayer.state.x, spatial.getGeometry().spawn.x)
+  assert.equal(scene.localPlayer.state.y, spatial.getGeometry().spawn.y)
 })
 
 test('enemy jitter cannot put an enemy into room solids', () => {
@@ -71,8 +72,8 @@ test('enemy jitter cannot put an enemy into room solids', () => {
 
 test('rest choices become available at the generated reachable rest anchor', () => {
   const scene = sceneFixture()
-  const infinite = installInfiniteDungeon(scene, { random: () => 0.31 })
-  installDungeonSpatial(scene, { getProgress: infinite.getProgress, random: () => 0.31 })
+  const infinite = installInfiniteDungeon(attachLegacyTestPlayer(scene), { random: () => 0.31 })
+  installDungeonSpatial(attachLegacyTestPlayer(scene), { getProgress: infinite.getProgress, random: () => 0.31 })
   const texts = []
   // Replace the generic drawing proxy so text calls can be observed.
   scene.add = { circle: display, text: (x, y, text) => { texts.push({ x, y, text }); return display(x, y) } }

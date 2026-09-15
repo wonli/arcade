@@ -470,8 +470,8 @@ function enemyIsFlying(enemy) {
 }
 function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy) ? { ...geometry, water: [] } : geometry }
 
-export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
-  if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
+export function installDungeonSpatial(scene, { player = scene?.localPlayer, getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
+  if (!scene || !player || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
   scene.__dungeonSpatialInstalled = true
   let chests = [], trapCooldownUntil = 0
   const chestKey = scene.input.keyboard.addKey('E')
@@ -490,7 +490,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     chests = []
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
-    if (!fixedGeometry) placePlayerAtRoomSpawn(scene)
+    if (!fixedGeometry) placePlayerAtRoomSpawn(scene, player)
     const cellSize = geometry.grid?.tileSize ?? 32
     scene.__navGrids = {
       ground: buildNavGrid(geometry, { cellSize, actorRadius: ENEMY_RADIUS, profile: 'ground' }),
@@ -514,19 +514,23 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   scene.drawArena = function drawSpatialArena() { refreshRoom() }
-  scene.updatePlayer = function updateSpatialPlayer(dt) {
-    const before = { x: scene.playerState.x, y: scene.playerState.y }
-    if ((scene.__hitStopUntil ?? 0) > scene.time.now) { scene.playerMoving = false; if (!scene.playerAttacking) scene.syncPlayerAnimation?.(); return }
-    originalUpdatePlayer(dt)
-    const desired = { x: scene.playerState.x, y: scene.playerState.y }
+  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
+    const before = { x: target.state.x, y: target.state.y }
+    if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
+      target.moving = false
+      if (!target.attacking) scene.syncPlayerAnimation?.(null, target)
+      return
+    }
+    originalUpdatePlayer(dt, target)
+    const desired = { x: target.state.x, y: target.state.y }
     const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
-    scene.playerState.x = next.x; scene.playerState.y = next.y
-    scene.player?.setPosition?.(next.x, next.y)
-    scene.updateHealthBar?.(scene.playerBar, next.x, next.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+    target.state.x = next.x; target.state.y = next.y
+    target.actor?.setPosition?.(next.x, next.y)
+    scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)
     const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
     if (trap && scene.time.now >= trapCooldownUntil) {
       trapCooldownUntil = scene.time.now + 850
-      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4)
+      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)
       onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
     }
   }
@@ -552,19 +556,19 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     enemy.x = next.x; enemy.y = next.y
   }
 
-  scene.moveEnemyTowardPlayer = function moveSpatialEnemy(enemy, time, dt) {
-    navigateEnemy(enemy, scene.playerState, time, dt)
-    const dx = scene.playerState.x - enemy.x
-    scene.syncEnemyVisual(enemy, time, dx, Math.hypot(dx, scene.playerState.y - enemy.y) || 1)
+  scene.moveEnemyTowardPlayer = function moveSpatialEnemy(enemy, time, dt, target = player) {
+    navigateEnemy(enemy, target.state, time, dt)
+    const dx = target.state.x - enemy.x
+    scene.syncEnemyVisual(enemy, time, dx, Math.hypot(dx, target.state.y - enemy.y) || 1, target)
   }
 
-  scene.updateRangedEnemy = function updateSpatialRanged(enemy, time, dt) {
+  scene.updateRangedEnemy = function updateSpatialRanged(enemy, time, dt, target = player) {
     if ((scene.__hitStopUntil ?? 0) > time) return
-    const dx = scene.playerState.x - enemy.x, dy = scene.playerState.y - enemy.y, distance = Math.hypot(dx, dy) || 1
+    const dx = target.state.x - enemy.x, dy = target.state.y - enemy.y, distance = Math.hypot(dx, dy) || 1
     const preferred = enemy.preferredRange || 180
     const collisionGeometry = collisionGeometryForEnemy(enemy, scene.__roomGeometry)
-    const los = clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3)
-    if (distance > enemy.attackRange || los.blocked) navigateEnemy(enemy, scene.playerState, time, dt)
+    const los = clipSegmentToSolids(enemy, target.state, collisionGeometry, 3)
+    if (distance > enemy.attackRange || los.blocked) navigateEnemy(enemy, target.state, time, dt)
     else if (distance < preferred - 34) {
       const next = movementWithCollision(enemy, { x: -(dx / distance) * enemy.speed * 0.72 * dt, y: -(dy / distance) * enemy.speed * 0.72 * dt }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
       enemy.x = next.x; enemy.y = next.y
@@ -573,15 +577,15 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
       const next = movementWithCollision(enemy, { x: (-dy / distance) * strafe, y: (dx / distance) * strafe }, enemy.hitRadius ?? ENEMY_RADIUS, collisionGeometry)
       enemy.x = next.x; enemy.y = next.y
     }
-    const nextDx = scene.playerState.x - enemy.x, nextDy = scene.playerState.y - enemy.y, nextDistance = Math.hypot(nextDx, nextDy) || 1
-    scene.syncEnemyVisual(enemy, time, nextDx, nextDistance)
-    if (!clipSegmentToSolids(enemy, scene.playerState, collisionGeometry, 3).blocked && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
+    const nextDx = target.state.x - enemy.x, nextDy = target.state.y - enemy.y, nextDistance = Math.hypot(nextDx, nextDy) || 1
+    scene.syncEnemyVisual(enemy, time, nextDx, nextDistance, target)
+    if (!clipSegmentToSolids(enemy, target.state, collisionGeometry, 3).blocked && nextDistance <= enemy.attackRange && time >= enemy.nextProjectileAt) {
       enemy.nextProjectileAt = time + enemy.projectileCooldown
-      scene.fireEnemyProjectile(enemy)
+      scene.fireEnemyProjectile(enemy, target)
     }
   }
 
-  scene.updateEnemyProjectiles = function updateSpatialProjectiles(dt) {
+  scene.updateEnemyProjectiles = function updateSpatialProjectiles(dt, target = player) {
     if ((scene.__hitStopUntil ?? 0) > scene.time.now) return
     const projectileGeometry = scene.__roomGeometry ? { ...scene.__roomGeometry, water: [] } : scene.__roomGeometry
     for (let index = scene.enemyProjectiles.length - 1; index >= 0; index--) {
@@ -590,17 +594,17 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
       projectile.life -= dt
       const wallHit = circleHitsSolid(next, 5, projectileGeometry)
       if (!wallHit) { projectile.x = next.x; projectile.y = next.y; projectile.visual?.setPosition(projectile.x, projectile.y); projectile.glow?.setPosition(projectile.x, projectile.y) }
-      const playerHit = !wallHit && Math.hypot(projectile.x - scene.playerState.x, projectile.y - scene.playerState.y) <= 20
+      const playerHit = !wallHit && Math.hypot(projectile.x - target.state.x, projectile.y - target.state.y) <= 20
       const expired = projectile.life <= 0
       if (!wallHit && !playerHit && !expired) continue
-      if (playerHit) scene.hitPlayer(projectile.damage)
+      if (playerHit) scene.hitPlayer(projectile.damage, target)
       projectile.visual?.destroy(); projectile.glow?.destroy(); scene.enemyProjectiles.splice(index, 1)
     }
   }
 
-  scene.updateBoss = function updateSpatialBoss(enemy, time, dt) {
+  scene.updateBoss = function updateSpatialBoss(enemy, time, dt, target = player) {
     const before = { x: enemy.x, y: enemy.y }
-    originalUpdateBoss(enemy, time, dt)
+    originalUpdateBoss(enemy, time, dt, target)
     if (!scene.__roomGeometry) return
     const collisionGeometry = collisionGeometryForEnemy(enemy, scene.__roomGeometry)
     const corrected = movementWithCollision(before, { x: enemy.x - before.x, y: enemy.y - before.y }, enemy.hitRadius ?? 26, collisionGeometry)
@@ -611,13 +615,13 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
 
   const updateInteraction = () => {
-    const nearest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
+    const nearest = nearestInteractable(player.state, chests, CHEST_RANGE)
     for (const chest of chests) { if (chest === nearest) showChestPrompt(scene, chest, label); else hideChestPrompt(chest) }
   }
   scene.events.on('update', updateInteraction)
 
   const openNearestChest = () => {
-    const chest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
+    const chest = nearestInteractable(player.state, chests, CHEST_RANGE)
     if (!chest || chest.opened) return
     openChestVisual(scene, chest); hideChestPrompt(chest)
     const progress = getProgress() ?? {}

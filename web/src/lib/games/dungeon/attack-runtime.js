@@ -71,31 +71,33 @@ function createImpactAudio(windowImpl = globalThis.window) {
   }
 }
 
-export function installDungeonAttackRuntime(scene, { random = Math.random } = {}) {
-  if (!scene || scene.__dungeonAttackRuntimeInstalled) {
+export function installDungeonAttackRuntime(scene, { random = Math.random, player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonAttackRuntimeInstalled) {
     return scene?.__dungeonAttackRuntime ?? null
   }
 
   scene.__dungeonAttackRuntimeInstalled = true
-  installDungeonSfx(scene)
-  installDungeonWorldVfx(scene)
-  installDungeonWeaponVisuals(scene)
+  installDungeonSfx(scene, { player })
+  installDungeonWorldVfx(scene, { player })
+  installDungeonWeaponVisuals(scene, { player })
   installDungeonWeaponCombat(scene)
-  installDungeonPlayerFacing(scene)
+  installDungeonPlayerFacing(scene, { player })
   installDungeonEnemyFeedback(scene)
-  installDungeonEnemyBehaviors(scene)
+  installDungeonEnemyBehaviors(scene, { player })
 
   const originalSlash = scene.slash.bind(scene)
   const originalDamageEnemy = scene.damageEnemy.bind(scene)
   const originalApplyWeaponProcs = scene.applyWeaponProcs.bind(scene)
   const audio = createImpactAudio()
 
-  scene.slash = function spatialSlash(target) {
-    if (!target || target.hp <= 0) return
+  scene.slash = function spatialSlash(target, attacker = player) {
+    if (!target || target.hp <= 0 || !attacker) return
 
-    const bladeTip = scene.__dungeonWeaponVisuals?.swing?.() ?? scene.playerState
+    const bladeTip = attacker === player
+      ? (scene.__dungeonWeaponVisuals?.swing?.() ?? attacker.state)
+      : attacker.state
     scene.__dungeonVfx?.slash?.(bladeTip, target, false)
-    originalSlash(target)
+    originalSlash(target, attacker)
   }
 
   scene.damageEnemy = function spatialDamageEnemy(
@@ -104,14 +106,15 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     critical,
     knockback,
     context = { direct: false, canProc: false, source: 'effect' },
+    attacker = player,
   ) {
-    if (!enemy || enemy.hp <= 0) return
+    if (!enemy || enemy.hp <= 0 || !attacker) return
 
     const beforeHp = enemy.hp
     const impactX = enemy.x
     const impactY = enemy.y
 
-    originalDamageEnemy(enemy, damage, critical, 0, context)
+    originalDamageEnemy(enemy, damage, critical, 0, context, attacker)
     if (enemy.hp >= beforeHp) return
 
     const killed = enemy.hp <= 0
@@ -147,7 +150,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
         source: context?.source,
       })
     } else {
-      scene.__dungeonEnemyFeedback?.hit?.(enemy, scene.playerState, {
+      scene.__dungeonEnemyFeedback?.hit?.(enemy, attacker.state, {
         critical,
         damage,
         source: context?.source,
@@ -178,7 +181,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     if (enemy.hp > 0 && knockback > 0) {
       const next = knockbackTarget(
         { ...enemy, hitRadius: enemy.hitRadius ?? (enemy.boss ? 26 : 15) },
-        scene.playerState,
+        attacker.state,
         knockback * feedback.knockbackScale,
         scene.__roomGeometry,
       )
@@ -195,14 +198,15 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
     }
   }
 
-  scene.applyWeaponProcs = function spatialWeaponProcs(primary, damage, critical) {
-    const effects = scene.playerState.effects ?? {}
-    const groupSkill = weaponGroupSkill(scene.playerState)
+  scene.applyWeaponProcs = function spatialWeaponProcs(primary, damage, critical, attacker = player) {
+    if (!attacker) return
+    const effects = attacker.state.effects ?? {}
+    const groupSkill = weaponGroupSkill(attacker.state)
 
     if (primary?.hp > 0 && effects.piercing > 0 && random() < effects.piercing) {
       const attack = piercingAttack(
-        scene.playerState,
-        scene.playerFacing,
+        attacker.state,
+        attacker.facing,
         390,
         34,
         scene.__roomGeometry,
@@ -216,6 +220,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
           false,
           14,
           { direct: false, canProc: false, source: 'piercing' },
+          attacker,
         )
       }
     }
@@ -231,12 +236,13 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
           false,
           8,
           { direct: false, canProc: false, source: 'chain' },
+          attacker,
         )
       }
     }
 
     if (effects.thunder > 0 && random() < effects.thunder) {
-      const segments = thunderChain(scene.playerState, primary, scene.enemies, 3, 190)
+      const segments = thunderChain(attacker.state, primary, scene.enemies, 3, 190)
       segments.forEach((segment, index) => {
         scene.__dungeonVfx?.lightning?.(segment.from, segment.to, { primary: index === 0 })
         scene.damageEnemy(
@@ -245,12 +251,13 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
           false,
           6,
           { direct: false, canProc: false, source: 'thunder' },
+          attacker,
         )
       })
     }
 
     if (groupSkill === 'whirlwind' && effects.whirlwind > 0 && random() < effects.whirlwind) {
-      const attack = whirlwindAttack(scene.playerState, 112)
+      const attack = whirlwindAttack(attacker.state, 112)
       scene.__dungeonVfx?.whirlwind?.(attack)
 
       for (const enemy of targetsInCircle(attack, scene.enemies)) {
@@ -261,6 +268,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random } = {}
           false,
           16,
           { direct: false, canProc: false, source: 'whirlwind' },
+          attacker,
         )
       }
     }

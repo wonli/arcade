@@ -90,6 +90,7 @@ export function installDungeonHud(scene, {
   onPotion = () => {},
   onDetails = () => {},
   weaponIconUrl = HUD_WEAPON_ICON_URL,
+  player = scene?.localPlayer,
 } = {}) {
   const textStyle = {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -153,7 +154,7 @@ export function installDungeonHud(scene, {
   const update = () => {
     const stats = getStats()
     const model = dungeonHudModel({
-      stats: { ...stats, equippedWeapon: scene.playerState?.equippedWeapon ?? stats.equippedWeapon },
+      stats: { ...stats, equippedWeapon: player?.state?.equippedWeapon ?? stats.equippedWeapon },
       progress: getProgress(),
       labels: getLabels(),
     })

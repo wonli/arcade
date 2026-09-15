@@ -179,11 +179,11 @@ export function setWeaponVisualSelected(scene, visual, item, selected) {
   return true
 }
 
-function equippedItem(scene) {
-  if (!scene?.playerState?.weapon) return null
-  return scene.playerState.equippedWeapon ?? {
-    type: scene.playerState.weapon,
-    rarity: scene.playerState.weaponRarity ?? 'common',
+function equippedItem(player) {
+  if (!player?.state?.weapon) return null
+  return player.state.equippedWeapon ?? {
+    type: player.state.weapon,
+    rarity: player.state.weaponRarity ?? 'common',
   }
 }
 
@@ -191,8 +191,8 @@ function presentationConfig(scene) {
   return scene?.__dungeonWeaponPresentation ?? DEFAULT_WEAPON_PRESENTATION
 }
 
-export function installDungeonWeaponVisuals(scene) {
-  if (!scene || scene.__dungeonWeaponVisuals) return scene?.__dungeonWeaponVisuals ?? null
+export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonWeaponVisuals) return scene?.__dungeonWeaponVisuals ?? null
   const weaponCatalog = installDungeonWeaponCatalog(scene)
   installDungeonWeaponCombat(scene)
   let visual = null
@@ -200,11 +200,11 @@ export function installDungeonWeaponVisuals(scene) {
   let attackUntil = 0
   let ready = false
 
-  const presentationNow = (item = equippedItem(scene), attacking = (scene.time?.now ?? 0) < attackUntil) =>
-    resolveWeaponPresentation(presentationConfig(scene), item ?? {}, scene.playerFacing, { attacking })
+  const presentationNow = (item = equippedItem(player), attacking = (scene.time?.now ?? 0) < attackUntil) =>
+    resolveWeaponPresentation(presentationConfig(scene), item ?? {}, player.facing, { attacking })
 
   const ensureVisual = () => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     const profile = weaponVisualProfile(item)
     if (!profile) {
       visual?.setVisible?.(false)
@@ -213,7 +213,7 @@ export function installDungeonWeaponVisuals(scene) {
     const nextKey = `${profile.archetype}:${profile.textureKey}`
     if (!visual || currentKey !== nextKey) {
       visual?.destroy?.()
-      visual = createWeaponVisual(scene, item, scene.playerState.x, scene.playerState.y, { presentationConfig: presentationConfig(scene) })
+      visual = createWeaponVisual(scene, item, player.state.x, player.state.y, { presentationConfig: presentationConfig(scene) })
       currentKey = nextKey
     }
     visual?.setVisible?.(true)
@@ -221,9 +221,9 @@ export function installDungeonWeaponVisuals(scene) {
   }
 
   const poseNow = () => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     const profile = weaponProfile(item)
-    return weaponPose(scene.playerState, scene.playerFacing, {
+    return weaponPose(player.state, player.facing, {
       attacking: (scene.time?.now ?? 0) < attackUntil,
       reachScale: profile.reachScale,
       presentationConfig: presentationConfig(scene),
@@ -234,7 +234,7 @@ export function installDungeonWeaponVisuals(scene) {
   const sync = () => {
     const object = ensureVisual()
     if (!object) return
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     const profile = weaponVisualProfile(item)
     const presentation = presentationNow(item)
     const pose = poseNow()
@@ -255,11 +255,11 @@ export function installDungeonWeaponVisuals(scene) {
     return transformed
   }
 
-  const weaponVfx = installDungeonWeaponVfx(scene, { anchor, presentation: () => presentationNow() })
+  const weaponVfx = installDungeonWeaponVfx(scene, { anchor, presentation: () => presentationNow(), player })
   const weaponMelee = installDungeonWeaponMelee(scene)
-  const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor })
+  const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor, player })
   const swing = () => {
-    const profile = weaponProfile(equippedItem(scene))
+    const profile = weaponProfile(equippedItem(player))
     attackUntil = (scene.time?.now ?? 0) + profile.swingMs
     sync()
     scene.time?.delayedCall?.(profile.swingMs + 5, sync)

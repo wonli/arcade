@@ -1,11 +1,11 @@
 import { weaponVfxProfile } from './weapon-vfx-profile.js'
 
-function equippedItem(scene) {
-  if (!scene?.playerState?.weapon) return null
-  return scene.playerState.equippedWeapon ?? {
-    type: scene.playerState.weapon,
-    rarity: scene.playerState.weaponRarity ?? 'common',
-    vfxTheme: scene.playerState.weaponVfxTheme,
+function equippedItem(player) {
+  if (!player?.state?.weapon) return null
+  return player.state.equippedWeapon ?? {
+    type: player.state.weapon,
+    rarity: player.state.weaponRarity ?? 'common',
+    vfxTheme: player.state.weaponVfxTheme,
   }
 }
 
@@ -20,8 +20,8 @@ function signature(item) {
   ].join('|')
 }
 
-function point(scene, anchor) {
-  return anchor?.() ?? { x: scene?.playerState?.x ?? 0, y: scene?.playerState?.y ?? 0 }
+function point(player, anchor) {
+  return anchor?.(player) ?? { x: player?.state?.x ?? 0, y: player?.state?.y ?? 0 }
 }
 
 function rotate(entries, offset = 0) {
@@ -130,8 +130,8 @@ function applyPresentation(profile, presentation = {}) {
   }
 }
 
-export function installDungeonWeaponVfx(scene, { anchor = null, presentation = null } = {}) {
-  if (!scene || scene.__dungeonWeaponVfx) return scene?.__dungeonWeaponVfx ?? null
+export function installDungeonWeaponVfx(scene, { anchor = null, presentation = null, player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonWeaponVfx) return scene?.__dungeonWeaponVfx ?? null
 
   let currentSignature = null
   let particleManager = null
@@ -156,7 +156,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
     }
     const texture = weaponVfxTexture(scene, profile.particles)
     if (!texture) return
-    const at = point(scene, anchor)
+    const at = point(player, anchor)
     particleManager = scene.add.particles(at.x, at.y, texture.key, particleConfig(profile.particles, texture.asset))
     particleManager?.setDepth?.(23)
     particleProfile = profile.particles
@@ -165,7 +165,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   const currentProfile = (item) => applyPresentation(weaponVfxProfile(item), presentation?.() ?? {})
 
   const sync = () => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     const profile = item ? currentProfile(item) : null
     const nextSignature = `${signature(item)}|${profile?.particles?.size ?? ''}`
     if (nextSignature !== currentSignature) {
@@ -174,16 +174,16 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
     }
     if (!item || !profile) return
     ensureParticles(profile)
-    const at = point(scene, anchor)
+    const at = point(player, anchor)
     particleManager?.setPosition?.(at.x, at.y)
   }
 
   const attack = (target) => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     if (!item) return null
     const profile = currentProfile(item)
     ensureParticles(profile)
-    const from = point(scene, anchor)
+    const from = point(player, anchor)
     if (particleManager && particleProfile) particleManager.emitParticleAt?.(from.x, from.y, particleProfile.burst)
     if (!profile.attack) return null
     return playAttack(scene, profile.attack, from, target, {
@@ -193,7 +193,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   }
 
   const impact = (x, y, { critical = false } = {}) => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     if (!item) return null
     const profile = currentProfile(item)
     if (!profile.impact) return null
@@ -206,11 +206,11 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   }
 
   const volley = (targets = []) => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     if (!item || item.archetype !== 'bow') return null
     const profile = currentProfile(item)
     ensureParticles(profile)
-    const from = point(scene, anchor)
+    const from = point(player, anchor)
     const count = Math.max(1, targets.length)
     if (particleManager && particleProfile) {
       particleManager.emitParticleAt?.(from.x, from.y, Math.max(particleProfile.burst, count * 5))
@@ -235,7 +235,7 @@ export function installDungeonWeaponVfx(scene, { anchor = null, presentation = n
   }
 
   const nova = (x, y, { radius = 112 } = {}) => {
-    const item = equippedItem(scene)
+    const item = equippedItem(player)
     if (!item || item.archetype !== 'staff') return null
     const profile = currentProfile(item)
     const scale = Math.max(0.82, Math.min(1.75, radius / 96))

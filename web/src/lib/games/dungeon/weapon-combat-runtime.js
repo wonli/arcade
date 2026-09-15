@@ -12,36 +12,37 @@ export function installDungeonWeaponCombat(scene) {
   const originalAutoAttack = scene.autoAttack?.bind(scene)
   if (!originalSlash) return null
 
-  scene.slash = function archetypeSlash(target) {
-    if (!target || target.hp <= 0) return
-    const profile = weaponProfile(scene.playerState)
-    if (!isWeaponTargetAttackable(scene.playerState, target, profile, roomGeometry(scene))) return
-    const beforeDamage = scene.playerState.damage
+  scene.slash = function archetypeSlash(target, player = scene.localPlayer) {
+    if (!target || target.hp <= 0 || !player) return
+    const profile = weaponProfile(player.state)
+    if (!isWeaponTargetAttackable(player.state, target, profile, roomGeometry(scene))) return
+    const beforeDamage = player.state.damage
     const originalDamageEnemy = scene.damageEnemy
-    scene.playerState.damage = weaponAttackDamage(scene.playerState, beforeDamage)
+    player.state.damage = weaponAttackDamage(player.state, beforeDamage)
     scene.__dungeonWeaponVfx?.attack?.({ x: target.x, y: target.y })
-    scene.damageEnemy = function archetypeDamageEnemy(enemy, damage, critical, knockback, context) {
+    scene.damageEnemy = function archetypeDamageEnemy(enemy, damage, critical, knockback, context, attacker = player) {
+      const sourcePlayer = attacker ?? player
       const isWeapon = context?.source === 'weapon'
-      const adjusted = isWeapon ? weaponAttackKnockback(scene.playerState, knockback) : knockback
-      const result = originalDamageEnemy.call(scene, enemy, damage, critical, adjusted, context)
+      const adjusted = isWeapon ? weaponAttackKnockback(sourcePlayer.state, knockback) : knockback
+      const result = originalDamageEnemy.call(scene, enemy, damage, critical, adjusted, context, sourcePlayer)
       if (isWeapon) scene.__dungeonWeaponVfx?.impact?.(enemy?.x ?? target.x, enemy?.y ?? target.y, { critical })
       return result
     }
-    try { return originalSlash(target) } finally { scene.playerState.damage = beforeDamage; scene.damageEnemy = originalDamageEnemy }
+    try { return originalSlash(target, player) } finally { player.state.damage = beforeDamage; scene.damageEnemy = originalDamageEnemy }
   }
 
-  if (originalAutoAttack) scene.autoAttack = function archetypeAutoAttack(time) {
-    if (time - scene.lastAttackAt < attackInterval(scene.playerState, time)) return
-    const profile = weaponProfile(scene.playerState)
-    const target = nearestAttackableTarget(scene.playerState, scene.enemies ?? [], profile, roomGeometry(scene))
+  if (originalAutoAttack) scene.autoAttack = function archetypeAutoAttack(time, player = scene.localPlayer) {
+    if (!player || time - player.lastAttackAt < attackInterval(player.state, time)) return
+    const profile = weaponProfile(player.state)
+    const target = nearestAttackableTarget(player.state, scene.enemies ?? [], profile, roomGeometry(scene))
     if (!target) return
-    scene.lastAttackAt = time
-    scene.slash(target)
+    player.lastAttackAt = time
+    scene.slash(target, player)
   }
 
   const restore = () => { scene.slash = originalSlash; if (originalAutoAttack) scene.autoAttack = originalAutoAttack; scene.__dungeonWeaponCombat = null }
   scene.events?.once?.('shutdown', restore); scene.events?.once?.('destroy', restore)
-  const api = { range: () => weaponProfile(scene.playerState).range, restore }
+  const api = { range: (player = scene.localPlayer) => weaponProfile(player.state).range, restore }
   scene.__dungeonWeaponCombat = api
   return api
 }

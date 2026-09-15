@@ -37,8 +37,8 @@ function equipmentSignature(playerState = {}) {
   return [playerState.weapon, playerState.weaponRarity, playerState.weaponDamage, ...(playerState.weaponAffixes ?? [])].join('|')
 }
 
-export function installDungeonWorldVfx(scene) {
-  if (!scene || scene.__dungeonWorldVfxInstalled) return scene?.__dungeonWorldVfx ?? null
+export function installDungeonWorldVfx(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonWorldVfxInstalled) return scene?.__dungeonWorldVfx ?? null
   scene.__dungeonWorldVfxInstalled = true
 
   const originalSpawnDrop = scene.spawnDrop?.bind(scene)
@@ -47,7 +47,7 @@ export function installDungeonWorldVfx(scene) {
   let lastPortal = null
   let restActive = false
   let lastFloorCleared = Boolean(scene.floorCleared)
-  let lastEquipment = equipmentSignature(scene.playerState)
+  let lastEquipment = equipmentSignature(player.state)
   const presentedEnemies = new WeakSet()
 
   const stopRestFlame = () => {
@@ -99,10 +99,10 @@ export function installDungeonWorldVfx(scene) {
     if (isRest && !restActive) startRestFlame()
     else if (!isRest && restActive) stopRestFlame()
 
-    const nextEquipment = equipmentSignature(scene.playerState)
+    const nextEquipment = equipmentSignature(player.state)
     if (lastEquipment && nextEquipment && nextEquipment !== lastEquipment) {
-      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
-        tint: RARITY_TINT[scene.playerState?.weaponRarity] ?? null,
+      scene.__dungeonVfx?.aura?.(player.state?.x ?? 480, player.state?.y ?? 300, {
+        tint: RARITY_TINT[player.state?.weaponRarity] ?? null,
         seed: `equip:${nextEquipment}`,
       })
     }
@@ -110,7 +110,7 @@ export function installDungeonWorldVfx(scene) {
 
     const cleared = Boolean(scene.floorCleared)
     if (cleared && !lastFloorCleared) {
-      scene.__dungeonVfx?.aura?.(scene.playerState?.x ?? 480, scene.playerState?.y ?? 300, {
+      scene.__dungeonVfx?.aura?.(player.state?.x ?? 480, player.state?.y ?? 300, {
         width: 96,
         height: 96,
         alpha: 0.9,

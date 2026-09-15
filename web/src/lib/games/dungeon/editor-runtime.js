@@ -8,8 +8,8 @@ function syncEnemy(scene, enemy) {
   enemy.navRefreshAt = 0
 }
 
-export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {}) {
-  if (!scene || scene.__dungeonEditorRuntime) return scene?.__dungeonEditorRuntime ?? null
+export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8, player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonEditorRuntime) return scene?.__dungeonEditorRuntime ?? null
 
   let aiEnabled = true
   let playerInvincible = false
@@ -21,29 +21,29 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   if (originalCheckFloorClear) scene.checkFloorClear = () => {}
   if (originalUpdateEnemies) {
-    scene.updateEnemies = function editorUpdateEnemies(time, dt) {
+    scene.updateEnemies = function editorUpdateEnemies(time, dt, target = player) {
       if (!aiEnabled) return
-      return originalUpdateEnemies(time, dt)
+      return originalUpdateEnemies(time, dt, target)
     }
   }
   if (originalHitPlayer) {
-    scene.hitPlayer = function editorHitPlayer(damage) {
-      if (playerInvincible) {
-        scene.flashPlayer?.()
+    scene.hitPlayer = function editorHitPlayer(damage, target = player) {
+      if (target === player && playerInvincible) {
+        scene.flashPlayer?.(target)
         return
       }
-      return originalHitPlayer(damage)
+      return originalHitPlayer(damage, target)
     }
   }
   if (originalDamageEnemy) {
-    scene.damageEnemy = function editorDamageEnemy(enemy, damage, critical, knockback, context) {
-      if (!enemyInvincible) return originalDamageEnemy(enemy, damage, critical, knockback, context)
+    scene.damageEnemy = function editorDamageEnemy(enemy, damage, critical, knockback, context, attacker = player) {
+      if (!enemyInvincible) return originalDamageEnemy(enemy, damage, critical, knockback, context, attacker)
       if (!enemy || enemy.hp <= 0) return
       const beforeHp = enemy.hp
       const originalKillEnemy = scene.killEnemy
       scene.killEnemy = () => {}
       try {
-        const result = originalDamageEnemy(enemy, damage, critical, knockback, context)
+        const result = originalDamageEnemy(enemy, damage, critical, knockback, context, attacker)
         enemy.hp = beforeHp
         syncEnemy(scene, enemy)
         return result
@@ -66,7 +66,7 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   const spawnAroundPlayer = (count = 4, radius = 110, options = {}) => {
     const total = Math.max(1, Math.min(24, Math.floor(Number(count) || 1)))
-    const center = scene.playerState ?? { x: 0, y: 0 }
+    const center = player.state ?? { x: 0, y: 0 }
     const created = []
     for (let index = 0; index < total; index++) {
       const angle = (Math.PI * 2 * index) / total
@@ -93,15 +93,15 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8 } = {})
 
   const equipWeapon = (item) => {
     if (!item?.type) return null
-    const baseStats = scene.playerState?.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
-    scene.playerState = {
-      ...applyPickup(scene.playerState ?? {}, item, baseStats),
+    const baseStats = player.state?.baseStats ?? { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
+    player.state = {
+      ...applyPickup(player.state ?? {}, item, baseStats),
       baseStats: { ...baseStats },
     }
     scene.__dungeonWeaponVisuals?.sync?.()
     scene.__dungeonWeaponVfx?.sync?.()
-    scene.emitStats?.()
-    return scene.playerState.equippedWeapon
+    if (player === scene.localPlayer) scene.emitStats?.()
+    return player.state.equippedWeapon
   }
 
   const restore = () => {

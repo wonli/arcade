@@ -1,8 +1,10 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { PlayerEntity } from './player-entity.js'
 import { installDungeonWeaponSignatures } from './weapon-signature-runtime.js'
 
-function signatureScene(signature = 'storm_palm') {
+function signatureScene(signature = 'storm_palm', player = null) {
   const hits = []
   const lightning = []
   const scene = {
@@ -11,8 +13,8 @@ function signatureScene(signature = 'storm_palm') {
       equippedWeapon: { type: `weapon.${signature}`, archetype: 'staff', signature },
     },
     enemies: [],
-    damageEnemy(target, damage, critical, knockback, context) {
-      hits.push({ target, damage, context })
+    damageEnemy(target, damage, critical, knockback, context, attacker) {
+      hits.push({ target, damage, context, attacker })
       target.hp -= damage
     },
     __dungeonVfx: {
@@ -20,7 +22,8 @@ function signatureScene(signature = 'storm_palm') {
     },
     __dungeonWeaponVfx: { nova() {} },
   }
-  const runtime = installDungeonWeaponSignatures(scene)
+  attachLegacyTestPlayer(scene)
+  const runtime = installDungeonWeaponSignatures(scene, { player: player ?? scene.localPlayer })
   return { scene, runtime, hits, lightning }
 }
 
@@ -54,10 +57,33 @@ test('Storm Palm renders one resource lightning segment for the primary and each
   runtime.onStaffHit(primary, 20)
 
   assert.equal(lightning.length, 3)
-  assert.equal(lightning[0].from, scene.playerState)
+  assert.equal(lightning[0].from, scene.localPlayer.state)
   assert.equal(lightning[0].to, primary)
   assert.equal(lightning[1].from, primary)
   assert.equal(lightning[1].to, first)
   assert.equal(lightning[2].from, first)
   assert.equal(lightning[2].to, second)
+})
+
+test('weapon signatures use the explicitly supplied PlayerEntity instead of localPlayer', () => {
+  const player = new PlayerEntity({
+    id: 'remote',
+    state: {
+      x: 180,
+      y: 40,
+      effects: {},
+      equippedWeapon: { type: 'weapon.remote_staff', archetype: 'staff', signature: 'storm_palm' },
+    },
+  })
+  const { scene, runtime, hits, lightning } = signatureScene('arcane_burst', player)
+  const primary = { id: 'primary', x: 220, y: 40, hp: 1000 }
+  scene.enemies = [primary]
+
+  runtime.onStaffHit(primary, 20)
+  runtime.onStaffHit(primary, 20)
+  runtime.onStaffHit(primary, 20)
+
+  assert.ok(hits.length > 0)
+  assert.ok(hits.every((hit) => hit.attacker === player))
+  assert.equal(lightning[0]?.from, player.state)
 })

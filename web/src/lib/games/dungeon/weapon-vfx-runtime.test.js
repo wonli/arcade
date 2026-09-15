@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponVfx, weaponParticleCandidates } from './weapon-vfx-runtime.js'
@@ -105,7 +106,7 @@ test('particle selection falls back to a static loaded candidate', () => {
 
 test('rare storm weapon normalizes a 512px source texture to an 8px particle', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'rare', vfxTheme: 'storm' })
-  const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 8, y: 9 }) })
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene), { anchor: () => ({ x: 8, y: 9 }) })
   assert.equal(particles.length, 1)
   assert.equal(particles[0].key, 'dungeon-vfx-sparkle-1')
   assert.equal(particles[0].config.scale.start, 8 / 512)
@@ -117,14 +118,14 @@ test('rare storm weapon normalizes a 512px source texture to an 8px particle', (
 
 test('legendary weapon normalizes a 512px source texture to a 16px particle', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.crimson_verdict', rarity: 'legendary' })
-  installDungeonWeaponVfx(scene, { anchor: () => ({ x: 8, y: 9 }) })
+  installDungeonWeaponVfx(attachLegacyTestPlayer(scene), { anchor: () => ({ x: 8, y: 9 }) })
   assert.equal(particles.length, 1)
   assert.equal(particles[0].config.scale.start, 16 / 512)
 })
 
 test('legendary attack bursts particles without stopping the persistent flow', () => {
   const { scene, calls, particles } = sceneFor({ type: 'weapon.test', rarity: 'legendary', vfxTheme: 'storm' })
-  const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 10, y: 11 }) })
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene), { anchor: () => ({ x: 10, y: 11 }) })
   const frequency = particles[0].frequency
   runtime.attack({ x: 40, y: 50 })
   assert.deepEqual(particles[0].bursts[0], [12, 10, 11])
@@ -135,7 +136,7 @@ test('legendary attack bursts particles without stopping the persistent flow', (
 
 test('sync restarts a particle flow that was stopped during a floor transition', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'epic', vfxTheme: 'storm' })
-  const runtime = installDungeonWeaponVfx(scene)
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene))
   particles[0].frequency = -1
   particles[0].emitting = false
   runtime.sync()
@@ -146,14 +147,14 @@ test('sync restarts a particle flow that was stopped during a floor transition',
 
 test('common weapon creates no particle emitter', () => {
   const { scene, particles } = sceneFor({ type: 'weapon.test', rarity: 'common', vfxTheme: 'storm' })
-  const runtime = installDungeonWeaponVfx(scene)
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene))
   runtime.attack({ x: 40, y: 50 })
   assert.equal(particles.length, 0)
 })
 
 test('bow volley uses a dedicated release aura and sparkle from existing vfx assets', () => {
   const { scene, calls } = sceneFor({ type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'rare', vfxTheme: 'storm' })
-  const runtime = installDungeonWeaponVfx(scene, { anchor: () => ({ x: 10, y: 11 }) })
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene), { anchor: () => ({ x: 10, y: 11 }) })
   runtime.volley([{ x: 40, y: 50 }, { x: 60, y: 45 }])
 
   assert.ok(calls.some(([kind, x, y]) => kind === 'aura' && x === 10 && y === 11))
@@ -162,7 +163,7 @@ test('bow volley uses a dedicated release aura and sparkle from existing vfx ass
 
 test('staff arcane nova layers aura, explosion and sparkle at the impact point', () => {
   const { scene, calls } = sceneFor({ type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'rare', vfxTheme: 'arcane' })
-  const runtime = installDungeonWeaponVfx(scene)
+  const runtime = installDungeonWeaponVfx(attachLegacyTestPlayer(scene))
   runtime.nova(70, 80, { radius: 130 })
 
   assert.ok(calls.some(([kind, x, y]) => kind === 'aura' && x === 70 && y === 80))

@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponSignatures } from './weapon-signature-runtime.js'
@@ -17,7 +18,7 @@ function frostScene(skillRadius = 0) {
     __dungeonVfx: {},
     __dungeonWeaponVfx: { nova() {} },
   }
-  return { scene, hits, runtime: installDungeonWeaponSignatures(scene) }
+  return { scene, hits, runtime: installDungeonWeaponSignatures(attachLegacyTestPlayer(scene)) }
 }
 
 function trigger(runtime, primary, damage = 20) {

@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installPickupInteraction } from './pickup-runtime.js'
@@ -30,22 +31,22 @@ test('equipping never replaces the selected drop with null', () => {
       if (!drop) return
       equippedCalls++
       assert.equal(drop, candidate, 'confirmed pickup must pass the selected drop to the original updater')
-      this.playerState.weapon = drop.item.type
-      this.playerState.weaponRarity = drop.item.rarity
-      this.playerState.weaponDamage = drop.item.damage
-      this.playerState.weaponAffixes = drop.item.affixes ?? []
-      this.playerState.equippedWeapon = drop.item
+      this.localPlayer.state.weapon = drop.item.type
+      this.localPlayer.state.weaponRarity = drop.item.rarity
+      this.localPlayer.state.weaponDamage = drop.item.damage
+      this.localPlayer.state.weaponAffixes = drop.item.affixes ?? []
+      this.localPlayer.state.equippedWeapon = drop.item
       this.drops.splice(0, 1)
     },
     clearDrops() { this.drops = [] },
   }
 
-  installPickupInteraction(scene)
+  installPickupInteraction(attachLegacyTestPlayer(scene))
   scene.updateDrops()
   assert.ok(onDown)
   assert.equal(equippedCalls, 0, 'confirmable weapons must not auto-equip during ordinary drop updates')
   assert.doesNotThrow(() => onDown())
   assert.equal(equippedCalls, 1)
   assert.equal(scene.drops.some((drop) => drop == null), false)
-  assert.equal(scene.playerState.weapon, candidate.item.type)
+  assert.equal(scene.localPlayer.state.weapon, candidate.item.type)
 })

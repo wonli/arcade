@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponProjectiles, weaponProjectileSpec } from './weapon-projectile-runtime.js'
@@ -82,7 +83,7 @@ function rangedScene(archetype = 'bow') {
     time: { delayedCall() {} },
     events: { on(event, fn){ if(event === 'update') update = fn }, off(){}, once(){} },
   }
-  const runtime = installDungeonWeaponProjectiles(scene, { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) })
+  const runtime = installDungeonWeaponProjectiles(attachLegacyTestPlayer(scene), { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) })
   return { scene, runtime, hits, heals, procs, volleyVfx, images, update: (...args) => update(...args) }
 }
 

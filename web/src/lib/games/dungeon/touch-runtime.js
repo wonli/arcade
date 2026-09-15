@@ -4,7 +4,7 @@ import { installPhaser4FillTintCompat } from './phaser4-tint-runtime.js'
 
 export { joystickVector } from '../touch/joystick.js'
 
-function resetInputState(scene, state) {
+function resetInputState(scene, state, player) {
   scene.input?.keyboard?.resetKeys?.()
   for (const name of ['A', 'D', 'W', 'S']) {
     if (scene.keys?.[name]) scene.keys[name].isDown = false
@@ -13,18 +13,18 @@ function resetInputState(scene, state) {
   state.x = 0
   state.y = 0
   state.skillPending = false
-  scene.playerMoving = false
-  scene.playerAttacking = false
+  player.moving = false
+  player.attacking = false
 }
 
-export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
-  if (!scene) return null
+export function installDungeonTouchInput(scene, { deadzone = 0.18, player = scene?.localPlayer } = {}) {
+  if (!scene || !player) return null
   if (scene.__dungeonTouchInput) return scene.__dungeonTouchInput
   const state = { x: 0, y: 0, skillPending: false }
-  resetInputState(scene, state)
+  resetInputState(scene, state, player)
 
   const ensureAudio = () => {
-    if (scene.dead || scene.runComplete) return
+    if (player.dead || scene.runComplete) return
     scene.ambient?.start?.().catch?.(() => {})
     scene.sound?.context?.resume?.().catch?.(() => {})
   }
@@ -45,7 +45,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
       saved[name] = keys[name].isDown
       if (pressed[name]) keys[name].isDown = true
     }
-    try { return originalUpdatePlayer.call(scene, dt) }
+    try { return originalUpdatePlayer.call(scene, dt, player) }
     finally {
       for (const [name, value] of Object.entries(saved)) keys[name].isDown = value
     }
@@ -57,7 +57,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
       scene.keys.SPACE._justDown = true
       state.skillPending = false
     }
-    return originalTrySkill.call(scene, time)
+    return originalTrySkill.call(scene, time, player)
   }
   scene.trySkill = trySkillWithTouch
 
@@ -69,7 +69,7 @@ export function installDungeonTouchInput(scene, { deadzone = 0.18 } = {}) {
       state.y = vector.y
     },
     stopMove() { state.x = 0; state.y = 0 },
-    reset() { resetInputState(scene, state) },
+    reset() { resetInputState(scene, state, player) },
     triggerSkill() { ensureAudio(); state.skillPending = true },
     triggerInteract() {
       ensureAudio()

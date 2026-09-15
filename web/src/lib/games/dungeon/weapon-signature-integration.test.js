@@ -1,3 +1,4 @@
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponProjectiles } from './weapon-projectile-runtime.js'
@@ -48,7 +49,7 @@ function staffScene() {
     time: { delayedCall() {} },
     events: { on(event, fn){ if (event === 'update') update = fn }, off(){}, once(){} },
   }
-  const runtime = installDungeonWeaponProjectiles(scene, { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) })
+  const runtime = installDungeonWeaponProjectiles(attachLegacyTestPlayer(scene), { random: () => 0.9, anchor: () => ({ x: 0, y: 0 }) })
   return { scene, runtime, hits, update: (...args) => update(...args) }
 }
 
@@ -100,7 +101,7 @@ test('staff signature progress resets when equipped weapon identity changes', ()
 
   fireAndResolve(scene, update, target)
   fireAndResolve(scene, update, target)
-  scene.playerState.equippedWeapon = { ...scene.playerState.equippedWeapon, type: 'weapon.second_staff' }
+  scene.localPlayer.state.equippedWeapon = { ...scene.localPlayer.state.equippedWeapon, type: 'weapon.second_staff' }
   fireAndResolve(scene, update, target)
   fireAndResolve(scene, update, target)
   assert.equal(hits.filter((hit) => hit.context.source === 'staff_signature').length, 0)
