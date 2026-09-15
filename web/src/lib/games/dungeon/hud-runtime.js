@@ -1,3 +1,4 @@
+import { currentWeapon } from './player-loadout.js'
 import { weaponDisplayName } from './presentation.js'
 
 export const HUD_INSET = 56
@@ -154,7 +155,7 @@ export function installDungeonHud(scene, {
   const update = () => {
     const stats = getStats()
     const model = dungeonHudModel({
-      stats: { ...stats, equippedWeapon: player?.state?.equippedWeapon ?? stats.equippedWeapon },
+      stats: { ...stats, equippedWeapon: currentWeapon(player?.state) ?? stats.equippedWeapon },
       progress: getProgress(),
       labels: getLabels(),
     })
