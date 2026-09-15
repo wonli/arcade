@@ -10,13 +10,31 @@ function sceneFixture() {
     playerState: { x: 0, y: 0, hp: 100, maxHp: 100, healthPotions: 0 },
     drops: [],
     time: { now: 0 },
+    textures: { exists: () => true },
+    tweens: { killTweensOf() {} },
     input: { keyboard: { addKey: () => ({ on() {}, off() {} }) } },
     events: { on() {}, off() {}, once() {} },
     emitStats() {},
     spawnDrop(x, y, item) { this.drops.push({ x, y, item }) },
+    destroyDrop(drop) { drop?.visual?.destroy?.() },
     updateDrops() {},
     clearDrops() { this.drops = [] },
   })
+}
+
+function selectedWeaponVisual() {
+  return {
+    destroyed: false,
+    scaleX: 1,
+    scaleY: 1,
+    setY() { return this },
+    setScale() { return this },
+    setTexture() {
+      if (this.destroyed) throw new Error('setTexture called after destroy')
+      return this
+    },
+    destroy() { this.destroyed = true },
+  }
 }
 
 test('player inventory runtime is separate from the scene pickup interaction', () => {
@@ -70,4 +88,50 @@ test('pickup intent interception keeps automatic drops untouched until authority
   assert.equal(intents.length, 1)
   assert.equal(intents[0].player, scene.localPlayer)
   assert.equal(intents[0].candidate, drop)
+})
+
+test('authoritative destruction clears selected weapon state before its Phaser visual is destroyed', () => {
+  const scene = sceneFixture()
+  installPickupInteraction(scene)
+  const visual = selectedWeaponVisual()
+  const drop = {
+    id: 'drop:ABC123:1:0',
+    x: 0,
+    y: 0,
+    spawnedAt: 0,
+    groundY: 0,
+    baseScaleX: 1,
+    baseScaleY: 1,
+    visual,
+    item: { type: 'weapon.iron_fang', rarity: 'rare', damage: 12, affixes: [] },
+  }
+  scene.drops = [drop]
+
+  scene.updateDrops(scene.localPlayer)
+  assert.equal(visual.destroyed, false)
+
+  scene.destroyDrop(drop)
+  scene.drops = []
+
+  assert.equal(visual.destroyed, true)
+  assert.doesNotThrow(() => scene.updateDrops(scene.localPlayer))
+})
+
+test('pickup runtime owns authoritative removal by stable drop id', () => {
+  const scene = sceneFixture()
+  const interaction = installPickupInteraction(scene)
+  const visual = selectedWeaponVisual()
+  const drop = {
+    id: 'drop:ABC123:1:7',
+    x: 0,
+    y: 0,
+    visual,
+    item: { type: 'weapon.iron_fang', rarity: 'rare', damage: 12, affixes: [] },
+  }
+  scene.drops = [drop]
+
+  assert.equal(typeof interaction.removeById, 'function')
+  assert.equal(interaction.removeById(drop.id), drop)
+  assert.deepEqual(scene.drops, [])
+  assert.equal(visual.destroyed, true)
 })
