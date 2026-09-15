@@ -41,18 +41,20 @@ test('semantic event strips presentation objects and clones gameplay data', () =
   assert.equal(event.item.rarity, 'rare')
 })
 
-test('ordinary elite presentation does not switch the replica into boss spawn mode', () => {
+test('spawn mode is distinct from final elite presentation', () => {
   const elite = normalizeCoopEvent({
     eventSeq: 2,
     id: 'enemy-elite',
     type: 'enemy.spawn',
     enemyId: 'enemy:3:1:normal',
     spawnIndex: 1,
+    spawnElite: false,
     elite: true,
     boss: false,
     patch: { elite: true, boss: false, archetype: 'fast' },
   })
-  assert.equal(elite.elite, false)
+  assert.equal(elite.spawnElite, false)
+  assert.equal(elite.elite, true)
   assert.equal(elite.patch.elite, true)
 
   const boss = normalizeCoopEvent({
@@ -61,11 +63,36 @@ test('ordinary elite presentation does not switch the replica into boss spawn mo
     type: 'enemy.spawn',
     enemyId: 'enemy:5:0:elite',
     spawnIndex: 0,
+    spawnElite: true,
     elite: true,
     boss: true,
     patch: { elite: true, boss: true, archetype: 'brute' },
   })
-  assert.equal(boss.elite, true)
+  assert.equal(boss.spawnElite, true)
+})
+
+test('semantic combat and pickup feedback keeps facts but strips renderer state', () => {
+  const event = normalizeCoopEvent({
+    eventSeq: 9,
+    id: 'hit-9',
+    type: 'enemy.hit',
+    playerId: 'p2',
+    enemyId: 'e1',
+    x: 200,
+    y: 180,
+    damage: 17,
+    critical: true,
+    killed: false,
+    healed: 6,
+    facing: 'right',
+    particle: { x: 10 },
+  })
+  assert.equal(event.damage, 17)
+  assert.equal(event.critical, true)
+  assert.equal(event.killed, false)
+  assert.equal(event.healed, 6)
+  assert.equal(event.facing, 'right')
+  assert.equal('particle' in event, false)
 })
 
 test('event sequence rejects duplicate and stale messages', () => {
