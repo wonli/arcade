@@ -140,16 +140,18 @@ function scaleEnemy(scene, enemy, profile, { elite = false, boss = false } = {})
 
 export function installInfiniteDungeon(scene, {
   random = Math.random,
+  authority = true,
+  initialProgress = null,
   onProgress = () => {},
   onEvent = () => {},
   label = (key) => key,
 } = {}) {
-  if (!scene || scene.__infiniteDungeonInstalled) return null
+  if (!scene || scene.__infiniteDungeonInstalled) return scene?.__infiniteDungeon ?? null
   scene.__infiniteDungeonInstalled = true
 
-  let progress = createRunProgress(random)
-  let fortunePending = false
-  let fortuneActive = false
+  let progress = initialProgress ? { ...initialProgress } : createRunProgress(random)
+  let fortunePending = Boolean(initialProgress?.fortunePending)
+  let fortuneActive = Boolean(initialProgress?.fortuneActive)
   let restRuntime = null
 
   scene.floor = progress.floor
@@ -215,7 +217,7 @@ export function installInfiniteDungeon(scene, {
     if (!restRuntime) return
     for (const object of restRuntime.objects) object?.destroy?.()
     for (const key of restRuntime.keys) key?.off?.('down')
-    scene.events?.off?.('update', restRuntime.update)
+    if (restRuntime.update) scene.events?.off?.('update', restRuntime.update)
     restRuntime = null
   }
 
@@ -235,11 +237,11 @@ export function installInfiniteDungeon(scene, {
   scene.openPortal = openInfinitePortal
 
   scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
-    const next = promoteEquipment(item, progress.floor, fortuneActive, random)
-    originalSpawnDrop(x, y, next)
+    const next = authority ? promoteEquipment(item, progress.floor, fortuneActive, random) : item
+    return originalSpawnDrop(x, y, next)
   }
 
-  const spawnRestRoom = () => {
+  const spawnRestRoom = ({ interactive = authority } = {}) => {
     const { x, y } = roomAnchor(scene.__roomGeometry, 'rest')
     const objects = []
     const glow = scene.add.circle(x, y, 56, 0xffc66d, 0.08).setDepth(8)
@@ -248,14 +250,14 @@ export function installInfiniteDungeon(scene, {
     objects.push(glow, ...statue, title)
     scene.tweens.add({ targets: glow, scale: 1.18, alpha: 0.16, duration: 900, yoyo: true, repeat: -1 })
 
-    const keys = ['ONE', 'TWO', 'THREE'].map((name) => scene.input.keyboard.addKey(name))
+    const keys = interactive ? ['ONE', 'TWO', 'THREE'].map((name) => scene.input.keyboard.addKey(name)) : []
     let choicesVisible = false
     let used = false
     const choiceLabels = restChoices()
     const choiceTexts = []
 
     const choose = (index) => {
-      if (!choicesVisible || used) return
+      if (!interactive || !choicesVisible || used) return
       const choice = choiceLabels[index]
       if (!choice) return
       used = true
@@ -272,7 +274,7 @@ export function installInfiniteDungeon(scene, {
     }
 
     const showChoices = () => {
-      if (choicesVisible || used) return
+      if (!interactive || choicesVisible || used) return
       choicesVisible = true
       choiceLabels.forEach((choice, index) => {
         const text = scene.add.text(x, y + 48 + index * 24, `${index + 1}. ${label(`rest.${choice}`)}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', color: index === 0 ? '#70ff9f' : index === 1 ? '#67a8ff' : '#c984ff', stroke: '#08090b', strokeThickness: 3 }).setOrigin(0.5).setDepth(31)
@@ -282,17 +284,20 @@ export function installInfiniteDungeon(scene, {
       })
     }
 
-    keys.forEach((key, index) => key.on('down', () => choose(index)))
-    const update = () => {
+    const update = interactive ? () => {
       if (used) return
       if (Math.hypot(scene.playerState.x - x, scene.playerState.y - y) <= 96) showChoices()
+    } : null
+
+    if (interactive) {
+      keys.forEach((key, index) => key.on('down', () => choose(index)))
+      scene.events.on('update', update)
     }
-    scene.events.on('update', update)
     restRuntime = { objects, keys, update }
     onEvent({ type: 'rest', floor: progress.floor, chapter: progress.chapter })
   }
 
-  const startInfiniteFloor = (initial = false) => {
+  const startInfiniteFloor = (initial = false, { spawnEncounter = authority, emitEvent = true } = {}) => {
     destroyRest()
     scene.floorCleared = false
     scene.floorKills = 0
@@ -313,12 +318,14 @@ export function installInfiniteDungeon(scene, {
       placePlayerAtRoomSpawn(scene)
     }
 
-    scalePlayerForProgress(scene, progress)
-    scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+    if (authority) {
+      scalePlayerForProgress(scene, progress)
+      scene.updateHealthBar?.(scene.playerBar, scene.playerState.x, scene.playerState.y - 42, scene.playerState.hp, scene.playerState.maxHp)
+    }
 
     if (role === 'rest') {
-      spawnRestRoom()
-    } else {
+      spawnRestRoom({ interactive: authority })
+    } else if (spawnEncounter) {
       const plan = encounterPlan(progress)
       if (plan.kind === 'boss') {
         const boss = scene.spawnEnemy(0, { elite: true })
@@ -336,7 +343,7 @@ export function installInfiniteDungeon(scene, {
     }
 
     scene.showBanner(`${label('floor')} ${progress.floor} · ${label('chapter')} ${progress.chapter}`, role === 'boss' ? '#ffd56a' : role === 'rest' ? '#ffd27c' : role === 'elite' ? '#c984ff' : '#f4f0e8', 34)
-    onEvent({ type: 'floorstart', floor: progress.floor, chapter: progress.chapter, roomRole: role })
+    if (emitEvent) onEvent({ type: 'floorstart', floor: progress.floor, chapter: progress.chapter, roomRole: role })
     publish()
     scene.emitStats?.()
   }
@@ -344,6 +351,7 @@ export function installInfiniteDungeon(scene, {
   scene.startFloor = startInfiniteFloor
 
   scene.checkFloorClear = function checkInfiniteFloorClear() {
+    if (!authority) return
     const role = roomRoleAt(progress)
     if (role === 'rest' || scene.floorCleared || scene.dead) return
     const living = scene.enemies.filter((enemy) => enemy.hp > 0).length
@@ -376,7 +384,7 @@ export function installInfiniteDungeon(scene, {
   }
 
   scene.advanceFloor = function advanceInfiniteFloor() {
-    if (scene.dead) return
+    if (!authority || scene.dead) return
     fortuneActive = false
     scene.destroyPortal()
     progress = advanceProgress(progress, random)
@@ -385,21 +393,38 @@ export function installInfiniteDungeon(scene, {
     startInfiniteFloor(false)
   }
 
+  const startFloorFromNetwork = (nextProgress) => {
+    if (authority || !nextProgress) return false
+    progress = { ...nextProgress }
+    fortunePending = Boolean(nextProgress.fortunePending)
+    fortuneActive = Boolean(nextProgress.fortuneActive)
+    scene.floor = Math.max(1, Number(progress.floor) || 1)
+    scene.lastContactAt = scene.time?.now ?? 0
+    startInfiniteFloor(false, { spawnEncounter: false, emitEvent: false })
+    return true
+  }
+
   publish()
 
-  scene.events?.once?.('shutdown', () => {
-    destroyRest()
-    destroyEliteAuras()
-    scene.events?.off?.('update', syncEliteAuras)
-    scene.openPortal = originalOpenPortal
-  })
-
-  return {
+  const api = {
+    authority,
     getProgress: snapshot,
+    startFloorFromNetwork,
     destroy() {
       destroyRest()
       destroyEliteAuras()
       scene.events?.off?.('update', syncEliteAuras)
     },
   }
+  scene.__infiniteDungeon = api
+
+  scene.events?.once?.('shutdown', () => {
+    destroyRest()
+    destroyEliteAuras()
+    scene.events?.off?.('update', syncEliteAuras)
+    scene.openPortal = originalOpenPortal
+    if (scene.__infiniteDungeon === api) scene.__infiniteDungeon = null
+  })
+
+  return api
 }
