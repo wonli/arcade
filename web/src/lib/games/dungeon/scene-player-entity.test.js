@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { PlayerEntity } from './player-entity.js'
+import { PlayerEntity, createPlayerEntity } from './player-entity.js'
 import { createDungeonGame } from './scene.js'
 
 function phaserHarness() {
@@ -55,4 +55,27 @@ test('single-player scene exposes no legacy player state aliases', () => {
   ]
 
   for (const alias of aliases) assert.equal(Object.prototype.hasOwnProperty.call(scene, alias), false, alias)
+})
+
+test('hitPlayer only mutates the provided PlayerEntity', () => {
+  const Phaser = phaserHarness()
+  const scene = createDungeonGame({ Phaser, parent: null }).scene
+  const local = scene.localPlayer
+  const target = createPlayerEntity({
+    id: 'target',
+    state: { x: 20, y: 30, hp: 70, maxHp: 100, effects: {} },
+    bar: { id: 'target-bar' },
+  })
+  scene.time = { now: 900 }
+  scene.updateHealthBar = () => {}
+  scene.flashPlayer = () => {}
+  scene.emitStats = () => {}
+  scene.gameOver = () => { target.dead = true }
+
+  scene.hitPlayer(15, target)
+
+  assert.equal(target.state.hp, 55)
+  assert.equal(target.lastContactAt, 900)
+  assert.equal(local.state.hp, 100)
+  assert.equal(local.lastContactAt, 0)
 })
