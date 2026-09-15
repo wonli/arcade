@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createPlayerEntity } from './player-entity.js'
+import { attachLocalPlayerEntity, attachPlayerEntity, createPlayerEntity } from './player-entity.js'
 
 function baseState(x) {
   return {
@@ -65,6 +65,27 @@ test('runtime combat timestamps and presentation refs are independent per player
   assert.equal(p2.attacking, false)
   assert.equal(p2.actor, null)
   assert.equal(p2.facing, 'left')
+})
+
+test('scene player registry can hold multiple independent entities while the single-player pointer stays unchanged', () => {
+  const scene = {}
+  const first = attachLocalPlayerEntity(scene, { id: 'p1', state: baseState(100) })
+  const second = attachPlayerEntity(scene, { id: 'p2', state: baseState(200) })
+
+  assert.equal(scene.localPlayer, first)
+  assert.equal(scene.players.size, 2)
+  assert.equal(scene.players.get('p1'), first)
+  assert.equal(scene.players.get('p2'), second)
+  assert.notEqual(first.state, second.state)
+})
+
+test('scene player registry rejects duplicate ids', () => {
+  const scene = {}
+  attachPlayerEntity(scene, { id: 'p1', state: baseState(100) })
+  assert.throws(
+    () => attachPlayerEntity(scene, { id: 'p1', state: baseState(200) }),
+    /already attached/i,
+  )
 })
 
 test('player id is mandatory', () => {

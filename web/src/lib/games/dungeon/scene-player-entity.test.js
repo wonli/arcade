@@ -22,9 +22,9 @@ function phaserHarness() {
   }
 }
 
-function remotePlayer(overrides = {}) {
+function otherPlayer(overrides = {}) {
   return createPlayerEntity({
-    id: 'remote',
+    id: 'p2',
     state: {
       x: 100,
       y: 100,
@@ -54,6 +54,8 @@ test('single-player scene stores player state in one local PlayerEntity', () => 
   assert.equal(scene.localPlayer.skillReadyAt, 0)
   assert.equal(scene.localPlayer.lastContactAt, 0)
   assert.equal(scene.localPlayer.dead, false)
+  assert.equal(scene.players.size, 1)
+  assert.equal(scene.players.get(scene.localPlayer.id), scene.localPlayer)
 })
 
 test('single-player scene exposes no legacy player state aliases', () => {
@@ -79,7 +81,7 @@ test('hitPlayer only mutates the provided PlayerEntity', () => {
   const Phaser = phaserHarness()
   const scene = createDungeonGame({ Phaser, parent: null }).scene
   const local = scene.localPlayer
-  const target = remotePlayer({ x: 20, y: 30 })
+  const target = otherPlayer({ x: 20, y: 30 })
   target.bar = { id: 'target-bar' }
   scene.time = { now: 900 }
   scene.updateHealthBar = () => {}
@@ -98,7 +100,7 @@ test('hitPlayer only mutates the provided PlayerEntity', () => {
 test('autoAttack acquires targets from the provided PlayerEntity', () => {
   const Phaser = phaserHarness()
   const scene = createDungeonGame({ Phaser, parent: null }).scene
-  const player = remotePlayer()
+  const player = otherPlayer()
   const target = { id: 'enemy', x: 125, y: 100, hp: 20, maxHp: 20 }
   scene.enemies = [target]
   const slashes = []
@@ -114,7 +116,7 @@ test('autoAttack acquires targets from the provided PlayerEntity', () => {
 test('healPlayer only heals the provided PlayerEntity', () => {
   const Phaser = phaserHarness()
   const scene = createDungeonGame({ Phaser, parent: null }).scene
-  const player = remotePlayer({ hp: 45 })
+  const player = otherPlayer({ hp: 45 })
   scene.updateHealthBar = () => {}
   scene.emitStats = () => {}
 
@@ -127,7 +129,7 @@ test('healPlayer only heals the provided PlayerEntity', () => {
 test('damageEnemy applies knockback away from the provided attacker', () => {
   const Phaser = phaserHarness()
   const scene = createDungeonGame({ Phaser, parent: null }).scene
-  const attacker = remotePlayer({ x: 100, y: 100 })
+  const attacker = otherPlayer({ x: 100, y: 100 })
   const enemy = { id: 'enemy', x: 120, y: 100, hp: 100, maxHp: 100, hitUntil: 0, boss: false, barOffset: 28 }
   scene.time = { now: 500 }
   scene.updateHealthBar = () => {}
