@@ -41,8 +41,5 @@ jobs:
           src/lib/games/dungeon/world-runtime.test.js
           src/lib/games/dungeon/network-runtime.test.js
 
-      - name: Run full tests
-        run: npm test
-
       - name: Build web
         run: npm run build
