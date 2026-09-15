@@ -1,0 +1,130 @@
+name: Fix dungeon player cleanup formatting
+
+on:
+  push:
+    branches:
+      - feat/dungeon-coop-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/dungeon-coop-foundation
+          fetch-depth: 0
+      - name: Fix formatting
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def block(lines):
+              return '\n'.join(lines)
+
+          scene_path = Path('web/src/lib/games/dungeon/scene.js')
+          scene = scene_path.read_text()
+
+          sync = block([
+              '    syncPlayerAnimation(forceAction = null, player = this.localPlayer) {',
+              "      if (assets.player?.source !== 'rpg-main-character' || !player?.actor?.anims) return",
+              "      const action = forceAction || (player.moving ? 'walk' : 'idle')",
+              "      const sheetDirection = player.facing === 'up' ? 'up' : player.facing === 'down' ? 'down' : 'side'",
+              '      const key = `dungeon-player-${sheetDirection}-${action}`',
+              "      player.actor.setFlipX?.(player.facing === 'left')",
+              '      if (this.anims.exists(key) && player.actor.anims.currentAnim?.key !== key) player.actor.play(key, true)',
+              '    }',
+          ])
+          scene, n = re.subn(r'    syncPlayerAnimation\(forceAction = null, player = this\.localPlayer\) \{.*?\n\}', sync, scene, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'sync format replacements: {n}')
+          scene = scene.replace('\nmakeActor(x, y, kind, enemyType = \'skeleton\') {', "\n    makeActor(x, y, kind, enemyType = 'skeleton') {", 1)
+
+          movement = block([
+              '    updatePlayer(dt, player = this.localPlayer) {',
+              '      let dx = 0, dy = 0',
+              '      if (this.keys.A.isDown) dx -= 1',
+              '      if (this.keys.D.isDown) dx += 1',
+              '      if (this.keys.W.isDown) dy -= 1',
+              '      if (this.keys.S.isDown) dy += 1',
+              '      player.facing = directionFromInput(dx, dy, player.facing)',
+              '      player.moving = Boolean(dx || dy)',
+              '      const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (player.state.effects?.hurtHaste ?? 0) : 1',
+              '      if (dx || dy) {',
+              '        const length = Math.hypot(dx, dy) || 1',
+              '        player.state.x += (dx / length) * player.state.speed * hurtBoost * dt',
+              '        player.state.y += (dy / length) * player.state.speed * hurtBoost * dt',
+              '      }',
+              '      player.state.x = Phaser.Math.Clamp(player.state.x, TILE + 18, WIDTH - TILE - 18)',
+              '      player.state.y = Phaser.Math.Clamp(player.state.y, TILE + 18, HEIGHT - TILE - 18)',
+              '      player.actor?.setPosition?.(player.state.x, player.state.y)',
+              '      this.updateHealthBar(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)',
+              '      if (!player.attacking) this.syncPlayerAnimation(null, player)',
+              '    }',
+          ])
+          scene, n = re.subn(r'    updatePlayer\(dt, player = this\.localPlayer\) \{.*?\n\}', movement, scene, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'movement format replacements: {n}')
+          scene = scene.replace('\nupdateEnemies(time, dt) {', '\n    updateEnemies(time, dt) {', 1)
+          scene_path.write_text(scene)
+
+          facing_path = Path('web/src/lib/games/dungeon/player-facing-runtime.js')
+          facing = facing_path.read_text()
+          facing_sync = block([
+              '  const sync = (forceAction = null, target = player) => {',
+              '    const result = originalSync(forceAction, target)',
+              '    target.actor?.setFlipX?.(playerFlipX(target.facing))',
+              '    return result',
+              '  }',
+          ])
+          facing, n = re.subn(r'  const sync = \(forceAction = null, target = player\) => \{.*?\n\}', facing_sync, facing, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'facing format replacements: {n}')
+          facing_path.write_text(facing)
+
+          spatial_path = Path('web/src/lib/games/dungeon/spatial-runtime.js')
+          spatial = spatial_path.read_text()
+          spatial_update = block([
+              '  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {',
+              '    const before = { x: target.state.x, y: target.state.y }',
+              '    if ((scene.__hitStopUntil ?? 0) > scene.time.now) {',
+              '      target.moving = false',
+              '      if (!target.attacking) scene.syncPlayerAnimation?.(null, target)',
+              '      return',
+              '    }',
+              '    originalUpdatePlayer(dt, target)',
+              '    const desired = { x: target.state.x, y: target.state.y }',
+              '    const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)',
+              '    target.state.x = next.x; target.state.y = next.y',
+              '    target.actor?.setPosition?.(next.x, next.y)',
+              '    scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)',
+              '    const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)',
+              '    if (trap && scene.time.now >= trapCooldownUntil) {',
+              '      trapCooldownUntil = scene.time.now + 850',
+              "      scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)",
+              "      onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })",
+              '    }',
+              '  }',
+          ])
+          spatial, n = re.subn(r'  scene\.updatePlayer = function updateSpatialPlayer\(dt, target = player\) \{.*?\n\}', spatial_update, spatial, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'spatial format replacements: {n}')
+          spatial = spatial.replace('\nfunction navigateEnemy(enemy, target, time, dt) {', '\n  function navigateEnemy(enemy, target, time, dt) {', 1)
+          spatial_path.write_text(spatial)
+          PY
+
+          node --check web/src/lib/games/dungeon/scene.js
+          node --check web/src/lib/games/dungeon/player-facing-runtime.js
+          node --check web/src/lib/games/dungeon/spatial-runtime.js
+
+          git config user.name "ideaa"
+          git config user.email "ideaa@qq.com"
+          git rm .github/workflows/dungeon-player-format-fix.yml
+          git add web/src/lib/games/dungeon/scene.js web/src/lib/games/dungeon/player-facing-runtime.js web/src/lib/games/dungeon/spatial-runtime.js
+          git commit -m "style(dungeon): restore player cleanup formatting [skip ci]"
+          git push origin HEAD:feat/dungeon-coop-foundation
