@@ -8,14 +8,36 @@ export function shouldAutoUseHealthPotion(state = {}, threshold = AUTO_POTION_TH
   return hp > 0 && maxHp > 0 && healthPotions > 0 && hp / maxHp <= threshold
 }
 
-export function healthPotionPickupMode() {
-  return 'store'
+export function healthPotionPickupMode(state = {}) {
+  const hp = Number(state.hp ?? 0)
+  const maxHp = Number(state.maxHp ?? hp)
+  return hp < maxHp ? 'consume' : 'store'
 }
 
 export function storeHealthPotion(state = {}) {
   return {
     ...state,
     healthPotions: Number(state.healthPotions ?? 0) + 1,
+  }
+}
+
+export function pickupHealthPotion(state = {}) {
+  const hp = Number(state.hp ?? 0)
+  const maxHp = Number(state.maxHp ?? hp)
+  const healthPotions = Number(state.healthPotions ?? 0)
+
+  if (healthPotionPickupMode({ hp, maxHp }) === 'consume') {
+    return {
+      state: { ...state, hp: maxHp, maxHp, healthPotions },
+      healed: Math.max(0, maxHp - hp),
+      stored: false,
+    }
+  }
+
+  return {
+    state: storeHealthPotion({ ...state, hp, maxHp, healthPotions }),
+    healed: 0,
+    stored: true,
   }
 }
 
