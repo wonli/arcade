@@ -5,7 +5,10 @@ import {
   acceptRemoteInput,
   consumeRemoteInput,
   nextGuestInput,
+  refreshRemoteActorVisual,
+  repositionRemotePlayerForGeometryChange,
   simulateAuthoritativeRemotePlayer,
+  updateMirroredDropVisuals,
 } from './coop-runtime.js'
 
 test('host accepts only newer normalized intent and ignores guest position fields', () => {
@@ -56,4 +59,65 @@ test('host remote player uses the same movement pickup interaction attack and sk
   assert.deepEqual(calls.map((entry) => entry[0]), ['move', 'pickup', 'interact', 'attack', 'skill'])
   assert.equal(calls[0][2], 'p2')
   assert.equal(calls[2][1], 'p2')
+})
+
+test('guest mirrored drops advance the same loot animation instead of staying at the spawn apex', () => {
+  let y = 28
+  let scale = null
+  const scene = {
+    time: { now: 210 },
+    drops: [{
+      spawnedAt: 0,
+      groundY: 100,
+      y: 100,
+      baseScaleX: 1,
+      baseScaleY: 1,
+      visual: {
+        setY(next) { y = next },
+        setScale(x, nextY) { scale = [x, nextY] },
+      },
+      glow: { setAlpha() {} },
+    }],
+  }
+
+  updateMirroredDropVisuals(scene)
+  assert.ok(y > 28 && y < 100)
+  assert.ok(scale[0] > 0.82)
+})
+
+test('placeholder remote actor is replaced once the real player texture is ready', () => {
+  let destroyed = false
+  let visualUpdates = 0
+  let animationSyncs = 0
+  const fallback = { getData: () => false, destroy() { destroyed = true } }
+  const sprite = {
+    getData: () => true,
+    setDepth() { return this },
+    setAlpha() { return this },
+  }
+  const scene = {
+    player: { getData: () => true },
+    makeActor() { return sprite },
+  }
+  const runtime = {
+    updatePlayerVisual() { visualUpdates++ },
+    syncAnimation() { animationSyncs++ },
+  }
+  const player = { state: { x: 120, y: 90 }, actor: fallback, dead: false, attacking: false }
+
+  assert.equal(refreshRemoteActorVisual(scene, runtime, player), true)
+  assert.equal(player.actor, sprite)
+  assert.equal(destroyed, true)
+  assert.equal(visualUpdates, 1)
+  assert.equal(animationSyncs, 1)
+})
+
+test('new room geometry repositions remote player before the authoritative snapshot', () => {
+  let repositioned = 0
+  const runtime = { repositionRemotePlayers() { repositioned++ } }
+
+  assert.equal(repositionRemotePlayerForGeometryChange(runtime, 'room-b', 'room-a'), true)
+  assert.equal(repositioned, 1)
+  assert.equal(repositionRemotePlayerForGeometryChange(runtime, 'room-b', 'room-b'), false)
+  assert.equal(repositioned, 1)
 })
