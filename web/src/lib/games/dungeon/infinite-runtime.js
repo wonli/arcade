@@ -1,6 +1,7 @@
 import { placePlayerAtRoomSpawn, roomAnchor } from './room-anchors.js'
 import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
+import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { growPlayerLegendaryForRoom } from './legendary-growth.js'
 import { currentWeapon } from './player-loadout.js'
@@ -92,25 +93,6 @@ function promoteEquipment(item, floor, fortuneActive, random) {
   }
 }
 
-function attachEliteAura(scene, enemy, { boss = false } = {}) {
-  if (!enemy || enemy.eliteAura) return
-  const presentation = elitePresentation({ boss })
-  const aura = scene.add.circle(enemy.x, enemy.y + 8, presentation.auraRadius, presentation.auraColor, boss ? 0.08 : 0.06)
-    .setStrokeStyle(boss ? 3 : 2, presentation.auraColor, boss ? 0.78 : 0.64)
-    .setDepth(Math.max(7, (enemy.visual?.depth ?? 20) - 1))
-  aura.setScale?.(1, 0.42)
-  scene.tweens.add({
-    targets: aura,
-    scaleX: boss ? 1.28 : 1.2,
-    scaleY: boss ? 0.54 : 0.5,
-    alpha: boss ? 0.24 : 0.18,
-    duration: presentation.pulseMs,
-    yoyo: true,
-    repeat: -1,
-  })
-  enemy.eliteAura = aura
-}
-
 function scaleEnemy(scene, enemy, profile, { elite = false, boss = false } = {}) {
   if (!enemy || !profile) return
   const hpFactor = profile.hpMultiplier * (elite ? 1.5 : 1) * (boss ? profile.bossHpMultiplier : 1)
@@ -125,7 +107,7 @@ function scaleEnemy(scene, enemy, profile, { elite = false, boss = false } = {})
     enemy.shockwaveCooldown = Math.max(2200, Math.round(enemy.shockwaveCooldown * profile.bossCooldownMultiplier))
     const presentation = elitePresentation({ boss: true })
     enemy.visual?.setTint?.(presentation.tint)
-    attachEliteAura(scene, enemy, { boss: true })
+    scene.__dungeonEnemyPresentation?.ensureAura?.(enemy, { boss: true })
   }
   if (elite && !boss) {
     const presentation = elitePresentation({ boss: false })
@@ -134,7 +116,7 @@ function scaleEnemy(scene, enemy, profile, { elite = false, boss = false } = {})
     enemy.visual?.setScale?.(enemy.visual.scaleX * presentation.scale, enemy.visual.scaleY * presentation.scale)
     enemy.visual?.setTint?.(presentation.tint)
     enemy.tint = presentation.tint
-    attachEliteAura(scene, enemy)
+    scene.__dungeonEnemyPresentation?.ensureAura?.(enemy)
   }
   scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - enemy.barOffset, enemy.hp, enemy.maxHp)
 }
@@ -155,6 +137,7 @@ export function installInfiniteDungeon(scene, {
   let restRuntime = null
 
   scene.floor = progress.floor
+  const enemyPresentation = installEnemyPresentationRuntime(scene)
 
   const originalOpenPortal = scene.openPortal.bind(scene)
   const originalSpawnDrop = scene.spawnDrop.bind(scene)
@@ -162,27 +145,6 @@ export function installInfiniteDungeon(scene, {
 
   const snapshot = () => progressSnapshot(progress, fortunePending, fortuneActive)
   const publish = () => onProgress(snapshot())
-
-  const destroyEliteAuras = () => {
-    for (const enemy of scene.enemies ?? []) {
-      enemy.eliteAura?.destroy?.()
-      enemy.eliteAura = null
-    }
-  }
-
-  const syncEliteAuras = () => {
-    for (const enemy of scene.enemies ?? []) {
-      const aura = enemy.eliteAura
-      if (!aura) continue
-      if (enemy.hp <= 0 || enemy.visual?.active === false) {
-        aura.destroy?.()
-        enemy.eliteAura = null
-        continue
-      }
-      aura.setPosition?.(enemy.x, enemy.y + Math.max(6, (enemy.barOffset ?? 24) * 0.2))
-    }
-  }
-  scene.events?.on?.('update', syncEliteAuras)
 
   const playClearFeedback = (role) => {
     const feedback = roomClearFeedback({ roomRole: role })
@@ -307,8 +269,7 @@ export function installInfiniteDungeon(scene, {
     fortunePending = fortune.remaining
 
     if (!initial) {
-      destroyEliteAuras()
-      scene.clearEnemies()
+      enemyPresentation?.clearAll()
       scene.clearEnemyProjectiles()
       originalClearDrops()
       scene.drawArena()
@@ -391,8 +352,6 @@ export function installInfiniteDungeon(scene, {
 
   scene.events?.once?.('shutdown', () => {
     destroyRest()
-    destroyEliteAuras()
-    scene.events?.off?.('update', syncEliteAuras)
     scene.openPortal = originalOpenPortal
   })
 
@@ -400,8 +359,6 @@ export function installInfiniteDungeon(scene, {
     getProgress: snapshot,
     destroy() {
       destroyRest()
-      destroyEliteAuras()
-      scene.events?.off?.('update', syncEliteAuras)
     },
   }
 }
