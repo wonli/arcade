@@ -179,7 +179,7 @@ function frameFromSet(scene, role, index = 0) {
 function renderAuthoredFloorSkin(scene, geometry, floorTexture, frame, skin) {
   const inset = 48, left = inset, top = inset, right = geometry.width - inset, bottom = geometry.height - inset
   const width = right - left, height = bottom - top
-  addTiledTexture(scene, left + width / 2, top + size / 2, width - size * 2, size, floorTexture, 1.2, null, edge.top)
+  addTiledTexture(scene, left + width / 2, top + height / 2, width, height, floorTexture, 1, null, frame)
   const edge = skin?.autotile
   if (edge) {
     const size = 16
@@ -237,6 +237,7 @@ function renderAuthoredWater(scene, geometry, water, waterIndex, available, fram
   const baseFrame = spatialTextureFrame('water', frames)
   const body = addTiledTexture(scene, water.x + water.width / 2, water.y + water.height / 2, water.width, water.height, waterTexture, 2, null, baseFrame)
   body.setAlpha?.(1)
+
   const coasts = scene.__dungeonEnvironmentWaterCoasts
   const tileSize = Math.max(8, Number(coasts?.tileSize) || 16)
   if (coasts?.patterns) {
@@ -356,6 +357,7 @@ function renderFloor(scene, geometry) {
     const edge = isBoundary ? 0x708095 : 0x8b949f
     track(scene, scene.add.rectangle(solid.x + solid.width / 2, solid.y + solid.height / 2, Math.max(2, solid.width - 2), Math.max(2, solid.height - 2), color, 0.98).setStrokeStyle(isBoundary ? 1 : 2, edge, 0.9).setDepth(depth))
   }
+
   for (let index = 0; index < geometry.torches.length; index++) {
     const torch = geometry.torches[index]
     const glow = track(scene, scene.add.circle(torch.x, torch.y, 42, 0xff8a3d, 0.08).setDepth(7))
@@ -614,10 +616,9 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
   }
   scene.events.on('update', updateInteraction)
 
-  const openNearestChestFor = (playerOrState = scene.playerState) => {
-    const state = playerOrState?.state ?? playerOrState
-    const chest = nearestInteractable(state, chests, CHEST_RANGE)
-    if (!chest || chest.opened) return false
+  const openNearestChest = () => {
+    const chest = nearestInteractable(scene.playerState, chests, CHEST_RANGE)
+    if (!chest || chest.opened) return
     openChestVisual(scene, chest); hideChestPrompt(chest)
     const progress = getProgress() ?? {}
     const profile = chestRewardProfile(progress.roomRole ?? 'combat', progress.chapter ?? 1, Boolean(progress.fortuneActive))
@@ -626,18 +627,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     scene.time.delayedCall(90, () => {
       for (let index = 0; index < profile.dropCount; index++) scene.spawnDrop(chest.x + (index - (profile.dropCount - 1) / 2) * 28, chest.y + 18, rollChestWeapon(profile, floor, random))
     })
-    return true
   }
-  const openNearestChest = () => openNearestChestFor(scene.playerState)
-
-  const applyChestSnapshot = (authoritative = []) => {
-    const byId = new Map(authoritative.filter(Boolean).map((entry) => [entry.id, entry]))
-    for (const chest of chests) {
-      const next = byId.get(chest.id)
-      if (next?.opened && !chest.opened) openChestVisual(scene, chest)
-    }
-  }
-
   chestKey.on('down', openNearestChest)
   refreshRoom()
 
@@ -652,13 +642,7 @@ export function installDungeonSpatial(scene, { getProgress = () => ({ floor: sce
     scene.updateBoss = originalUpdateBoss
   })
 
-  const api = {
-    refreshRoom,
-    getGeometry: () => scene.__roomGeometry,
-    getChests: () => [...chests],
-    interactPlayer: (player) => openNearestChestFor(player),
-    applyChestSnapshot,
-  }
+  const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
   scene.__dungeonSpatial = api
   loadEnvironmentTextures(scene).then((loaded) => { if (loaded && scene.__roomGeometry) refreshRoom({ geometry: scene.__roomGeometry }) })
   return api
