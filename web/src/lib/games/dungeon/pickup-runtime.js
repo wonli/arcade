@@ -156,7 +156,7 @@ function syncGroundWeaponLabel(drop, locale) {
   drop.label.setText(drop.__weaponDetailText ? `${identity}\n${drop.__weaponDetailText}` : identity)
 }
 
-export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random, getLocale = () => 'en' } = {}) {
+export function installPickupInteraction(scene, { onSelection = () => {}, random = Math.random, getLocale = () => 'en', authority = true } = {}) {
   if (!scene || scene.__pickupInteractionInstalled) return scene?.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
   scene.playerState.healthPotions ??= 0
@@ -207,6 +207,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
 
   const useHealthPotionFor = (player) => {
+    if (!authority) return false
     const state = player?.state ?? scene.playerState
     const next = useStoredHealthPotion(state)
     if (!next.used) return false
@@ -221,6 +222,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   const useHealthPotion = () => useHealthPotionFor(scene.localPlayer ?? { local: true, state: scene.playerState })
 
   const autoUseHealthPotionFor = (player) => {
+    if (!authority) return false
     const state = player?.state ?? scene.playerState
     if (scene.dead || scene.runComplete || player?.dead || !shouldAutoUseHealthPotion(state)) return false
     return useHealthPotionFor(player)
@@ -229,6 +231,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   const autoUseHealthPotion = () => autoUseHealthPotionFor(scene.localPlayer ?? { local: true, state: scene.playerState })
 
   const api = {
+    authority,
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     useHealthPotion,
     useHealthPotionFor,
@@ -239,7 +242,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     },
     getHealthPotions(player = null) { return (player?.state ?? scene.playerState).healthPotions ?? 0 },
     updatePlayer(player, input = {}) {
-      if (!player?.state || player.dead || scene.dead || scene.runComplete) return
+      if (!authority || !player?.state || player.dead || scene.dead || scene.runComplete) return
       const state = player.state
       state.healthPotions ??= 0
       const drops = [...(scene.drops ?? [])].filter(Boolean)
@@ -292,6 +295,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
   }
 
   const equipSelected = () => {
+    if (!authority) return
     const candidate = selected
     if (!candidate || !scene.drops?.includes(candidate)) return
     const distance = Math.hypot(candidate.x - scene.playerState.x, candidate.y - scene.playerState.y)
@@ -324,6 +328,12 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
 
     const allDrops = [...scene.drops]
     const confirmDrops = allDrops.filter((drop) => pickupIntent(drop.item) === 'confirm')
+
+    if (!authority) {
+      publish(nearestConfirmableDrop(scene.playerState, confirmDrops, 34))
+      return
+    }
+
     const automaticDrops = allDrops.filter((drop) => pickupIntent(drop.item) !== 'confirm')
     const remainingAutomatic = []
 
@@ -347,7 +357,7 @@ export function installPickupInteraction(scene, { onSelection = () => {}, random
     publish(nearestConfirmableDrop(scene.playerState, confirmDrops, 34))
   }
 
-  const autoPotionUpdate = () => autoUseHealthPotion()
+  const autoPotionUpdate = () => { if (authority) autoUseHealthPotion() }
   scene.events?.on?.('update', autoPotionUpdate)
 
   scene.clearDrops = function clearDropsWithSelectionReset() {
