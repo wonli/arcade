@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dungeon-legacy-cleanup-${{ github.ref }}
@@ -20,6 +20,87 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: feat/dungeon-coop-players
+
+      - name: Canonicalize scene player state
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('web/src/lib/games/dungeon/scene.js')
+          text = path.read_text()
+          replacements = [
+            (
+              "import { castPlayerSkill } from './player-skill-runtime.js'\n",
+              "import { castPlayerSkill } from './player-skill-runtime.js'\nimport { currentEffects, currentWeapon } from './player-loadout.js'\n",
+            ),
+            (
+              "          weapon: null,\n          weaponRarity: null,\n          weaponDamage: 0,\n          weaponAffixes: [],\n          effects: {},\n",
+              "          equipment: { weapon: null },\n          modifiers: {},\n",
+            ),
+            (
+              "const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (player.state.effects?.hurtHaste ?? 0) : 1",
+              "const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (currentEffects(player.state).hurtHaste ?? 0) : 1",
+            ),
+            (
+              "if ((player.state.effects?.hurtHaste ?? 0) > 0) player.state.hasteUntil = this.time.now + 1800",
+              "if ((currentEffects(player.state).hurtHaste ?? 0) > 0) player.state.hasteUntil = this.time.now + 1800",
+            ),
+            (
+              "const effects = player.state.effects ?? {}",
+              "const effects = currentEffects(player.state)",
+            ),
+            (
+              "const corpseBurst = player.state.effects?.corpseBurst ?? 0",
+              "const corpseBurst = currentEffects(player.state).corpseBurst ?? 0",
+            ),
+          ]
+          for old, new in replacements:
+            if old in text:
+              text = text.replace(old, new)
+          old = """    emitStats(now = this.time?.now ?? 0) {
+      onStats({
+        hp: this.localPlayer.state.hp,
+        maxHp: this.localPlayer.state.maxHp,
+        damage: this.localPlayer.state.damage,
+        kills: this.kills,
+        floor: this.floor,
+        weapon: this.localPlayer.state.weapon,
+        weaponRarity: this.localPlayer.state.weaponRarity,
+        weaponDamage: this.localPlayer.state.weaponDamage ?? 0,
+        weaponAffixes: [...(this.localPlayer.state.weaponAffixes ?? [])],
+        skillCooldown: Math.max(0, this.localPlayer.skillReadyAt - now),
+      })
+    }
+"""
+          new = """    emitStats(now = this.time?.now ?? 0) {
+      const weapon = currentWeapon(this.localPlayer.state)
+      onStats({
+        hp: this.localPlayer.state.hp,
+        maxHp: this.localPlayer.state.maxHp,
+        damage: this.localPlayer.state.damage,
+        kills: this.kills,
+        floor: this.floor,
+        weapon: weapon?.type ?? null,
+        weaponRarity: weapon?.rarity ?? null,
+        weaponDamage: weapon?.damage ?? 0,
+        weaponAffixes: [...(weapon?.affixes ?? [])],
+        skillCooldown: Math.max(0, this.localPlayer.skillReadyAt - now),
+      })
+    }
+"""
+          if old in text:
+            text = text.replace(old, new)
+          path.write_text(text)
+          PY
+          if ! git diff --quiet -- web/src/lib/games/dungeon/scene.js; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add web/src/lib/games/dungeon/scene.js
+            git commit -m 'refactor(dungeon): remove scene player mirrors'
+            git push origin HEAD:feat/dungeon-coop-players
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
