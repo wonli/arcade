@@ -6,9 +6,23 @@ export function roomAnchor(geometry, kind) {
   return kind === 'exit' ? { x: 480, y: 600 - 48 * 1.7 } : { x: 480, y: 300 }
 }
 
-export function placePlayerAtRoomSpawn(scene, player = scene?.localPlayer) {
+export function playerRoomSpawn(geometry, slot = 0) {
+  const base = roomAnchor(geometry, 'spawn')
+  const index = Math.max(0, Math.floor(Number(slot) || 0))
+  if (index === 0) return { ...base }
+
+  const side = index % 2 === 1 ? 1 : -1
+  const rank = Math.ceil(index / 2)
+  const desired = {
+    x: base.x + side * 34 * rank,
+    y: base.y + (rank % 2 === 0 ? 22 : 0),
+  }
+  return safeEnemySpawn(geometry, desired, 18)
+}
+
+export function placePlayerAtRoomSpawn(scene, player = scene?.localPlayer, slot = scene?.__dungeonPlayerSlot ?? player?.slot ?? 0) {
   if (!scene || !player) return
-  const { x, y } = roomAnchor(scene.__roomGeometry, 'spawn')
+  const { x, y } = playerRoomSpawn(scene.__roomGeometry, slot)
   player.state.x = x
   player.state.y = y
   player.actor?.setPosition?.(x, y)
