@@ -25,12 +25,16 @@ test('co-op snapshot strips Phaser objects and includes both player contexts', (
     enemies: [{ id: 'e1', x: 5, y: 6, hp: 10, maxHp: 10, visual: { setPosition() {} } }],
     drops: [],
     __dungeonPlayerRuntime: { activePlayers: () => [p1, p2] },
+    __dungeonSpatial: {
+      getChests: () => [{ id: 'chest-0', x: 80, y: 96, opened: true, visuals: { sprite: { destroy() {} } } }],
+    },
   }
   const snapshot = createDungeonCoopSnapshot(scene, { chapter: 2 }, { sequence: 4 })
   assert.equal(snapshot.players.length, 2)
   assert.equal(snapshot.players[0].state.x, 10)
   assert.equal('actor' in snapshot.players[0], false)
   assert.equal('visual' in snapshot.enemies[0], false)
+  assert.deepEqual(snapshot.chests, [{ id: 'chest-0', x: 80, y: 96, opened: true }])
 })
 
 test('prediction reconciliation preserves small error but corrects large divergence', () => {
