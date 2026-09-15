@@ -1,7 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { applyEquipmentState, currentEffects, currentWeapon } from './player-loadout.js'
+import {
+  applyEquipmentState,
+  clearModifierLayer,
+  currentEffects,
+  currentWeapon,
+  setModifierLayer,
+} from './player-loadout.js'
 
 test('canonical equipment weapon wins over compatibility mirrors', () => {
   const canonical = { type: 'weapon.canonical', archetype: 'staff', rarity: 'rare', damage: 11, affixes: [] }
@@ -30,6 +36,22 @@ test('equipment replacement preserves non-equipment modifier layers', () => {
   assert.equal(currentEffects(next).attackSpeed, 0.35)
   assert.equal(currentEffects(next).skillRadius, 0.1)
   assert.equal(currentEffects(next).lifeSteal, 0.08)
+})
+
+test('modifier layer updates keep the legacy effects mirror synchronized', () => {
+  const state = setModifierLayer({ effects: {} }, 'temporary', { attackSpeed: 0.2, skillHaste: 0.1 })
+  const withPassive = setModifierLayer(state, 'passive', { skillRadius: 0.25 })
+
+  assert.equal(withPassive.effects.attackSpeed, 0.2)
+  assert.equal(withPassive.effects.skillHaste, 0.1)
+  assert.equal(withPassive.effects.skillRadius, 0.25)
+  assert.deepEqual(withPassive.effects, currentEffects(withPassive))
+
+  const cleared = clearModifierLayer(withPassive, 'temporary')
+  assert.equal(cleared.effects.attackSpeed, undefined)
+  assert.equal(cleared.effects.skillHaste, undefined)
+  assert.equal(cleared.effects.skillRadius, 0.25)
+  assert.deepEqual(cleared.effects, currentEffects(cleared))
 })
 
 test('compatibility mirrors are derived from canonical equipment state', () => {
