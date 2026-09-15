@@ -17,6 +17,7 @@ export function serializePlayerSnapshot(player) {
 
   return {
     id: String(player.id),
+    slot: Number.isInteger(player.slot) ? player.slot : null,
     state: clone(player.state),
     facing: player.facing ?? 'down',
     moving: Boolean(player.moving),
@@ -37,6 +38,7 @@ export function applyPlayerSnapshot(player, snapshot) {
     throw new Error(`Player snapshot id ${snapshotId || '<missing>'} does not match ${player.id}`)
   }
 
+  player.slot = Number.isInteger(snapshot.slot) ? snapshot.slot : player.slot ?? null
   player.state = clone(snapshot.state)
   player.facing = snapshot.facing ?? player.facing ?? 'down'
   player.moving = Boolean(snapshot.moving)
