@@ -1,4 +1,5 @@
 import { applyPickup } from './combat.js'
+import { currentWeapon } from './player-loadout.js'
 import { safeEnemySpawn } from './room-anchors.js'
 
 function syncEnemy(scene, enemy) {
@@ -101,7 +102,7 @@ export function installDungeonEditorRuntime(scene, { defaultWaveSize = 8, player
     scene.__dungeonWeaponVisuals?.sync?.()
     scene.__dungeonWeaponVfx?.sync?.()
     if (player === scene.localPlayer) scene.emitStats?.()
-    return player.state.equippedWeapon
+    return currentWeapon(player.state)
   }
 
   const restore = () => {
