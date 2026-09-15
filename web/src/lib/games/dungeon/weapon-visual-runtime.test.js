@@ -81,7 +81,12 @@ function visualScene() {
   let update = null, delayed = null
   const created = []
   const scene = {
-    playerState: { x: 100, y: 120, weapon: 'weapon.dungeon_blade', weaponRarity: 'rare', equippedWeapon: { type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'rare' } },
+    playerState: {
+      x: 100,
+      y: 120,
+      equipment: { weapon: { type: 'weapon.dungeon_blade', archetype: 'dagger', rarity: 'rare' } },
+      modifiers: {},
+    },
     playerFacing: 'right', time: { now: 100, delayedCall(ms) { delayed = ms } }, textures: { exists: () => true },
     add: { image(x, y, key) { const object = { x, y, key, visible: true, angle: 0, depth: 0, flipX: false, setOrigin() { return this }, setScale() { return this }, setVisible(value) { this.visible = value; return this }, setPosition(nx, ny) { this.x = nx; this.y = ny; return this }, setAngle(value) { this.angle = value; return this }, setFlipX(value) { this.flipX = value; return this }, setDepth(value) { this.depth = value; return this }, destroy() {} }; created.push(object); return object } },
     load: { image() {}, once() {}, start() {} }, events: { on(event, handler) { if (event === 'update') update = handler }, off() {}, once() {} },
@@ -106,9 +111,8 @@ test('weapon visual runtimes are isolated per PlayerEntity', () => {
     state: {
       x: 300,
       y: 220,
-      weapon: 'weapon.remote_blade',
-      weaponRarity: 'rare',
-      equippedWeapon: { type: 'weapon.remote_blade', archetype: 'sword', rarity: 'rare' },
+      equipment: { weapon: { type: 'weapon.remote_blade', archetype: 'sword', rarity: 'rare' } },
+      modifiers: {},
     },
     facing: 'left',
   })
