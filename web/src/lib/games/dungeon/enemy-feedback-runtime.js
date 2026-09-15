@@ -31,9 +31,9 @@ export function bossPlayerHitProfile({ damage = 0 } = {}) {
 
 function baseScale(enemy) { return { x: Math.abs(enemy?.visual?.scaleX ?? enemy?.scale ?? 1), y: Math.abs(enemy?.visual?.scaleY ?? enemy?.scale ?? 1) } }
 
-function addChargeWarning(scene, enemy) {
-  if (!scene?.add?.rectangle || !enemy) return
-  const profile = bossTelegraphProfile('charge', enemy), dx = (scene.localPlayer.state?.x ?? enemy.x) - enemy.x, dy = (scene.localPlayer.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1, rotation = Math.atan2(dy, dx), x = enemy.x + dx / 2, y = enemy.y + dy / 2
+function addChargeWarning(scene, enemy, player) {
+  if (!scene?.add?.rectangle || !enemy || !player) return
+  const profile = bossTelegraphProfile('charge', enemy), dx = (player.state?.x ?? enemy.x) - enemy.x, dy = (player.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1, rotation = Math.atan2(dy, dx), x = enemy.x + dx / 2, y = enemy.y + dy / 2
   const band = scene.add.rectangle(x, y, distance, profile.width, 0xff493f, profile.alpha).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(22)
   const core = scene.add.rectangle(x, y, distance, 2, 0xffd0a8, 0.82).setOrigin?.(0.5).setRotation?.(rotation).setDepth?.(23)
   scene.tweens?.add?.({ targets: band, alpha: profile.alpha * 1.7, duration: 210, yoyo: true, onComplete: () => band?.destroy?.() })
@@ -51,9 +51,9 @@ function addShockwaveWarning(scene, enemy) {
   scene.tweens?.add?.({ targets: inner, radius: profile.radius, alpha: 0.12, duration: profile.windupMs, onComplete: () => inner?.destroy?.() })
 }
 
-function chargePose(scene, enemy) {
-  if (!enemy?.visual) return
-  const profile = bossActionProfile('charge', enemy), scale = baseScale(enemy), dx = (scene.localPlayer.state?.x ?? enemy.x) - enemy.x, dy = (scene.localPlayer.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1
+function chargePose(scene, enemy, player) {
+  if (!enemy?.visual || !player) return
+  const profile = bossActionProfile('charge', enemy), scale = baseScale(enemy), dx = (player.state?.x ?? enemy.x) - enemy.x, dy = (player.state?.y ?? enemy.y) - enemy.y, distance = Math.hypot(dx, dy) || 1
   scene.tweens?.add?.({ targets: enemy.visual, x: enemy.x - (dx / distance) * profile.recoilPx, y: enemy.y - (dy / distance) * profile.recoilPx, scaleX: scale.x * profile.gatherScaleX, scaleY: scale.y * profile.gatherScaleY, duration: profile.windupMs, ease: 'Quad.Out' })
   scene.time?.delayedCall?.(profile.windupMs, () => { if (enemy.hp <= 0 || enemy.visual?.active === false) return; enemy.visual.setPosition?.(enemy.x, enemy.y); scene.tweens?.add?.({ targets: enemy.visual, scaleX: scale.x * profile.releaseScaleX, scaleY: scale.y * profile.releaseScaleY, duration: profile.releaseMs, yoyo: true, onComplete: () => enemy.visual?.setScale?.(scale.x, scale.y) }) })
 }
@@ -65,13 +65,13 @@ function shockwavePose(scene, enemy) {
   scene.time?.delayedCall?.(profile.windupMs, () => { if (enemy.hp <= 0 || enemy.visual?.active === false) return; scene.tweens?.add?.({ targets: enemy.visual, scaleX: scale.x * profile.stompScaleX, scaleY: scale.y * profile.stompScaleY, duration: profile.stompMs, yoyo: true, onComplete: () => enemy.visual?.setScale?.(scale.x, scale.y) }) })
 }
 
-export function installDungeonEnemyFeedback(scene) {
-  if (!scene || scene.__dungeonEnemyFeedback) return scene?.__dungeonEnemyFeedback ?? null
-  installDungeonEnemyBehaviors(scene)
+export function installDungeonEnemyFeedback(scene, { player = scene?.localPlayer } = {}) {
+  if (!scene || !player || scene.__dungeonEnemyFeedback) return scene?.__dungeonEnemyFeedback ?? null
+  installDungeonEnemyBehaviors(scene, { player })
   const originalBossCharge = typeof scene.bossCharge === 'function' ? scene.bossCharge.bind(scene) : null
   const originalBossShockwave = typeof scene.bossShockwave === 'function' ? scene.bossShockwave.bind(scene) : null
-  if (originalBossCharge) scene.bossCharge = function feedbackBossCharge(enemy) { addChargeWarning(scene, enemy); chargePose(scene, enemy); return originalBossCharge(enemy) }
-  if (originalBossShockwave) scene.bossShockwave = function feedbackBossShockwave(enemy) { addShockwaveWarning(scene, enemy); shockwavePose(scene, enemy); return originalBossShockwave(enemy) }
+  if (originalBossCharge) scene.bossCharge = function feedbackBossCharge(enemy, target = player) { addChargeWarning(scene, enemy, target); chargePose(scene, enemy, target); return originalBossCharge(enemy, target) }
+  if (originalBossShockwave) scene.bossShockwave = function feedbackBossShockwave(enemy, target = player) { addShockwaveWarning(scene, enemy); shockwavePose(scene, enemy); return originalBossShockwave(enemy, target) }
 
   const hit = (enemy, origin, options = {}) => {
     if (!enemy?.visual) return
