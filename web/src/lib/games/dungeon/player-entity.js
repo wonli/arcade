@@ -36,7 +36,19 @@ export class PlayerEntity {
     if (id == null || String(id).trim() === '') throw new TypeError('Player id is required')
 
     this.id = String(id)
-    this.state = cloneGameplayState(state)
+    const gameplayState = cloneGameplayState(state)
+    Object.defineProperty(this, 'state', {
+      enumerable: true,
+      configurable: false,
+      get: () => gameplayState,
+      set: (nextState) => {
+        const next = cloneGameplayState(nextState)
+        for (const key of Object.keys(gameplayState)) {
+          if (!(key in next)) delete gameplayState[key]
+        }
+        Object.assign(gameplayState, next)
+      },
+    })
     this.actor = actor
     this.bar = bar
     this.runtime = {}
