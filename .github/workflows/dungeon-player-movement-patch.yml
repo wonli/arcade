@@ -27,28 +27,23 @@ jobs:
           scene_path = Path('web/src/lib/games/dungeon/scene.js')
           scene = scene_path.read_text()
 
-          old_sync = '''    syncPlayerAnimation(forceAction = null) {
-            if (assets.player?.source !== 'rpg-main-character' || !this.localPlayer.actor?.anims) return
-            const action = forceAction || (this.localPlayer.moving ? 'walk' : 'idle')
-            const sheetDirection = this.localPlayer.facing === 'up' ? 'up' : this.localPlayer.facing === 'down' ? 'down' : 'side'
-            const key = `dungeon-player-${sheetDirection}-${action}`
-            this.localPlayer.actor.setFlipX?.(this.localPlayer.facing === 'left')
-            if (this.anims.exists(key) && this.localPlayer.actor.anims.currentAnim?.key !== key) this.localPlayer.actor.play(key, true)
-          }'''.replace('          ', '')
-          new_sync = '''    syncPlayerAnimation(forceAction = null, player = this.localPlayer) {
+          sync_pattern = re.compile(r'''    syncPlayerAnimation\(forceAction = null\) \{.*?\n    \}\n\n    makeActor''', re.S)
+          sync_replacement = '''    syncPlayerAnimation(forceAction = null, player = this.localPlayer) {
             if (assets.player?.source !== 'rpg-main-character' || !player?.actor?.anims) return
             const action = forceAction || (player.moving ? 'walk' : 'idle')
             const sheetDirection = player.facing === 'up' ? 'up' : player.facing === 'down' ? 'down' : 'side'
             const key = `dungeon-player-${sheetDirection}-${action}`
             player.actor.setFlipX?.(player.facing === 'left')
             if (this.anims.exists(key) && player.actor.anims.currentAnim?.key !== key) player.actor.play(key, true)
-          }'''.replace('          ', '')
-          if old_sync not in scene:
-              raise SystemExit('syncPlayerAnimation block not found')
-          scene = scene.replace(old_sync, new_sync, 1)
+          }
 
-          pattern = re.compile(r'''    updatePlayer\(dt\) \{.*?\n    \}\n\n    updateEnemies''', re.S)
-          replacement = '''    updatePlayer(dt, player = this.localPlayer) {
+          makeActor'''.replace('          ', '')
+          scene, count = sync_pattern.subn(sync_replacement, scene, count=1)
+          if count != 1:
+              raise SystemExit(f'syncPlayerAnimation replacements: {count}')
+
+          movement_pattern = re.compile(r'''    updatePlayer\(dt\) \{.*?\n    \}\n\n    updateEnemies''', re.S)
+          movement_replacement = '''    updatePlayer(dt, player = this.localPlayer) {
             let dx = 0, dy = 0
             if (this.keys.A.isDown) dx -= 1
             if (this.keys.D.isDown) dx += 1
@@ -70,26 +65,23 @@ jobs:
           }
 
           updateEnemies'''.replace('          ', '')
-          scene, count = pattern.subn(replacement, scene, count=1)
+          scene, count = movement_pattern.subn(movement_replacement, scene, count=1)
           if count != 1:
-              raise SystemExit(f'updatePlayer block replacements: {count}')
+              raise SystemExit(f'updatePlayer replacements: {count}')
           scene_path.write_text(scene)
 
           facing_path = Path('web/src/lib/games/dungeon/player-facing-runtime.js')
           facing = facing_path.read_text()
-          old = '''  const sync = (...args) => {
-            const result = originalSync(...args)
-            player.actor?.setFlipX?.(playerFlipX(player.facing))
-            return result
-          }'''.replace('          ', '')
-          new = '''  const sync = (forceAction = null, target = player) => {
+          facing_pattern = re.compile(r'''  const sync = \(\.\.\.args\) => \{.*?\n  \}''', re.S)
+          facing_replacement = '''  const sync = (forceAction = null, target = player) => {
             const result = originalSync(forceAction, target)
             target.actor?.setFlipX?.(playerFlipX(target.facing))
             return result
           }'''.replace('          ', '')
-          if old not in facing:
-              raise SystemExit('player-facing sync block not found')
-          facing_path.write_text(facing.replace(old, new, 1))
+          facing, count = facing_pattern.subn(facing_replacement, facing, count=1)
+          if count != 1:
+              raise SystemExit(f'player-facing sync replacements: {count}')
+          facing_path.write_text(facing)
 
           spatial_path = Path('web/src/lib/games/dungeon/spatial-runtime.js')
           spatial = spatial_path.read_text()
@@ -101,8 +93,8 @@ jobs:
           spatial = spatial.replace("  if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null", "  if (!scene || !player || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null", 1)
           spatial = spatial.replace("    if (!fixedGeometry) placePlayerAtRoomSpawn(scene)", "    if (!fixedGeometry) placePlayerAtRoomSpawn(scene, player)", 1)
 
-          pattern = re.compile(r'''  scene\.updatePlayer = function updateSpatialPlayer\(dt\) \{.*?\n  \}\n\n  function navigateEnemy''', re.S)
-          replacement = '''  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
+          spatial_pattern = re.compile(r'''  scene\.updatePlayer = function updateSpatialPlayer\(dt\) \{.*?\n  \}\n\n  function navigateEnemy''', re.S)
+          spatial_replacement = '''  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
             const before = { x: target.state.x, y: target.state.y }
             if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
               target.moving = false
@@ -124,9 +116,9 @@ jobs:
           }
 
           function navigateEnemy'''.replace('          ', '')
-          spatial, count = pattern.subn(replacement, spatial, count=1)
+          spatial, count = spatial_pattern.subn(spatial_replacement, spatial, count=1)
           if count != 1:
-              raise SystemExit(f'spatial updatePlayer block replacements: {count}')
+              raise SystemExit(f'spatial updatePlayer replacements: {count}')
 
           spatial = spatial.replace("    const nearest = nearestInteractable(scene.localPlayer.state, chests, CHEST_RANGE)", "    const nearest = nearestInteractable(player.state, chests, CHEST_RANGE)")
           spatial_path.write_text(spatial)
