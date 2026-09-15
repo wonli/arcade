@@ -131,6 +131,35 @@ test('host world bootstrap publishes canonical enemy and drop state', () => {
   assert.deepEqual(facts.at(-1), state)
 })
 
+test('host world snapshot never republishes defeated enemies during delayed cleanup', () => {
+  const scene = sceneFixture({ hp: 0 })
+  const runtime = createDungeonWorldRuntime(scene, { runSeed: 'ABC123', isHost: true, publishFact() {} })
+  runtime.start()
+
+  const state = runtime.publishState()
+
+  assert.deepEqual(state.enemies, [])
+})
+
+test('host floor transition is followed immediately by a canonical world snapshot', () => {
+  const scene = sceneFixture({ x: 222, archetype: 'ranged', hp: 19 })
+  const facts = []
+  const runtime = createDungeonWorldRuntime(scene, {
+    runSeed: 'ABC123',
+    isHost: true,
+    publishFact(fact) { facts.push(fact) },
+  })
+  runtime.start()
+
+  scene.advanceFloor(scene.localPlayer)
+
+  assert.deepEqual(facts.map((fact) => fact.type), ['floor.transition', 'world.state'])
+  assert.equal(facts[0].fromFloor, 1)
+  assert.equal(facts[0].toFloor, 2)
+  assert.equal(facts[1].floor, 2)
+  assert.equal(facts[1].enemies[0].id, 'enemy:ABC123:2:0')
+})
+
 test('guest world bootstrap replaces its random enemy state with the host state', () => {
   const host = sceneFixture({ x: 222, archetype: 'ranged', hp: 19 })
   const hostRuntime = createDungeonWorldRuntime(host, { runSeed: 'ABC123', isHost: true, publishFact() {} })
