@@ -58,8 +58,8 @@ export function createDungeonSfx(windowImpl = globalThis.window) {
   return { play, setMoving, stop }
 }
 
-export function installDungeonSfx(scene, { windowImpl = globalThis.window } = {}) {
-  if (!scene || scene.__dungeonSfxInstalled) return scene?.__dungeonSfx ?? null
+export function installDungeonSfx(scene, { player = scene?.localPlayer, windowImpl = globalThis.window } = {}) {
+  if (!scene || !player || scene.__dungeonSfxInstalled) return scene?.__dungeonSfx ?? null
   scene.__dungeonSfxInstalled = true
 
   const sfx = createDungeonSfx(windowImpl)
@@ -70,7 +70,7 @@ export function installDungeonSfx(scene, { windowImpl = globalThis.window } = {}
 
   scene.updatePlayer = function updatePlayerWithSfx(...args) {
     const result = originalUpdatePlayer(...args)
-    sfx.setMoving(scene.localPlayer.moving)
+    sfx.setMoving(player.moving)
     return result
   }
 
@@ -80,16 +80,16 @@ export function installDungeonSfx(scene, { windowImpl = globalThis.window } = {}
   }
 
   scene.healPlayer = function healPlayerWithSfx(...args) {
-    const before = scene.localPlayer.state?.hp ?? 0
+    const before = player.state?.hp ?? 0
     const result = originalHealPlayer(...args)
-    if ((scene.localPlayer.state?.hp ?? 0) > before) sfx.play('heal')
+    if ((player.state?.hp ?? 0) > before) sfx.play('heal')
     return result
   }
 
   scene.trySkill = function trySkillWithSfx(...args) {
-    const before = scene.localPlayer.skillReadyAt ?? 0
+    const before = player.skillReadyAt ?? 0
     const result = originalTrySkill(...args)
-    if ((scene.localPlayer.skillReadyAt ?? 0) > before) sfx.play('skill')
+    if ((player.skillReadyAt ?? 0) > before) sfx.play('skill')
     return result
   }
 
