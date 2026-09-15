@@ -1,0 +1,19 @@
+name: Dungeon Co-op V3 Debug
+on:
+  push:
+    branches: [feat/dungeon-coop-v3]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Run coop world regression
+        working-directory: web
+        run: |
+          npm ci
+          node --test src/lib/games/dungeon/coop-world.test.js
