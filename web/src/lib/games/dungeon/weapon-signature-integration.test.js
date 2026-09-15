@@ -18,10 +18,12 @@ function staffScene() {
   const scene = {
     playerState: {
       x: 0, y: 0, damage: 20, critChance: 0, critMultiplier: 2,
-      effects: {},
-      equippedWeapon: {
-        type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'rare',
-        vfxTheme: 'arcane', vfxVariant: 1,
+      modifiers: {},
+      equipment: {
+        weapon: {
+          type: 'weapon.arcane_spire', archetype: 'staff', rarity: 'rare',
+          vfxTheme: 'arcane', vfxVariant: 1,
+        },
       },
     },
     playerFacing: 'right', enemies: [],
@@ -94,14 +96,14 @@ test('staff projectile reacquires a nearby living target when its original targe
   assert.equal(hits[0].target.id, 'replacement')
 })
 
-test('staff signature progress resets when equipped weapon identity changes', () => {
+test('staff signature progress resets when canonical weapon identity changes', () => {
   const { scene, hits, update } = staffScene()
   const target = { id: 'target', x: 40, y: 0, hp: 2000, hitRadius: 10 }
   scene.enemies = [target]
 
   fireAndResolve(scene, update, target)
   fireAndResolve(scene, update, target)
-  scene.localPlayer.state.equippedWeapon = { ...scene.localPlayer.state.equippedWeapon, type: 'weapon.second_staff' }
+  scene.localPlayer.state.equipment.weapon = { ...scene.localPlayer.state.equipment.weapon, type: 'weapon.second_staff' }
   fireAndResolve(scene, update, target)
   fireAndResolve(scene, update, target)
   assert.equal(hits.filter((hit) => hit.context.source === 'staff_signature').length, 0)
