@@ -105,7 +105,9 @@
   onDestroy(() => { for (const audio of [bgm, moveAudio, captureAudio]) { if (!audio) continue; audio.pause(); audio.src = '' } })
 </script>
 
-<div class="chess-wrap" onpointerdown={unlockAudio}>
+<svelte:window onpointerdown={unlockAudio} />
+
+<div class="chess-wrap">
   <div class:flipped class="chess-board" aria-label="International chess board">
     {#each cells as cell}
       <button class="chess-cell" class:light={(cell.x + cell.y) % 2 === 0} class:dark={(cell.x + cell.y) % 2 === 1} class:selected={selected?.x === cell.x && selected?.y === cell.y} class:target={isLegalTarget(state, cell.x, cell.y)} class:capture={isLegalTarget(state, cell.x, cell.y) && pieceAt(state, cell.x, cell.y) !== 0} class:last={isLastSquare(state, cell.x, cell.y)} onclick={() => chooseSquare(cell.x, cell.y)} aria-label={`${fileLabel(cell.x)}${rankLabel(cell.y)}`}>

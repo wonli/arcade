@@ -190,6 +190,15 @@
     window.addEventListener('pointerup', endDrag, { once: true })
   }
 
+  function nudgeWeapon(event) {
+    if (!resolved) return
+    const step = event.shiftKey ? 5 : 1
+    if (event.key === 'ArrowLeft') { event.preventDefault(); updatePose('x', resolved.pose.x - step) }
+    else if (event.key === 'ArrowRight') { event.preventDefault(); updatePose('x', resolved.pose.x + step) }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); updatePose('y', resolved.pose.y - step) }
+    else if (event.key === 'ArrowDown') { event.preventDefault(); updatePose('y', resolved.pose.y + step) }
+  }
+
   function dragMove(event) {
     if (!dragState || !resolved) return
     const point = pointerInPreview(event)
@@ -425,7 +434,7 @@
         {:else}<div class="player-placeholder" style={`left:${CENTER.x}px;top:${CENTER.y}px`}></div>{/if}
 
         {#if art?.path && resolved}
-          <div class="weapon-origin" style={`left:${weaponX}px;top:${weaponY}px;transform:rotate(${resolved.pose.angle}deg)`} on:pointerdown={(event) => beginDrag('move', event)}>
+          <div class="weapon-origin" role="button" tabindex="0" aria-label="Move weapon; use arrow keys for fine adjustment" style={`left:${weaponX}px;top:${weaponY}px;transform:rotate(${resolved.pose.angle}deg)`} on:pointerdown={(event) => beginDrag('move', event)} on:keydown={nudgeWeapon}>
             <img src={art.path} alt="" draggable="false" on:load={(event) => { weaponNaturalWidth=event.currentTarget.naturalWidth||32; weaponNaturalHeight=event.currentTarget.naturalHeight||32 }} style={`left:${-resolved.grip.x*weaponNaturalWidth}px;top:${-resolved.grip.y*weaponNaturalHeight}px;width:${weaponNaturalWidth}px;height:${weaponNaturalHeight}px;transform-origin:${resolved.grip.x*100}% ${resolved.grip.y*100}%;transform:scale(${facing==='right'?-visualScale:visualScale},${visualScale})`} />
           </div>
           <div class="vfx-ring" style={`left:${anchorPoint.x-vfxRadius}px;top:${anchorPoint.y-vfxRadius}px;width:${vfxRadius*2}px;height:${vfxRadius*2}px`}></div>
