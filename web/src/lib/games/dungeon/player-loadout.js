@@ -35,23 +35,41 @@ export function currentEffects(state = {}) {
   return { ...(state.effects ?? {}) }
 }
 
-export function applyEquipmentState(current = {}, weapon = null, equipmentEffects = {}) {
-  const canonicalWeapon = cloneWeapon(weapon)
+export function setModifierLayer(current = {}, layer, values = {}) {
+  if (!layer || typeof layer !== 'string') throw new TypeError('Modifier layer is required')
   const modifiers = {
     ...(current.modifiers ?? {}),
-    equipment: { ...equipmentEffects },
+    [layer]: { ...values },
   }
-  const effects = composeModifiers(modifiers)
+  return {
+    ...current,
+    modifiers,
+    effects: composeModifiers(modifiers),
+  }
+}
+
+export function clearModifierLayer(current = {}, layer) {
+  if (!layer || typeof layer !== 'string') throw new TypeError('Modifier layer is required')
+  const modifiers = { ...(current.modifiers ?? {}) }
+  delete modifiers[layer]
+  return {
+    ...current,
+    modifiers,
+    effects: composeModifiers(modifiers),
+  }
+}
+
+export function applyEquipmentState(current = {}, weapon = null, equipmentEffects = {}) {
+  const canonicalWeapon = cloneWeapon(weapon)
+  const withModifiers = setModifierLayer(current, 'equipment', equipmentEffects)
   const equipment = {
-    ...(current.equipment ?? {}),
+    ...(withModifiers.equipment ?? {}),
     weapon: canonicalWeapon,
   }
 
   return {
-    ...current,
+    ...withModifiers,
     equipment,
-    modifiers,
-    effects,
     equippedWeapon: cloneWeapon(canonicalWeapon),
     weapon: canonicalWeapon?.type ?? null,
     weaponRarity: canonicalWeapon?.rarity ?? null,
