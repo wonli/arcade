@@ -44,6 +44,11 @@ test('co-op runtime uses semantic facts and deterministic world instead of mirro
   assert.match(source, /dungeonPlayerRuntime/)
 })
 
+test('guest creates enemy presentation from the Host archetype fact', () => {
+  const source = readFileSync(new URL('./coop-runtime.js', import.meta.url), 'utf8')
+  assert.match(source, /archetypeType:\s*event\.archetype/)
+})
+
 test('host floor changes re-place both role slots before publishing the next floor', () => {
   const source = readFileSync(new URL('./coop-runtime.js', import.meta.url), 'utf8')
   const floorBranch = source.match(/if \(scene\.floor !== lastFloor\) \{([\s\S]*?)\n    \}/)?.[1] ?? ''
