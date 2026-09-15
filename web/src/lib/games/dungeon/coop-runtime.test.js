@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   acceptRemoteInput,
   consumeRemoteInput,
+  geometrySnapshotChange,
   nextGuestInput,
   refreshRemoteActorVisual,
   repositionRemotePlayerForGeometryChange,
@@ -120,4 +121,13 @@ test('new room geometry repositions remote player before the authoritative snaps
   assert.equal(repositioned, 1)
   assert.equal(repositionRemotePlayerForGeometryChange(runtime, 'room-b', 'room-b'), false)
   assert.equal(repositioned, 1)
+})
+
+test('periodic geometry payload does not look like a room change', () => {
+  const roomA = { seed: 11, width: 960, height: 600, solids: [], water: [], traps: [] }
+  const roomB = { seed: 12, width: 960, height: 600, solids: [], water: [], traps: [] }
+  const first = geometrySnapshotChange(roomA, '')
+  assert.equal(first.changed, true)
+  assert.equal(geometrySnapshotChange(roomA, first.version).changed, false)
+  assert.equal(geometrySnapshotChange(roomB, first.version).changed, true)
 })
