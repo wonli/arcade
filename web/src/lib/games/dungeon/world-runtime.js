@@ -402,7 +402,7 @@ export function createDungeonWorldRuntime(scene, {
       floorKills: Math.max(0, Number(scene.floorKills) || 0),
       floorCleared: Boolean(scene.floorCleared),
       runComplete: Boolean(scene.runComplete),
-      enemies: (scene.enemies ?? []).filter(Boolean).map(serializeEnemyState),
+      enemies: (scene.enemies ?? []).filter((enemy) => enemy && Number(enemy.hp) > 0).map(serializeEnemyState),
       drops: (scene.drops ?? []).filter(Boolean).map((drop) => ({
         entityId: String(drop.id ?? ''),
         x: Number(drop.x) || 0,
@@ -525,7 +525,13 @@ export function createDungeonWorldRuntime(scene, {
         const fromFloor = normalizeFloor(scene.floor)
         const value = originals.advanceFloor(player)
         const toFloor = normalizeFloor(scene.floor)
-        if (isHost && !applyingFact && toFloor !== fromFloor) emitFact({ type: 'floor.transition', fromFloor, toFloor })
+        if (isHost && !applyingFact && toFloor !== fromFloor) {
+          emitFact({ type: 'floor.transition', fromFloor, toFloor })
+          // The transition is only an event boundary. The newly generated floor
+          // is durable world state and must be published immediately so peers do
+          // not reconstruct enemies or drops from their own random stream.
+          publishState()
+        }
         assignExistingEnemyIds()
         reconcileDrops({ announce: false })
         return value
