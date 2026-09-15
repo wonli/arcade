@@ -20,8 +20,8 @@ function bowScene() {
   const scene = {
     playerState: {
       x: 0, y: 0, damage: 20, critChance: 0, critMultiplier: 2,
-      effects: { volley: 0.20 },
-      equippedWeapon: { type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'rare', vfxTheme: 'storm', vfxVariant: 1 },
+      modifiers: { test: { volley: 0.20 } },
+      equipment: { weapon: { type: 'weapon.tempest_bow', archetype: 'bow', rarity: 'rare', vfxTheme: 'storm', vfxVariant: 1 } },
     },
     playerFacing: 'right', enemies: [],
     slash() {},
@@ -72,8 +72,8 @@ test('Arcane Nova deterministically augments every staff signature without hitti
   const scene = {
     playerState: {
       x: 0, y: 0,
-      effects: { arcaneNova: 0.20, skillRadius: 0 },
-      equippedWeapon: { type: 'weapon.storm_staff', archetype: 'staff', signature: 'storm_palm' },
+      modifiers: { test: { arcaneNova: 0.20, skillRadius: 0 } },
+      equipment: { weapon: { type: 'weapon.storm_staff', archetype: 'staff', signature: 'storm_palm' } },
     },
     enemies: [],
     damageEnemy(target, damage, critical, knockback, context){ hits.push({ target, damage, context }); target.hp -= damage },
