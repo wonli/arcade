@@ -3,10 +3,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installDungeonWeaponMelee, meleeBehavior } from './weapon-melee-runtime.js'
 
+const stateFor = (archetype) => ({
+  equipment: { weapon: { type: `weapon.test_${archetype}`, archetype, rarity: 'common', damage: 0, affixes: [] } },
+  modifiers: {},
+})
+
 function sceneFor(archetype, enemies) {
   const damageCalls = []
   const scene = {
-    playerState: { x: 100, y: 100, damage: 20, equippedWeapon: { archetype } },
+    playerState: { x: 100, y: 100, damage: 20, ...stateFor(archetype) },
     enemies,
     __roomGeometry: null,
     cameras: { main: { shake() {} } },
@@ -24,10 +29,10 @@ function sceneFor(archetype, enemies) {
 }
 
 test('melee behavior maps spear, greatsword and axe to distinct attack kinds', () => {
-  assert.equal(meleeBehavior({ equippedWeapon: { archetype: 'spear' } }).kind, 'thrust')
-  assert.equal(meleeBehavior({ equippedWeapon: { archetype: 'greatsword' } }).kind, 'cleave')
-  assert.equal(meleeBehavior({ equippedWeapon: { archetype: 'axe' } }).kind, 'heavy')
-  assert.equal(meleeBehavior({ equippedWeapon: { archetype: 'sword' } }).kind, 'default')
+  assert.equal(meleeBehavior(stateFor('spear')).kind, 'thrust')
+  assert.equal(meleeBehavior(stateFor('greatsword')).kind, 'cleave')
+  assert.equal(meleeBehavior(stateFor('axe')).kind, 'heavy')
+  assert.equal(meleeBehavior(stateFor('sword')).kind, 'default')
 })
 
 test('spear damages a lined-up secondary target without marking it direct or proc-capable', () => {
