@@ -92,9 +92,11 @@ export function createDungeonNetworkRuntime({
   let mirrorsInstalled = false
   let originalAutoAttack = null
   let originalTrySkill = null
+  let previousPickupIntentHandler = null
   let factSequence = 0
   let factQueue = Promise.resolve(null)
   let worldRuntime = null
+  const pickupIntentRetryAt = new Map()
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -128,6 +130,32 @@ export function createDungeonNetworkRuntime({
       reportError(error)
       return null
     }
+  }
+
+  function installPickupIntentMirror() {
+    const pickupRuntime = scene.__dungeonPickupRuntime
+    if (isHost || typeof pickupRuntime?.setPickupIntentHandler !== 'function') return
+    previousPickupIntentHandler = pickupRuntime.setPickupIntentHandler((player, drop) => {
+      if (player !== scene.localPlayer) return true
+      const dropId = String(drop?.id ?? '').trim()
+      if (!dropId) return true
+      const now = Number(scene.time?.now) || 0
+      const retryAt = pickupIntentRetryAt.get(dropId) ?? -Infinity
+      if (now >= retryAt) {
+        pickupIntentRetryAt.set(dropId, now + 250)
+        void sendCommand({ type: 'pickup', dropId })
+      }
+      return true
+    })
+  }
+
+  function restorePickupIntentMirror() {
+    const pickupRuntime = scene.__dungeonPickupRuntime
+    if (typeof pickupRuntime?.setPickupIntentHandler === 'function') {
+      pickupRuntime.setPickupIntentHandler(previousPickupIntentHandler)
+    }
+    previousPickupIntentHandler = null
+    pickupIntentRetryAt.clear()
   }
 
   function sendFact(fact) {
@@ -189,6 +217,7 @@ export function createDungeonNetworkRuntime({
 
     if (payload.type === 'dungeon.fact') {
       if (isHost || sourcePlayerId !== normalizedHostId) return null
+      if (payload.fact?.type === 'drop.pickup') pickupIntentRetryAt.delete(String(payload.fact.entityId ?? ''))
       const applied = worldRuntime?.applyFact(payload.fact) ?? payload.fact ?? null
       onFact(payload.fact, { playerId: sourcePlayerId, applied })
       return applied
@@ -248,6 +277,7 @@ export function createDungeonNetworkRuntime({
       onError: reportError,
     })
     worldRuntime.start()
+    installPickupIntentMirror()
     unsubscribe = socket.subscribe(topic, handleMessage)
     installLocalCommandMirrors()
     timer = setIntervalImpl(() => { void flushSnapshot() }, snapshotInterval)
@@ -263,6 +293,7 @@ export function createDungeonNetworkRuntime({
     unsubscribe?.()
     unsubscribe = () => {}
     restoreLocalCommandMirrors()
+    restorePickupIntentMirror()
     worldRuntime?.stop()
     worldRuntime = null
     for (const player of [...scene.players.values()]) {

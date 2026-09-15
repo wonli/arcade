@@ -44,3 +44,30 @@ test('multiple players can own inventory runtimes without installing another pic
   assert.equal(scene.__dungeonPickupRuntime, interaction)
   assert.equal(remoteInventory.getHealthPotions(), 2)
 })
+
+test('pickup intent interception keeps automatic drops untouched until authority confirms them', () => {
+  const scene = sceneFixture()
+  scene.localPlayer.state.hp = 40
+  const interaction = installPickupInteraction(scene)
+  const drop = {
+    id: 'drop:ABC123:1:0',
+    x: 0,
+    y: 0,
+    item: { type: 'consumable.health_potion', rarity: 'common', healRatio: 0.30 },
+  }
+  const intents = []
+  scene.drops = [drop]
+  interaction.setPickupIntentHandler((player, candidate) => {
+    intents.push({ player, candidate })
+    return true
+  })
+
+  scene.updateDrops(scene.localPlayer)
+
+  assert.equal(scene.localPlayer.state.hp, 40)
+  assert.equal(scene.localPlayer.state.healthPotions, 0)
+  assert.deepEqual(scene.drops, [drop])
+  assert.equal(intents.length, 1)
+  assert.equal(intents[0].player, scene.localPlayer)
+  assert.equal(intents[0].candidate, drop)
+})

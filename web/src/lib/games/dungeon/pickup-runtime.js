@@ -203,6 +203,7 @@ export function installPickupInteraction(scene, {
   })
   const key = scene.input?.keyboard?.addKey?.('E')
   let selected = null
+  let pickupIntentHandler = null
 
   scene.emitStats = function emitStatsWithInventory(now) {
     originalEmitStats(now)
@@ -241,6 +242,11 @@ export function installPickupInteraction(scene, {
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
     autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
+    setPickupIntentHandler(handler = null) {
+      const previous = pickupIntentHandler
+      pickupIntentHandler = typeof handler === 'function' ? handler : null
+      return previous
+    },
     refreshLabels() {
       for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
     },
@@ -261,11 +267,20 @@ export function installPickupInteraction(scene, {
     onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
   }
 
+  const interceptPickup = (target, drop) => {
+    if (typeof pickupIntentHandler !== 'function') return false
+    return pickupIntentHandler(target, drop) === true
+  }
+
   const equipSelected = () => {
     const candidate = selected
     if (!candidate || !scene.drops?.includes(candidate)) return
     const distance = Math.hypot(candidate.x - player.state.x, candidate.y - player.state.y)
     if (distance > 34) return
+    if (interceptPickup(player, candidate)) {
+      publish(null)
+      return
+    }
     const previous = currentWeapon(player)
     const x = candidate.x
     const y = candidate.y
@@ -296,11 +311,16 @@ export function installPickupInteraction(scene, {
     const allDrops = [...scene.drops]
     const confirmDrops = allDrops.filter((drop) => pickupIntent(drop.item) === 'confirm')
     const automaticDrops = allDrops.filter((drop) => pickupIntent(drop.item) !== 'confirm')
+    const deferredAutomatic = []
     const remainingAutomatic = []
 
     for (const drop of automaticDrops) {
       const potion = drop.item?.type === 'consumable.health_potion'
       const nearby = Math.hypot((drop.x ?? 0) - target.state.x, (drop.y ?? 0) - target.state.y) <= 34
+      if (nearby && interceptPickup(target, drop)) {
+        deferredAutomatic.push(drop)
+        continue
+      }
       if (potion && nearby) {
         const result = pickupHealthPotion(target.state)
         Object.assign(target.state, result.state)
@@ -316,7 +336,7 @@ export function installPickupInteraction(scene, {
 
     scene.drops = remainingAutomatic
     originalUpdateDrops(target)
-    scene.drops = [...confirmDrops, ...(scene.drops ?? []).filter(Boolean)]
+    scene.drops = [...confirmDrops, ...deferredAutomatic, ...(scene.drops ?? []).filter(Boolean)]
     if (target === player) publish(nearestConfirmableDrop(target.state, confirmDrops, 34))
   }
 
@@ -332,6 +352,7 @@ export function installPickupInteraction(scene, {
     key?.off?.('down', equipSelected)
     scene.events?.off?.('update', autoPotionUpdate)
     publish(null)
+    pickupIntentHandler = null
     scene.__dungeonDropNavGrid = null
     scene.__pickupInteractionInstalled = false
     if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop

@@ -4,6 +4,13 @@ import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
 import { normalizeRunSeed } from './world-seed.js'
 
+const ENEMY_STATE_FIELDS = [
+  'x', 'y', 'hp', 'maxHp', 'speed', 'hitUntil', 'archetype', 'elite', 'boss', 'phase',
+  'phaseThreshold', 'chargeCooldown', 'shockwaveCooldown', 'nextChargeAt', 'nextShockwaveAt',
+  'chargingUntil', 'chargeVx', 'chargeVy', 'attackRange', 'preferredRange', 'projectileDamage',
+  'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'contactDamage', 'tint', 'scale', 'barOffset',
+]
+
 function normalizeFloor(floor) {
   return Math.max(1, Math.floor(Number(floor) || 1))
 }
@@ -30,6 +37,21 @@ function findEnemy(scene, id) {
 
 function findDrop(scene, id) {
   return (scene.drops ?? []).find((drop) => String(drop?.id ?? '') === String(id ?? '')) ?? null
+}
+
+function serializeEnemyState(enemy) {
+  const result = { id: String(enemy?.id ?? '') }
+  for (const field of ENEMY_STATE_FIELDS) {
+    const value = enemy?.[field]
+    if (value !== undefined) result[field] = value
+  }
+  return result
+}
+
+function enemyBarShape(enemy) {
+  if (enemy?.boss) return { width: 150, height: 11, color: 0xffc857 }
+  if (enemy?.archetype === 'brute') return { width: 46, height: 7, color: 0xff5964 }
+  return { width: 36, height: 5, color: 0xff5964 }
 }
 
 export function createDungeonWorldRuntime(scene, {
@@ -253,6 +275,97 @@ export function createDungeonWorldRuntime(scene, {
     return scene.floor
   }
 
+  const rebuildEnemyPresentation = (enemy, snapshot, previous) => {
+    const changed = previous.archetype !== enemy.archetype || previous.boss !== enemy.boss || previous.elite !== enemy.elite
+    if (!changed || typeof scene.makeActor !== 'function') return
+
+    enemy.visual?.destroy?.()
+    const visual = scene.makeActor(enemy.x, enemy.y, 'enemy', enemy.archetype)
+    if (visual) {
+      visual.setDepth?.(enemy.elite ? 12 : 10)
+      const scale = Number(enemy.scale) || 1
+      visual.setScale?.((visual.scaleX ?? 1) * scale, (visual.scaleY ?? 1) * scale)
+      if (enemy.tint != null) visual.setTint?.(enemy.tint)
+      enemy.visual = visual
+    }
+
+    scene.destroyHealthBar?.(enemy.healthBar)
+    const bar = enemyBarShape(enemy)
+    enemy.healthBar = scene.createHealthBar?.(enemy.x, enemy.y - (enemy.barOffset ?? 28), bar.width, bar.height, bar.color) ?? null
+  }
+
+  const applyEnemyState = (snapshot, index) => {
+    const id = String(snapshot?.id ?? stableWorldEntityId(seed, scene.floor, 'enemy', index))
+    let enemy = findEnemy(scene, id)
+    if (!enemy && originals.spawnEnemy) enemy = originals.spawnEnemy(index, { elite: Boolean(snapshot?.elite) })
+    if (!enemy) return null
+
+    const previous = { archetype: enemy.archetype, boss: Boolean(enemy.boss), elite: Boolean(enemy.elite) }
+    enemy.id = id
+    for (const field of ENEMY_STATE_FIELDS) {
+      if (snapshot?.[field] !== undefined) enemy[field] = snapshot[field]
+    }
+    rebuildEnemyPresentation(enemy, snapshot, previous)
+    enemy.visual?.setPosition?.(enemy.x, enemy.y)
+    scene.updateHealthBar?.(enemy.healthBar, enemy.x, enemy.y - (enemy.barOffset ?? 28), enemy.hp, enemy.maxHp)
+    return enemy
+  }
+
+  const applyWorldState = (fact) => {
+    const targetFloor = normalizeFloor(fact.floor)
+    const currentFloor = normalizeFloor(scene.floor)
+    if (targetFloor > currentFloor && originals.advanceFloor) {
+      while (normalizeFloor(scene.floor) < targetFloor) originals.advanceFloor(scene.localPlayer)
+    } else if (targetFloor !== currentFloor) {
+      scene.destroyPortal?.()
+      scene.floor = targetFloor
+      scene.startFloor?.(false, scene.localPlayer)
+    }
+
+    assignExistingEnemyIds()
+    const previousEnemies = [...(scene.enemies ?? [])]
+    const synchronizedEnemies = []
+    for (let index = 0; index < (fact.enemies ?? []).length; index++) {
+      const enemy = applyEnemyState(fact.enemies[index], index)
+      if (enemy) synchronizedEnemies.push(enemy)
+    }
+    for (const enemy of previousEnemies) {
+      if (synchronizedEnemies.includes(enemy)) continue
+      scene.destroyHealthBar?.(enemy?.healthBar)
+      enemy?.visual?.destroy?.()
+    }
+    scene.enemies = synchronizedEnemies
+
+    originals.clearDrops?.()
+    for (const drop of fact.drops ?? []) {
+      applyDropSpawn({
+        type: 'drop.spawn',
+        floor: targetFloor,
+        entityId: drop.entityId ?? drop.id,
+        x: drop.x,
+        y: drop.y,
+        item: drop.item,
+      })
+    }
+
+    scene.kills = Math.max(0, Number(fact.kills) || 0)
+    scene.floorKills = Math.max(0, Number(fact.floorKills) || 0)
+    scene.floorCleared = Boolean(fact.floorCleared)
+    scene.runComplete = Boolean(fact.runComplete)
+
+    scene.destroyPortal?.()
+    if (fact.portal) {
+      applyPortalOpen({
+        type: 'portal.open',
+        floor: targetFloor,
+        entityId: fact.portal.entityId ?? fact.portal.id,
+        x: fact.portal.x,
+        y: fact.portal.y,
+      })
+    }
+    return fact
+  }
+
   function applyFact(fact) {
     if (!fact || typeof fact !== 'object') return null
     if (fact.runSeed && normalizeRunSeed(fact.runSeed) !== seed) return null
@@ -264,6 +377,7 @@ export function createDungeonWorldRuntime(scene, {
 
     applyingFact = true
     try {
+      if (fact.type === 'world.state') return applyWorldState(fact)
       if (fact.type === 'enemy.hit') return applyEnemyHit(fact)
       if (fact.type === 'enemy.death') return applyEnemyDeath(fact)
       if (fact.type === 'drop.spawn') return applyDropSpawn(fact)
@@ -274,6 +388,35 @@ export function createDungeonWorldRuntime(scene, {
     } finally {
       applyingFact = false
     }
+  }
+
+  function publishState() {
+    if (!isHost) return null
+    assignExistingEnemyIds()
+    reconcileDrops({ announce: false })
+    if (scene.portal) scene.portal.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
+    const fact = {
+      type: 'world.state',
+      floor: normalizeFloor(scene.floor),
+      kills: Math.max(0, Number(scene.kills) || 0),
+      floorKills: Math.max(0, Number(scene.floorKills) || 0),
+      floorCleared: Boolean(scene.floorCleared),
+      runComplete: Boolean(scene.runComplete),
+      enemies: (scene.enemies ?? []).filter(Boolean).map(serializeEnemyState),
+      drops: (scene.drops ?? []).filter(Boolean).map((drop) => ({
+        entityId: String(drop.id ?? ''),
+        x: Number(drop.x) || 0,
+        y: Number(drop.y) || 0,
+        item: structuredClone(drop.item ?? {}),
+      })),
+      portal: scene.portal ? {
+        entityId: String(scene.portal.id),
+        x: Number(scene.portal.x) || 0,
+        y: Number(scene.portal.y) || 0,
+      } : null,
+    }
+    emitFact(fact)
+    return fact
   }
 
   function start() {
@@ -413,6 +556,7 @@ export function createDungeonWorldRuntime(scene, {
     start,
     stop,
     applyFact,
+    publishState,
     reconcileEnemies: assignExistingEnemyIds,
     reconcileDrops,
     pickupById: authoritativePickupById,
