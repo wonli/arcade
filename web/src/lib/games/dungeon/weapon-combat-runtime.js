@@ -6,6 +6,10 @@ function roomGeometry(scene) {
   return scene.__roomGeometry ?? scene.__dungeonSpatial?.getGeometry?.() ?? null
 }
 
+function weaponVfx(scene, player) {
+  return player?.runtime?.weaponVfx ?? scene.__dungeonWeaponVfx
+}
+
 export function installDungeonWeaponCombat(scene) {
   if (!scene || scene.__dungeonWeaponCombat) return scene?.__dungeonWeaponCombat ?? null
   const originalSlash = scene.slash?.bind(scene)
@@ -19,13 +23,13 @@ export function installDungeonWeaponCombat(scene) {
     const beforeDamage = player.state.damage
     const originalDamageEnemy = scene.damageEnemy
     player.state.damage = weaponAttackDamage(player.state, beforeDamage)
-    scene.__dungeonWeaponVfx?.attack?.({ x: target.x, y: target.y })
+    weaponVfx(scene, player)?.attack?.({ x: target.x, y: target.y })
     scene.damageEnemy = function archetypeDamageEnemy(enemy, damage, critical, knockback, context, attacker = player) {
       const sourcePlayer = attacker ?? player
       const isWeapon = context?.source === 'weapon'
       const adjusted = isWeapon ? weaponAttackKnockback(sourcePlayer.state, knockback) : knockback
       const result = originalDamageEnemy.call(scene, enemy, damage, critical, adjusted, context, sourcePlayer)
-      if (isWeapon) scene.__dungeonWeaponVfx?.impact?.(enemy?.x ?? target.x, enemy?.y ?? target.y, { critical })
+      if (isWeapon) weaponVfx(scene, sourcePlayer)?.impact?.(enemy?.x ?? target.x, enemy?.y ?? target.y, { critical })
       return result
     }
     try { return originalSlash(target, player) } finally { player.state.damage = beforeDamage; scene.damageEnemy = originalDamageEnemy }
