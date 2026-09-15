@@ -1,0 +1,140 @@
+name: Apply dungeon player movement cleanup
+
+on:
+  push:
+    branches:
+      - feat/dungeon-coop-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/dungeon-coop-foundation
+          fetch-depth: 0
+      - name: Apply entity-explicit movement cleanup
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          scene_path = Path('web/src/lib/games/dungeon/scene.js')
+          scene = scene_path.read_text()
+
+          old_sync = '''    syncPlayerAnimation(forceAction = null) {
+            if (assets.player?.source !== 'rpg-main-character' || !this.localPlayer.actor?.anims) return
+            const action = forceAction || (this.localPlayer.moving ? 'walk' : 'idle')
+            const sheetDirection = this.localPlayer.facing === 'up' ? 'up' : this.localPlayer.facing === 'down' ? 'down' : 'side'
+            const key = `dungeon-player-${sheetDirection}-${action}`
+            this.localPlayer.actor.setFlipX?.(this.localPlayer.facing === 'left')
+            if (this.anims.exists(key) && this.localPlayer.actor.anims.currentAnim?.key !== key) this.localPlayer.actor.play(key, true)
+          }'''.replace('          ', '')
+          new_sync = '''    syncPlayerAnimation(forceAction = null, player = this.localPlayer) {
+            if (assets.player?.source !== 'rpg-main-character' || !player?.actor?.anims) return
+            const action = forceAction || (player.moving ? 'walk' : 'idle')
+            const sheetDirection = player.facing === 'up' ? 'up' : player.facing === 'down' ? 'down' : 'side'
+            const key = `dungeon-player-${sheetDirection}-${action}`
+            player.actor.setFlipX?.(player.facing === 'left')
+            if (this.anims.exists(key) && player.actor.anims.currentAnim?.key !== key) player.actor.play(key, true)
+          }'''.replace('          ', '')
+          if old_sync not in scene:
+              raise SystemExit('syncPlayerAnimation block not found')
+          scene = scene.replace(old_sync, new_sync, 1)
+
+          pattern = re.compile(r'''    updatePlayer\(dt\) \{.*?\n    \}\n\n    updateEnemies''', re.S)
+          replacement = '''    updatePlayer(dt, player = this.localPlayer) {
+            let dx = 0, dy = 0
+            if (this.keys.A.isDown) dx -= 1
+            if (this.keys.D.isDown) dx += 1
+            if (this.keys.W.isDown) dy -= 1
+            if (this.keys.S.isDown) dy += 1
+            player.facing = directionFromInput(dx, dy, player.facing)
+            player.moving = Boolean(dx || dy)
+            const hurtBoost = (player.state.hasteUntil ?? 0) > this.time.now ? 1 + (player.state.effects?.hurtHaste ?? 0) : 1
+            if (dx || dy) {
+              const length = Math.hypot(dx, dy) || 1
+              player.state.x += (dx / length) * player.state.speed * hurtBoost * dt
+              player.state.y += (dy / length) * player.state.speed * hurtBoost * dt
+            }
+            player.state.x = Phaser.Math.Clamp(player.state.x, TILE + 18, WIDTH - TILE - 18)
+            player.state.y = Phaser.Math.Clamp(player.state.y, TILE + 18, HEIGHT - TILE - 18)
+            player.actor?.setPosition?.(player.state.x, player.state.y)
+            this.updateHealthBar(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
+            if (!player.attacking) this.syncPlayerAnimation(null, player)
+          }
+
+          updateEnemies'''.replace('          ', '')
+          scene, count = pattern.subn(replacement, scene, count=1)
+          if count != 1:
+              raise SystemExit(f'updatePlayer block replacements: {count}')
+          scene_path.write_text(scene)
+
+          facing_path = Path('web/src/lib/games/dungeon/player-facing-runtime.js')
+          facing = facing_path.read_text()
+          old = '''  const sync = (...args) => {
+            const result = originalSync(...args)
+            player.actor?.setFlipX?.(playerFlipX(player.facing))
+            return result
+          }'''.replace('          ', '')
+          new = '''  const sync = (forceAction = null, target = player) => {
+            const result = originalSync(forceAction, target)
+            target.actor?.setFlipX?.(playerFlipX(target.facing))
+            return result
+          }'''.replace('          ', '')
+          if old not in facing:
+              raise SystemExit('player-facing sync block not found')
+          facing_path.write_text(facing.replace(old, new, 1))
+
+          spatial_path = Path('web/src/lib/games/dungeon/spatial-runtime.js')
+          spatial = spatial_path.read_text()
+          old_sig = "export function installDungeonSpatial(scene, { getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {"
+          new_sig = "export function installDungeonSpatial(scene, { player = scene?.localPlayer, getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {"
+          if old_sig not in spatial:
+              raise SystemExit('spatial installer signature not found')
+          spatial = spatial.replace(old_sig, new_sig, 1)
+          spatial = spatial.replace("  if (!scene || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null", "  if (!scene || !player || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null", 1)
+          spatial = spatial.replace("    if (!fixedGeometry) placePlayerAtRoomSpawn(scene)", "    if (!fixedGeometry) placePlayerAtRoomSpawn(scene, player)", 1)
+
+          pattern = re.compile(r'''  scene\.updatePlayer = function updateSpatialPlayer\(dt\) \{.*?\n  \}\n\n  function navigateEnemy''', re.S)
+          replacement = '''  scene.updatePlayer = function updateSpatialPlayer(dt, target = player) {
+            const before = { x: target.state.x, y: target.state.y }
+            if ((scene.__hitStopUntil ?? 0) > scene.time.now) {
+              target.moving = false
+              if (!target.attacking) scene.syncPlayerAnimation?.(null, target)
+              return
+            }
+            originalUpdatePlayer(dt, target)
+            const desired = { x: target.state.x, y: target.state.y }
+            const next = movementWithCollision(before, { x: desired.x - before.x, y: desired.y - before.y }, PLAYER_RADIUS, scene.__roomGeometry)
+            target.state.x = next.x; target.state.y = next.y
+            target.actor?.setPosition?.(next.x, next.y)
+            scene.updateHealthBar?.(target.bar, next.x, next.y - 42, target.state.hp, target.state.maxHp)
+            const trap = activeTrapAt(next, scene.__roomGeometry, scene.time.now)
+            if (trap && scene.time.now >= trapCooldownUntil) {
+              trapCooldownUntil = scene.time.now + 850
+              scene.hitPlayer?.(trap.kind === 'spikes' || trap.kind === 'wall-trap' ? 6 : 4, target)
+              onEvent({ type: 'traptrigger', trap: trap.kind, x: trap.x, y: trap.y })
+            }
+          }
+
+          function navigateEnemy'''.replace('          ', '')
+          spatial, count = pattern.subn(replacement, spatial, count=1)
+          if count != 1:
+              raise SystemExit(f'spatial updatePlayer block replacements: {count}')
+
+          spatial = spatial.replace("    const nearest = nearestInteractable(scene.localPlayer.state, chests, CHEST_RANGE)", "    const nearest = nearestInteractable(player.state, chests, CHEST_RANGE)")
+          spatial_path.write_text(spatial)
+          PY
+
+          git config user.name "ideaa"
+          git config user.email "ideaa@qq.com"
+          git rm .github/workflows/dungeon-player-movement-patch.yml
+          git add web/src/lib/games/dungeon/scene.js web/src/lib/games/dungeon/player-facing-runtime.js web/src/lib/games/dungeon/spatial-runtime.js
+          git commit -m "refactor(dungeon): make player movement entity-explicit [skip ci]"
+          git push origin HEAD:feat/dungeon-coop-foundation
