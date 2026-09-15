@@ -4,6 +4,7 @@ import { installPickupInteraction } from './pickup-runtime.js'
 
 test('equipping never replaces the selected drop with null', () => {
   let onDown = null
+  let equippedCalls = 0
   const candidate = {
     x: 0,
     y: 0,
@@ -26,7 +27,9 @@ test('equipping never replaces the selected drop with null', () => {
     destroyDrop() {},
     updateDrops() {
       const drop = this.drops[0]
-      assert.ok(drop, 'original updateDrops must receive the selected drop, never null')
+      if (!drop) return
+      equippedCalls++
+      assert.equal(drop, candidate, 'confirmed pickup must pass the selected drop to the original updater')
       this.playerState.weapon = drop.item.type
       this.playerState.weaponRarity = drop.item.rarity
       this.playerState.weaponDamage = drop.item.damage
@@ -40,7 +43,9 @@ test('equipping never replaces the selected drop with null', () => {
   installPickupInteraction(scene)
   scene.updateDrops()
   assert.ok(onDown)
+  assert.equal(equippedCalls, 0, 'confirmable weapons must not auto-equip during ordinary drop updates')
   assert.doesNotThrow(() => onDown())
+  assert.equal(equippedCalls, 1)
   assert.equal(scene.drops.some((drop) => drop == null), false)
   assert.equal(scene.playerState.weapon, candidate.item.type)
 })
