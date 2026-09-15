@@ -15,6 +15,20 @@ function syncRemotePresentation(scene, player) {
   scene.syncPlayerAnimation?.(null, player)
 }
 
+function bindLocalPlayerId(scene, playerId) {
+  const player = scene.localPlayer
+  const nextId = String(playerId ?? '').trim()
+  if (!nextId) throw new TypeError('Local player id is required')
+  if (String(player.id) === nextId) return player
+  if (scene.players.has(nextId)) throw new Error(`Player ${nextId} is already attached`)
+
+  const previousId = String(player.id ?? '')
+  if (scene.players.get(previousId) === player) scene.players.delete(previousId)
+  player.id = nextId
+  scene.players.set(nextId, player)
+  return player
+}
+
 function wireCommand(command = {}) {
   const next = { ...command }
   delete next.playerId
@@ -41,9 +55,7 @@ export function createDungeonNetworkRuntime({
   const normalizedHostId = String(hostId ?? '').trim()
   if (!normalizedRoomId) throw new TypeError('Dungeon room id is required')
   if (!normalizedLocalId) throw new TypeError('Local player id is required')
-  if (String(scene.localPlayer.id) !== normalizedLocalId) {
-    throw new Error(`Local PlayerEntity id ${scene.localPlayer.id} does not match ${normalizedLocalId}`)
-  }
+  bindLocalPlayerId(scene, normalizedLocalId)
 
   const topic = `room:${normalizedRoomId}`
   const isHost = normalizedHostId !== '' && normalizedLocalId === normalizedHostId
