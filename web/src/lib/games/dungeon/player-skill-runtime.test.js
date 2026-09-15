@@ -13,7 +13,8 @@ function player(id, x = 100, y = 100) {
       hp: 100,
       maxHp: 100,
       damage: 10,
-      effects: {},
+      modifiers: {},
+      equipment: { weapon: null },
     },
   })
 }
