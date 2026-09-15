@@ -135,3 +135,40 @@ test('pickup runtime owns authoritative removal by stable drop id', () => {
   assert.deepEqual(scene.drops, [])
   assert.equal(visual.destroyed, true)
 })
+
+test('missing named weapon art is reconciled after its texture becomes available', () => {
+  const scene = sceneFixture()
+  let textureReady = false
+  scene.textures.exists = () => textureReady
+  scene.add = {
+    image(x, y, key) {
+      return {
+        x, y, key,
+        scaleX: 1,
+        scaleY: 1,
+        setOrigin() { return this },
+        setScale(value) { this.scaleX = value; this.scaleY = value; return this },
+        setDepth() { return this },
+        setY(value) { this.y = value; return this },
+        destroy() { this.destroyed = true },
+      }
+    },
+  }
+  const interaction = installPickupInteraction(scene)
+  const drop = interaction.spawnExact(30, 40, {
+    type: 'weapon.iron_fang',
+    rarity: 'rare',
+    damage: 12,
+    affixes: [],
+  })
+
+  assert.ok(drop)
+  assert.equal(drop.visual, undefined)
+
+  textureReady = true
+  assert.equal(typeof interaction.reconcileVisuals, 'function')
+  interaction.reconcileVisuals()
+
+  assert.ok(drop.visual)
+  assert.equal(drop.visual.destroyed, undefined)
+})
