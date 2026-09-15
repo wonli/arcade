@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { attachLocalPlayerEntity, attachPlayerEntity, createPlayerEntity } from './player-entity.js'
+import {
+  attachLocalPlayerEntity,
+  attachPlayerEntity,
+  createPlayerEntity,
+  getPlayerSkillReadyAt,
+  startPlayerSkillCooldown,
+} from './player-entity.js'
 
 function baseState(x) {
   return {
@@ -66,6 +72,24 @@ test('runtime combat timestamps and presentation refs are independent per player
   assert.equal(p2.attacking, false)
   assert.equal(p2.actor, null)
   assert.equal(p2.facing, 'left')
+})
+
+test('skill cooldowns are isolated by player and skill id while primary keeps legacy compatibility', () => {
+  const p1 = createPlayerEntity({ id: 'p1', state: baseState(100) })
+  const p2 = createPlayerEntity({ id: 'p2', state: baseState(200) })
+
+  startPlayerSkillCooldown(p1, 'primary', 1000, 4200)
+  startPlayerSkillCooldown(p1, 'dash', 1000, 1800)
+
+  assert.equal(getPlayerSkillReadyAt(p1, 'primary'), 5200)
+  assert.equal(getPlayerSkillReadyAt(p1, 'dash'), 2800)
+  assert.equal(getPlayerSkillReadyAt(p2, 'primary'), 0)
+  assert.equal(getPlayerSkillReadyAt(p2, 'dash'), 0)
+  assert.equal(p1.skillReadyAt, 5200)
+
+  p1.skillReadyAt = 6000
+  assert.equal(getPlayerSkillReadyAt(p1, 'primary'), 6000)
+  assert.equal(getPlayerSkillReadyAt(p1, 'dash'), 2800)
 })
 
 test('gameplay runtime namespaces are owned by each player', () => {
