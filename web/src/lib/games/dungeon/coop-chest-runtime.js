@@ -1,8 +1,10 @@
 import { rollAffixes } from './affixes.js'
 import { chestRewardProfile, nearestInteractable } from './interactables.js'
+import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { rngFor } from './deterministic-rng.js'
 
 const CHEST_RANGE = 48
+const EQUIP_RANGE = 34
 const DAMAGE_RANGES = {
   common: [2, 3],
   uncommon: [4, 5],
@@ -56,6 +58,11 @@ export function applyChestOpened(scene, chestId) {
   return presentChestOpened(scene, chest)
 }
 
+function nearbyConfirmableDrop(scene, state) {
+  const confirmable = (scene?.drops ?? []).filter((drop) => drop && pickupIntent(drop.item) === 'confirm')
+  return nearestConfirmableDrop(state, confirmable, EQUIP_RANGE)
+}
+
 export function openChestForPlayer(scene, player, {
   runSeed,
   floor = scene?.floor ?? 1,
@@ -63,6 +70,11 @@ export function openChestForPlayer(scene, player, {
 } = {}) {
   const state = player?.state ?? player
   if (!scene || !state) return null
+
+  // USE has one semantic meaning per press. If equipment is in range, the
+  // normal PickupRuntime owns that interaction; do not also open a nearby chest.
+  if (nearbyConfirmableDrop(scene, state)) return null
+
   const chest = nearestInteractable(state, scene.__dungeonSpatial?.getChests?.() ?? [], CHEST_RANGE)
   if (!chest || !presentChestOpened(scene, chest)) return null
 
