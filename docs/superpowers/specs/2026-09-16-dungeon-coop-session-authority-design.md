@@ -63,7 +63,7 @@ The current reconnect path can ask the host for durable world state, but per-pla
 
 1. After convergence, there is exactly one effective gameplay authority for the Dungeon session.
 2. Gameplay authority is identified by an authority token `(epoch, authorityId)` rather than by room host identity alone.
-3. Authority tokens have a deterministic total order: higher `epoch` wins; if epochs are equal, `authorityId` is compared deterministically as a tie-breaker.
+3. Authority tokens have a deterministic total order: higher `epoch` wins; if epochs are equal, lexicographically greater `authorityId` wins as a deterministic tie-breaker.
 4. Durable authority facts are ordered by `(epoch, sequence)`.
 5. Facts/checkpoints from a lower authority token are ignored.
 6. A former authority that reconnects cannot overwrite a newer surviving world with a fresh local bootstrap.
@@ -108,7 +108,7 @@ Authority liveness detection should be bounded and short enough for two-player p
 Authority token comparison is deterministic:
 
 1. higher epoch wins;
-2. if epochs match, deterministic lexicographic ordering of `authorityId` breaks a simultaneous-claim tie;
+2. if epochs match, lexicographically greater `authorityId` wins a simultaneous-claim tie;
 3. observing a higher token immediately demotes the local authority role;
 4. facts from a lower token are ignored;
 5. duplicate or non-increasing sequence numbers within the same token are ignored.
@@ -207,7 +207,9 @@ The exact implementation type may evolve, but the durable checkpoint should be s
 }
 ```
 
-Browser/Phaser monotonic timestamps such as `scene.time.now` must not be persisted across clients. Timers that must survive authority handoff are represented as remaining durations in the checkpoint and rebased to the new authority's local clock after restore.
+Browser/Phaser monotonic timestamps such as `scene.time.now` must not be persisted across clients. Timers that must survive authority handoff are represented as remaining durations in the checkpoint.
+
+Each follower rebases an accepted timer to its own local monotonic clock when the checkpoint arrives and continues consuming that remaining duration locally while it remains a follower. If that follower later becomes authority, it restores the already-consumed remaining duration rather than restarting the checkpoint's original value. This preserves a 3000 ms revive countdown across handoff without requiring synchronized wall clocks between browsers. A newer checkpoint or lifecycle fact always replaces the follower's locally projected timer state.
 
 The checkpoint should contain only data needed to continue the session. Presentation-only state such as a selected loot glow, tween phase, label object, or particle emitter is rebuilt locally.
 
@@ -449,7 +451,8 @@ Authority/session tests:
 - simultaneous same-epoch claims converge via authority-ID tie-break;
 - handoff rebuilds from the newest checkpoint;
 - old room host reconnect cannot overwrite newer authority state;
-- durable timers rebase from remaining durations rather than browser clock timestamps.
+- durable timers rebase from remaining durations rather than browser clock timestamps;
+- follower timer projection is consumed before takeover so a 3000 ms revive countdown does not restart after handoff.
 
 Revive tests:
 
@@ -496,6 +499,7 @@ The tests should continue to demonstrate that Go is a validated relay, not a wor
 7. Both clients see the same portal and a single authoritative floor transition.
 8. P1 sees P2's equipped weapon and P2 sees P1's equipped weapon.
 9. A stale fact from a previous authority epoch cannot resurrect enemies, close/open old chests, remove the current portal, or regress the floor.
+10. Authority handoff during a player's revive countdown preserves elapsed countdown time instead of restarting the full 3 seconds.
 
 ## Acceptance criteria
 
@@ -513,5 +517,6 @@ This design is complete when the implementation satisfies all of the following:
 - If active authority refreshes/disconnects while the peer survives, the peer continues from the latest checkpoint rather than floor 1.
 - A reconnecting former host restores current floor, current Boss/world state, and both players' durable state before it may become authoritative again.
 - A stale/lower authority epoch cannot regress the current world.
+- Authority handoff does not restart an in-progress revive/invulnerability timer.
 - No Phaser GameObject or browser-local clock timestamp exists in durable session/wire state.
 - AQI remains a stateless, membership-validating relay rather than a Dungeon simulation server.
