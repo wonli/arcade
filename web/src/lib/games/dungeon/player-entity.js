@@ -86,3 +86,17 @@ export function attachLocalPlayerEntity(scene, options = {}) {
   scene.localPlayer = player
   return player
 }
+
+export function detachPlayerEntity(scene, playerOrId) {
+  if (!scene || !(scene.players instanceof Map)) return null
+  const id = typeof playerOrId === 'object' && playerOrId != null
+    ? String(playerOrId.id ?? '')
+    : String(playerOrId ?? '')
+  if (!id) return null
+
+  const player = scene.players.get(id)
+  if (!player) return null
+  scene.players.delete(id)
+  if (scene.localPlayer === player) scene.localPlayer = null
+  return player
+}
