@@ -3,14 +3,18 @@ import { createPlayerEntity } from '../player-entity.js'
 export function attachLegacyTestPlayer(scene) {
   if (scene.localPlayer) return scene
 
+  const state = scene.playerState ?? {}
   const player = createPlayerEntity({
     id: 'test',
-    state: scene.playerState ?? {},
+    state,
     actor: scene.player ?? null,
     bar: scene.playerBar ?? null,
     facing: scene.playerFacing ?? 'down',
   })
 
+  // Tests often retain the original fixture object and assert mutations on it.
+  // Preserve that reference here; production PlayerEntity still defensively clones inputs.
+  player.state = state
   player.moving = scene.playerMoving ?? false
   player.attacking = scene.playerAttacking ?? false
   player.lastAttackAt = scene.lastAttackAt ?? 0
