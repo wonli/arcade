@@ -190,9 +190,9 @@ function presentationConfig(scene) {
 
 export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer } = {}) {
   if (!scene || !player) return null
-  if (player.runtime?.weaponVisuals) return player.runtime.weaponVisuals
-  if (scene.__dungeonWeaponVisuals) return scene.__dungeonWeaponVisuals
-  const weaponCatalog = installDungeonWeaponCatalog(scene)
+  player.runtime ??= {}
+  if (player.runtime.weaponVisuals) return player.runtime.weaponVisuals
+  installDungeonWeaponCatalog(scene)
   installDungeonWeaponCombat(scene)
   let visual = null
   let currentKey = null
@@ -255,7 +255,7 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
   }
 
   const weaponVfx = installDungeonWeaponVfx(scene, { anchor, presentation: () => presentationNow(), player })
-  const weaponMelee = installDungeonWeaponMelee(scene)
+  installDungeonWeaponMelee(scene)
   const weaponProjectiles = installDungeonWeaponProjectiles(scene, { anchor, player })
   const swing = () => {
     const profile = weaponProfile(equippedItem(player))
@@ -301,24 +301,21 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
   }
 
   scene.events?.on?.('update', sync)
+  let api = null
   const restore = () => {
     scene.events?.off?.('update', sync)
     visual?.destroy?.()
     visual = null
     weaponProjectiles?.restore?.()
-    weaponMelee?.restore?.()
     weaponVfx?.restore?.()
-    scene.__dungeonWeaponCombat?.restore?.()
-    weaponCatalog?.restore?.()
     if (player.runtime?.weaponVisuals === api) delete player.runtime.weaponVisuals
     if (scene.__dungeonWeaponVisuals === api) scene.__dungeonWeaponVisuals = null
   }
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
 
-  const api = { sync, swing, anchor, presentation: presentationNow, visual: () => visual, isReady: () => ready, restore }
-  player.runtime ??= {}
+  api = { sync, swing, anchor, presentation: presentationNow, visual: () => visual, isReady: () => ready, restore }
   player.runtime.weaponVisuals = api
-  scene.__dungeonWeaponVisuals = api
+  if (player === scene.localPlayer || !scene.localPlayer) scene.__dungeonWeaponVisuals = api
   return api
 }
