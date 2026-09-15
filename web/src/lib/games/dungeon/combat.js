@@ -1,4 +1,5 @@
 import { deriveEquipment, rollAffixes } from './affixes.js'
+import { storeHealthPotion } from './inventory.js'
 import { rollBossLegendary } from './legendary-weapons.js'
 import { weaponProfile } from './weapon-profile.js'
 
@@ -220,9 +221,6 @@ export function applyPickup(player, item, baseStats = player?.baseStats ?? DEFAU
       baseStats: { ...baseStats },
     }
   }
-  if (item.type === 'consumable.health_potion') {
-    const maxHp = player.maxHp ?? player.hp ?? 0
-    return { ...player, hp: Math.min(maxHp, (player.hp ?? 0) + (item.heal ?? 0)) }
-  }
+  if (item.type === 'consumable.health_potion') return storeHealthPotion(player)
   return { ...player }
 }
