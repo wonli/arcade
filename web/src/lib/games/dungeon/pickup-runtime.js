@@ -284,13 +284,35 @@ export function installPickupInteraction(scene, {
     return drop
   }
 
+  const reconcileVisuals = () => {
+    let created = 0
+    const now = scene.time?.now ?? 0
+    for (const drop of scene.drops ?? []) {
+      if (!drop?.item?.type?.startsWith?.('weapon.') || drop.visual) continue
+      const x = Number(drop.x) || 0
+      const groundY = Number(drop.groundY ?? drop.y) || 0
+      const visual = syncGroundWeaponVisual(scene, drop, { x, y: groundY })
+      if (!visual) continue
+      drop.baseScaleX = visual.scaleX ?? 1
+      drop.baseScaleY = visual.scaleY ?? 1
+      const motion = lootMotion(now - (drop.spawnedAt ?? now), groundY, 72)
+      visual.setY?.(motion.y)
+      visual.setScale?.(drop.baseScaleX * motion.scale, drop.baseScaleY * motion.scale)
+      if (selectedKey && selectionKey(drop) === selectedKey) applySelectionArt(drop, true)
+      created++
+    }
+    return created
+  }
+
   scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
+  scene.load?.on?.('complete', reconcileVisuals)
 
   const api = {
     inventory,
     spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
     removeById: removeOwnedDropById,
     clearAll: clearOwnedDrops,
+    reconcileVisuals,
     useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
     autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
     setPickupIntentHandler(handler = null) {
@@ -384,6 +406,7 @@ export function installPickupInteraction(scene, {
   scene.events?.once?.('shutdown', () => {
     key?.off?.('down', equipSelected)
     scene.events?.off?.('update', autoPotionUpdate)
+    scene.load?.off?.('complete', reconcileVisuals)
     publish(null)
     pickupIntentHandler = null
     scene.__dungeonDropNavGrid = null
