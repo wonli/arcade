@@ -3,6 +3,7 @@ import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js
 import { pickupHealthPotion } from './inventory.js'
 import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
+import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
 import { normalizeRunSeed } from './world-seed.js'
 
 const ENEMY_STATE_FIELDS = [
@@ -60,6 +61,7 @@ export function createDungeonWorldRuntime(scene, {
 
   const seed = normalizeRunSeed(runSeed)
   const enemyPresentation = installEnemyPresentationRuntime(scene)
+  const portalPresentation = installPortalPresentationRuntime(scene)
   const originals = {
     spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
     damageEnemy: typeof scene.damageEnemy === 'function' ? scene.damageEnemy.bind(scene) : null,
@@ -254,15 +256,10 @@ export function createDungeonWorldRuntime(scene, {
   }
 
   const applyPortalOpen = (fact) => {
-    if (!originals.openPortal) return null
-    if (scene.portal) return scene.portal
-    originals.openPortal(scene.localPlayer)
-    if (scene.portal) {
-      scene.portal.id = String(fact.entityId ?? stableWorldEntityId(seed, fact.floor ?? scene.floor, 'portal', 0))
-      if (Number.isFinite(Number(fact.x))) scene.portal.x = Number(fact.x)
-      if (Number.isFinite(Number(fact.y))) scene.portal.y = Number(fact.y)
-    }
-    return scene.portal
+    const id = String(fact.entityId ?? stableWorldEntityId(seed, fact.floor ?? scene.floor, 'portal', 0))
+    const x = Number.isFinite(Number(fact.x)) ? Number(fact.x) : Number(scene.portal?.x) || 0
+    const y = Number.isFinite(Number(fact.y)) ? Number(fact.y) : Number(scene.portal?.y) || 0
+    return portalPresentation?.ensure({ id, x, y, unlockAt: (scene.time?.now ?? 0) + 500 })?.portal ?? null
   }
 
   const applyFloorTransition = (fact) => {
@@ -270,7 +267,7 @@ export function createDungeonWorldRuntime(scene, {
     if (targetFloor <= normalizeFloor(scene.floor)) return scene.floor
     if (originals.advanceFloor && targetFloor === normalizeFloor(scene.floor) + 1) originals.advanceFloor(scene.localPlayer)
     else {
-      scene.destroyPortal?.()
+      portalPresentation?.remove()
       scene.floor = targetFloor
       scene.startFloor?.(false, scene.localPlayer)
     }
@@ -300,7 +297,7 @@ export function createDungeonWorldRuntime(scene, {
     if (targetFloor > currentFloor && originals.advanceFloor) {
       while (normalizeFloor(scene.floor) < targetFloor) originals.advanceFloor(scene.localPlayer)
     } else if (targetFloor !== currentFloor) {
-      scene.destroyPortal?.()
+      portalPresentation?.remove()
       scene.floor = targetFloor
       scene.startFloor?.(false, scene.localPlayer)
     }
@@ -335,7 +332,6 @@ export function createDungeonWorldRuntime(scene, {
     scene.floorCleared = Boolean(fact.floorCleared)
     scene.runComplete = Boolean(fact.runComplete)
 
-    scene.destroyPortal?.()
     if (fact.portal) {
       applyPortalOpen({
         type: 'portal.open',
@@ -344,7 +340,7 @@ export function createDungeonWorldRuntime(scene, {
         x: fact.portal.x,
         y: fact.portal.y,
       })
-    }
+    } else portalPresentation?.remove()
     return fact
   }
 
