@@ -264,21 +264,21 @@
           onSelection(next) { scene.__comparisonCard?.setSelection?.(next) },
         })
 
-        if (role === 'host') {
-          scene.__infiniteDungeon = installInfiniteDungeon(scene, {
-            onProgress(next) {
-              progress = next
-              hudRuntime?.update?.()
-            },
-            onEvent,
-            label: (key) => ({
-              floor: 'FLOOR', chapter: 'CHAPTER', floorClear: 'FLOOR CLEAR',
-              restTitle: 'REST CAMP', restComplete: 'REST COMPLETE',
-              'rest.recover': 'Recover 50% HP', 'rest.temper': 'Temper weapon',
-              'rest.fortune': 'Improve next loot',
-            }[key] ?? key),
-          })
-        }
+        scene.__infiniteDungeon = installInfiniteDungeon(scene, {
+          authority: role === 'host',
+          initialProgress: role === 'guest' ? progress : null,
+          onProgress(next) {
+            progress = next
+            hudRuntime?.update?.()
+          },
+          onEvent: role === 'host' ? onEvent : () => {},
+          label: (key) => ({
+            floor: 'FLOOR', chapter: 'CHAPTER', floorClear: 'FLOOR CLEAR',
+            restTitle: 'REST CAMP', restComplete: 'REST COMPLETE',
+            'rest.recover': 'Recover 50% HP', 'rest.temper': 'Temper weapon',
+            'rest.fortune': 'Improve next loot',
+          }[key] ?? key),
+        })
 
         installDungeonAttackRuntime(scene)
 
