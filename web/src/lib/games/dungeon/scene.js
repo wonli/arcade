@@ -8,6 +8,7 @@ import { currentEffects, currentWeapon } from './player-loadout.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { affixSummary } from './affixes.js'
 import {
   applyPickup,
