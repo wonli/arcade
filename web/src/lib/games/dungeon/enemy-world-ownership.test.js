@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { createDungeonWorldRuntime, stableWorldEntityId } from './world-runtime.js'
+
+const worldSource = await readFile(new URL('./world-runtime.js', import.meta.url), 'utf8')
 
 function destroyable() {
   return {
@@ -49,6 +52,14 @@ function sceneFixture() {
   }
   return { scene, enemy, visual, healthBar, eliteAura }
 }
+
+test('world runtime owns enemy identity through EnemyRuntime instead of replacing Scene spawnEnemy', () => {
+  assert.match(worldSource, /installDungeonEnemySceneBridge\(scene\)/)
+  assert.match(worldSource, /enemies\.setObserver\(/)
+  assert.match(worldSource, /enemies\.spawn\(index,/)
+  assert.doesNotMatch(worldSource, /scene\.spawnEnemy\s*=/)
+  assert.doesNotMatch(worldSource, /originals\.spawnEnemy/)
+})
 
 test('canonical world removal destroys the whole enemy presentation including elite aura', () => {
   const { scene, visual, healthBar, eliteAura } = sceneFixture()
