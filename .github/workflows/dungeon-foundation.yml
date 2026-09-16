@@ -69,6 +69,7 @@ jobs:
             src/lib/games/dungeon/pickup-loot-ownership-contract.test.js \
             src/lib/games/dungeon/pickup-runtime.test.js \
             src/lib/games/dungeon/weapon-visual-refresh-regression.test.js \
+            src/lib/games/dungeon/weapon-visual-equipped-refresh-regression.test.js \
             src/lib/games/dungeon/world-runtime.test.js \
             src/lib/games/dungeon/hydration-presentation-regression.test.js \
             src/lib/games/dungeon/player-intent-runtime.test.js \
