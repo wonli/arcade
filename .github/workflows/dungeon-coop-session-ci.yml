@@ -22,30 +22,9 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: npm ci
-      - name: Focused Dungeon session tests
+      - name: Full web tests
         working-directory: web
-        shell: bash
-        run: |
-          tests=(
-            src/lib/games/dungeon/session-authority.test.js
-            src/lib/games/dungeon/session-runtime.test.js
-            src/lib/games/dungeon/network-runtime.test.js
-            src/lib/games/dungeon/network-session-authority.test.js
-            src/lib/games/dungeon/peer-authority.test.js
-            src/lib/games/dungeon/coop-lifecycle.test.js
-            src/lib/games/dungeon/remote-player-runtime.test.js
-            src/lib/games/dungeon/player-command-runtime.test.js
-            src/lib/games/dungeon/chest-runtime.test.js
-          )
-          existing=()
-          for test in "${tests[@]}"; do
-            [[ -f "$test" ]] && existing+=("$test")
-          done
-          if (( ${#existing[@]} > 0 )); then
-            node --test "${existing[@]}"
-          else
-            echo "No session authority tests created yet"
-          fi
+        run: npm test
       - name: Build web
         working-directory: web
         run: npm run build
