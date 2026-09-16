@@ -1,12 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { ensureDungeonLootRuntime } from './loot-runtime.js'
+import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-runtime.js'
 
 function sceneFixture() {
   const calls = []
   const scene = {
     drops: [],
+    localPlayer: { id: 'local' },
     spawnDrop(x, y, item) {
       const drop = { id: null, x, y, item }
       this.drops.push(drop)
@@ -20,6 +21,7 @@ function sceneFixture() {
     },
     clearDrops() {
       calls.push(['core-clear'])
+      for (const drop of [...this.drops]) this.destroyDrop(drop)
       this.drops = []
     },
     updateDrops(player) {
@@ -48,6 +50,34 @@ test('loot runtime owns behavior without replacing Scene loot methods', () => {
   assert.equal(scene.destroyDrop, originals.destroyDrop)
   assert.equal(scene.clearDrops, originals.clearDrops)
   assert.equal(scene.updateDrops, originals.updateDrops)
+})
+
+test('explicit loot scene bridge is installed once and remains stable across owner changes', () => {
+  const { scene } = sceneFixture()
+  const first = installDungeonLootSceneBridge(scene)
+  const refs = {
+    spawnDrop: scene.spawnDrop,
+    destroyDrop: scene.destroyDrop,
+    clearDrops: scene.clearDrops,
+    updateDrops: scene.updateDrops,
+  }
+  const second = installDungeonLootSceneBridge(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  const restoreSpawn = loot.setSpawnOwner((request, core) => core(request))
+  const restoreStep = loot.setStepOwner((player, core) => core(player))
+
+  assert.equal(second, first)
+  assert.equal(scene.spawnDrop, refs.spawnDrop)
+  assert.equal(scene.destroyDrop, refs.destroyDrop)
+  assert.equal(scene.clearDrops, refs.clearDrops)
+  assert.equal(scene.updateDrops, refs.updateDrops)
+
+  restoreStep()
+  restoreSpawn()
+  assert.equal(scene.spawnDrop, refs.spawnDrop)
+  assert.equal(scene.destroyDrop, refs.destroyDrop)
+  assert.equal(scene.clearDrops, refs.clearDrops)
+  assert.equal(scene.updateDrops, refs.updateDrops)
 })
 
 test('authority can reject local spawn before mutation', () => {
@@ -95,6 +125,36 @@ test('spawnExact bypasses preparation while preserving authority and stable iden
 
   assert.deepEqual(modes, [true, false])
   assert.equal(scene.drops.length, 2)
+})
+
+test('remove observer receives active step player and clear context', () => {
+  const { scene } = sceneFixture()
+  installDungeonLootSceneBridge(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  const events = []
+  loot.setAuthority({
+    onRemoved(event) {
+      events.push({
+        id: event.drop.id,
+        playerId: event.player?.id ?? null,
+        clearing: event.clearing,
+      })
+    },
+  })
+
+  const stepped = loot.spawnExact(1, 2, { type: 'consumable.health_potion' })
+  stepped.id = 'step-drop'
+  loot.setStepOwner((player) => loot.remove(stepped))
+  loot.step({ id: 'p2' })
+
+  const cleared = loot.spawnExact(3, 4, { type: 'weapon.test' })
+  cleared.id = 'clear-drop'
+  loot.clear()
+
+  assert.deepEqual(events, [
+    { id: 'step-drop', playerId: 'p2', clearing: false },
+    { id: 'clear-drop', playerId: null, clearing: true },
+  ])
 })
 
 test('pickup is a stable-id semantic operation with one explicit owner', () => {
