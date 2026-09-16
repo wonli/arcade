@@ -43,6 +43,10 @@ function sceneFixture(localId) {
     updateHealthBar() {},
     syncPlayerAnimation() {},
     emitStats() {},
+    advanceFloor() {
+      this.floor += 1
+      return this.floor
+    },
   }
   attachLocalPlayerEntity(scene, { id: localId, state: state(10) })
   return scene
