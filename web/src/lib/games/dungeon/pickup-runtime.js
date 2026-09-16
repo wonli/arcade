@@ -204,6 +204,7 @@ export function installPickupInteraction(scene, {
   })
   const key = scene.input?.keyboard?.addKey?.('E')
   let selectedKey = null
+  let selectedFingerprint = null
   let localDropSequence = 0
   let pickupIntentHandler = null
 
@@ -219,6 +220,15 @@ export function installPickupInteraction(scene, {
   const dropBySelectionKey = (value) => (scene.drops ?? []).find((drop) => drop && selectionKey(drop) === value) ?? null
   const selectedDrop = () => selectedKey ? dropBySelectionKey(selectedKey) : null
 
+  const selectionFingerprint = (drop) => {
+    if (!drop) return null
+    return JSON.stringify({
+      key: selectionKey(drop),
+      current: currentWeapon(player),
+      candidate: drop.item ?? null,
+    })
+  }
+
   const applySelectionArt = (drop, active) => {
     if (!drop?.visual || !drop?.item?.type?.startsWith?.('weapon.')) return
     setWeaponVisualSelected(scene, drop.visual, drop.item, active)
@@ -226,10 +236,13 @@ export function installPickupInteraction(scene, {
 
   const publish = (next) => {
     const nextKey = next ? selectionKey(next) : null
-    if (selectedKey === nextKey) return
+    const nextFingerprint = next ? selectionFingerprint(next) : null
+    if (selectedKey === nextKey && selectedFingerprint === nextFingerprint) return
+    const keyChanged = selectedKey !== nextKey
     const previous = selectedDrop()
-    applySelectionArt(previous, false)
+    if (keyChanged) applySelectionArt(previous, false)
     selectedKey = nextKey
+    selectedFingerprint = nextFingerprint
     applySelectionArt(next, true)
     onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
   }
