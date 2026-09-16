@@ -27,6 +27,7 @@ export function ensureDungeonLootRuntime(scene) {
     removeOwner: null,
     clearOwner: null,
     stepOwner: null,
+    presentationOwner: null,
     pickupOwner: callable(previousLoot.pickup),
     openChestOwner: callable(previousLoot.openChest),
     authority: null,
@@ -114,6 +115,10 @@ export function ensureDungeonLootRuntime(scene) {
       }
     },
 
+    reconcilePresentation(context = {}) {
+      return slots.presentationOwner?.(context) ?? null
+    },
+
     pickup(player, dropId) {
       return slots.pickupOwner?.(player, dropId) ?? null
     },
@@ -158,6 +163,12 @@ export function ensureDungeonLootRuntime(scene) {
       const previous = slots.stepOwner
       slots.stepOwner = callable(owner)
       return restoreSlot(slots, 'stepOwner', slots.stepOwner, previous)
+    },
+
+    setPresentationOwner(owner = null) {
+      const previous = slots.presentationOwner
+      slots.presentationOwner = callable(owner)
+      return restoreSlot(slots, 'presentationOwner', slots.presentationOwner, previous)
     },
 
     setPickupOwner(owner = null) {
