@@ -42,6 +42,7 @@ function sceneFixture(localId) {
     createHealthBar() { return { destroy() { this.destroyed = true } } },
     updateHealthBar() {},
     syncPlayerAnimation() {},
+    emitStats() {},
   }
   attachLocalPlayerEntity(scene, { id: localId, state: state(10) })
   return scene
@@ -163,14 +164,17 @@ test('current authority answers checkpoint sync request with session checkpoint'
   await nextTurn()
   await nextTurn()
 
-  const fact = socket.calls.find((call) => call.action === 'dungeon.fact')?.params.fact
+  const fact = socket.calls
+    .filter((call) => call.action === 'dungeon.fact')
+    .map((call) => call.params.fact)
+    .find((candidate) => candidate?.type === 'session.checkpoint')
   assert.equal(fact?.type, 'session.checkpoint')
   assert.equal(fact?.checkpoint?.world?.floor, 4)
   assert.equal(fact?.checkpoint?.players?.guest?.state?.x, 200)
   runtime.stop()
 })
 
-test('newer checkpoint transfers authority and restores durable local equipment', () => {
+test('authority checkpoint restores follower durable local equipment', () => {
   const scene = sceneFixture('guest')
   const runtime = createDungeonNetworkRuntime({
     socket: socketFixture(), scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host',
@@ -179,16 +183,17 @@ test('newer checkpoint transfers authority and restores durable local equipment'
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.fact',
-    playerId: 'guest-ignored-relay-source',
-    fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'guest', epoch: 2, sequence: 0, floor: 9, guestWeapon: weapon }) },
+    playerId: 'host',
+    fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'host', epoch: 1, sequence: 5, floor: 9, guestWeapon: weapon }) },
   }))
 
-  assert.deepEqual(runtime.authority(), { epoch: 2, authorityId: 'guest', sequence: 0 })
-  assert.equal(runtime.isAuthority(), true)
+  assert.deepEqual(runtime.authority(), { epoch: 1, authorityId: 'host', sequence: 5 })
+  assert.equal(runtime.isAuthority(), false)
   assert.deepEqual(scene.localPlayer.state.equipment.weapon, weapon)
+  assert.equal(scene.floor, 9)
 })
 
-test('stale former-authority fact is rejected after a newer checkpoint takeover', () => {
+test('newer checkpoint from surviving peer transfers authority on former host', () => {
   const scene = sceneFixture('host')
   const runtime = createDungeonNetworkRuntime({
     socket: socketFixture(), scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host',
@@ -199,8 +204,25 @@ test('stale former-authority fact is rejected after a newer checkpoint takeover'
     playerId: 'guest',
     fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'guest', epoch: 2, sequence: 0, floor: 8 }) },
   }))
+
+  assert.deepEqual(runtime.authority(), { epoch: 2, authorityId: 'guest', sequence: 0 })
   assert.equal(runtime.isAuthority(), false)
   assert.equal(scene.floor, 8)
+})
+
+test('stale former-authority fact is rejected after local survivor takeover', () => {
+  const scene = sceneFixture('guest')
+  const runtime = createDungeonNetworkRuntime({
+    socket: socketFixture(), scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host',
+  })
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.fact',
+    playerId: 'host',
+    fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'host', epoch: 1, sequence: 5, floor: 8 }) },
+  }))
+
+  runtime.takeAuthority()
+  assert.equal(runtime.isAuthority(), true)
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.fact',
