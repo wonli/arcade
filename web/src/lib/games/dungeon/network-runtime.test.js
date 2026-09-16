@@ -235,24 +235,33 @@ test('current authority answers reconnect sync request without accepting reconne
   runtime.stop()
 })
 
-test('follower mirrors only real local attacks as semantic commands', async () => {
+test('follower forwards explicit local player intents as semantic commands', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
-  scene.autoAttack = (time, player) => {
-    if (time < 1000) return
-    player.lastAttackAt = time
-  }
   const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host' })
-  runtime.installLocalCommandMirrors()
 
-  scene.autoAttack(900, scene.localPlayer)
-  scene.autoAttack(1200, scene.localPlayer)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'guest', time: 1200 }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'skill', playerId: 'guest', skillId: 'primary', time: 1400 }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'spoofed', time: 1600 }), false)
   await Promise.resolve()
   await Promise.resolve()
 
   const commands = socket.calls.filter((call) => call.action === 'dungeon.command')
-  assert.equal(commands.length, 1)
-  assert.deepEqual(commands[0].params.command, { type: 'attack', time: 1200 })
+  assert.deepEqual(commands.map((call) => call.params.command), [
+    { type: 'attack', time: 1200 },
+    { type: 'skill', skillId: 'primary', time: 1400 },
+  ])
+})
+
+test('authority ignores local player intents because it already owns gameplay', async () => {
+  const scene = sceneFixture('host')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
+
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'host', time: 1200 }), false)
+  await Promise.resolve()
+
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.command'), false)
 })
 
 test('stop unsubscribes and despawns remote players without touching local player', () => {
