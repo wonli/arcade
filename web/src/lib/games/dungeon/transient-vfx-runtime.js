@@ -31,6 +31,8 @@ export function installTransientVfxRuntime(scene, { documentRef = globalThis.doc
     const current = [...effects]
     effects.clear()
     for (const effect of current) safeDestroy(scene, effect)
+    scene.cameras?.main?.resetFX?.()
+    for (const player of scene.players?.values?.() ?? []) player?.actor?.clearTint?.()
     return current.length
   }
 
