@@ -176,3 +176,29 @@ test('incoming world facts reanchor portable enemy timers before gameplay applie
   assert.equal(observed.enemies[0].nextChargeAt, 4250)
   assert.equal('nextChargeRemainingMs' in observed.enemies[0], false)
 })
+
+test('semantic commands never send the follower browser clock to authority', async () => {
+  const scene = sceneFixture('guest')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'guest',
+    hostId: 'host',
+  })
+
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'guest', time: 987654 }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'skill', playerId: 'guest', skillId: 'primary', time: 987999 }), true)
+  await Promise.resolve()
+  await Promise.resolve()
+
+  const commands = socket.calls
+    .filter((call) => call.action === 'dungeon.command')
+    .map((call) => call.params.command)
+
+  assert.deepEqual(commands, [
+    { type: 'attack' },
+    { type: 'skill', skillId: 'primary' },
+  ])
+})
