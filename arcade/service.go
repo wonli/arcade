@@ -14,7 +14,8 @@ import (
 )
 
 type Service struct {
-	rooms *room.Manager
+	rooms         *room.Manager
+	sessionStates *SessionStateStore
 
 	snakeMu   sync.Mutex
 	snakes    map[string]*snakeRuntime
@@ -27,11 +28,12 @@ type Service struct {
 
 func NewService() *Service {
 	return &Service{
-		rooms:     room.NewManager(),
-		snakes:    make(map[string]*snakeRuntime),
-		snakeTick: 100 * time.Millisecond,
-		draws:     make(map[string]*drawGuessRuntime),
-		drawTick:  250 * time.Millisecond,
+		rooms:         room.NewManager(),
+		sessionStates: NewSessionStateStore(),
+		snakes:        make(map[string]*snakeRuntime),
+		snakeTick:     100 * time.Millisecond,
+		draws:         make(map[string]*drawGuessRuntime),
+		drawTick:      250 * time.Millisecond,
 	}
 }
 
