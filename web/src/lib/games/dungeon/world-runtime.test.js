@@ -179,3 +179,26 @@ test('guest world bootstrap replaces its random enemy state with the host state'
   assert.equal(guest.enemies[0].archetype, 'ranged')
   assert.equal(guest.enemies[0].visual.type, 'ranged')
 })
+
+test('canonical world state restores an open portal on a refreshing follower', () => {
+  const host = sceneFixture()
+  const hostRuntime = createDungeonWorldRuntime(host, { runSeed: 'ABC123', isHost: true, publishFact() {} })
+  hostRuntime.start()
+  host.openPortal(host.localPlayer)
+  const state = hostRuntime.publishState()
+
+  assert.deepEqual(state.portal, {
+    entityId: 'portal:ABC123:1:0',
+    x: 480,
+    y: 518,
+  })
+
+  const guest = sceneFixture()
+  const guestRuntime = createDungeonWorldRuntime(guest, { runSeed: 'ABC123', isHost: false })
+  guestRuntime.start()
+  guestRuntime.applyFact({ ...state, runSeed: 'ABC123', sequence: 1 })
+
+  assert.equal(guest.portal?.id, 'portal:ABC123:1:0')
+  assert.equal(guest.portal?.x, 480)
+  assert.equal(guest.portal?.y, 518)
+})
