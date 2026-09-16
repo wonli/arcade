@@ -1,0 +1,58 @@
+name: Dungeon Co-op Session CI
+
+on:
+  push:
+    branches:
+      - feat/dungeon-coop-websocket
+
+concurrency:
+  group: dungeon-coop-session-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+      - name: Focused Dungeon session tests
+        working-directory: web
+        shell: bash
+        run: |
+          tests=(
+            src/lib/games/dungeon/session-authority.test.js
+            src/lib/games/dungeon/session-runtime.test.js
+            src/lib/games/dungeon/network-runtime.test.js
+            src/lib/games/dungeon/coop-lifecycle.test.js
+            src/lib/games/dungeon/remote-player-runtime.test.js
+          )
+          existing=()
+          for test in "${tests[@]}"; do
+            [[ -f "$test" ]] && existing+=("$test")
+          done
+          if (( ${#existing[@]} > 0 )); then
+            node --test "${existing[@]}"
+          else
+            echo "No session authority tests created yet"
+          fi
+      - name: Build web
+        working-directory: web
+        run: npm run build
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test Dungeon relay
+        run: go test ./arcade/...
