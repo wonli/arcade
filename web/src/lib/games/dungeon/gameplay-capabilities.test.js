@@ -3,9 +3,13 @@ import assert from 'node:assert/strict'
 
 import { ensureDungeonCapabilities } from './gameplay-capabilities.js'
 
-test('capability installation keeps one stable CombatRuntime owner', () => {
+test('capability installation keeps one stable CombatRuntime and LootRuntime owner', () => {
   const scene = {
     autoAttack() { return 'base' },
+    spawnDrop() {},
+    destroyDrop() {},
+    clearDrops() {},
+    updateDrops() {},
   }
 
   const first = ensureDungeonCapabilities(scene)
@@ -17,6 +21,7 @@ test('capability installation keeps one stable CombatRuntime owner', () => {
   assert.equal(second.combat, firstCombat)
   assert.equal(second.loot, firstLoot)
   assert.equal(second.combat.__dungeonCombatRuntime, true)
+  assert.equal(second.loot.__dungeonLootRuntime, true)
 })
 
 test('combat core is captured once while explicit owners can be installed and restored', () => {
@@ -50,38 +55,42 @@ test('combat core is captured once while explicit owners can be installed and re
   ])
 })
 
-test('loot compatibility capabilities still delegate to current runtime owners', () => {
+test('loot core is captured once while semantic pickup owner can be rebound explicitly', () => {
   const calls = []
   const scene = {
-    __dungeonPickupRuntime: {
-      pickupById(player, dropId) {
-        calls.push(['pickup-v1', dropId, player.id])
-        return { picked: true }
-      },
+    spawnDrop(x, y, item) {
+      const drop = { x, y, item }
+      this.drops ??= []
+      this.drops.push(drop)
+      return drop
     },
-    __dungeonSpatial: {
-      openChestById(player, chestId) {
-        calls.push(['chest-v1', chestId, player.id])
-        return { opened: true }
+    destroyDrop() {},
+    clearDrops() {},
+    updateDrops() {},
+    dungeon: {
+      loot: {
+        pickup(player, dropId) {
+          calls.push(['pickup-v1', dropId, player.id])
+          return { picked: true }
+        },
       },
     },
   }
   const player = { id: 'p2' }
-  const capabilities = ensureDungeonCapabilities(scene)
+  const loot = ensureDungeonCapabilities(scene).loot
 
-  scene.__dungeonPickupRuntime.pickupById = (nextPlayer, dropId) => {
+  loot.pickup(player, 'drop-1')
+  const restore = loot.setPickupOwner((nextPlayer, dropId) => {
     calls.push(['pickup-v2', dropId, nextPlayer.id])
     return { picked: true }
-  }
-  scene.__dungeonSpatial.openChestById = (nextPlayer, chestId) => {
-    calls.push(['chest-v2', chestId, nextPlayer.id])
-    return { opened: true }
-  }
-  capabilities.loot.pickup(player, 'drop-1')
-  capabilities.loot.openChest(player, 'chest-1')
+  })
+  loot.pickup(player, 'drop-2')
+  restore()
+  loot.pickup(player, 'drop-3')
 
   assert.deepEqual(calls, [
-    ['pickup-v2', 'drop-1', 'p2'],
-    ['chest-v2', 'chest-1', 'p2'],
+    ['pickup-v1', 'drop-1', 'p2'],
+    ['pickup-v2', 'drop-2', 'p2'],
+    ['pickup-v1', 'drop-3', 'p2'],
   ])
 })
