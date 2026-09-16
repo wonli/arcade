@@ -19,6 +19,13 @@ function state(x = 0) {
 
 function sceneFixture(localId = 'host') {
   const scene = {
+    floor: 1,
+    kills: 0,
+    floorKills: 0,
+    floorCleared: false,
+    runComplete: false,
+    portal: null,
+    drops: [],
     players: new Map(),
     enemies: [],
     time: { now: 1000 },
@@ -34,6 +41,7 @@ function sceneFixture(localId = 'host') {
     createHealthBar() { return { destroy() { this.destroyed = true } } },
     updateHealthBar() {},
     syncPlayerAnimation() {},
+    emitStats() {},
   }
   attachLocalPlayerEntity(scene, { id: localId, state: state(10) })
   return scene
@@ -114,7 +122,7 @@ test('later remote snapshots update the existing player presentation', () => {
   assert.equal(guest.moving, true)
 })
 
-test('host executes guest semantic commands using the relay identity', () => {
+test('current authority executes guest semantic commands using the relay identity', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
   scene.autoAttack = (time, player) => { player.lastAttackAt = time }
@@ -131,7 +139,7 @@ test('host executes guest semantic commands using the relay identity', () => {
   assert.equal(scene.players.has('spoofed'), false)
 })
 
-test('guest never authors gameplay when another client sends a command', () => {
+test('follower never authors gameplay when another client sends a command', () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
   let attacks = 0
@@ -160,7 +168,7 @@ test('snapshot flush sends only the local serializable player state', async () =
   assert.equal('runtime' in socket.calls[0].params.snapshot, false)
 })
 
-test('fresh guest start explicitly requests canonical world state exactly on bootstrap snapshot', async () => {
+test('fresh follower start explicitly requests canonical session checkpoint', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
   const runtime = createDungeonNetworkRuntime({
@@ -177,16 +185,17 @@ test('fresh guest start explicitly requests canonical world state exactly on boo
   await nextTurn()
 
   const bootstrap = socket.calls.find((call) => call.action === 'dungeon.snapshot')
-  assert.equal(bootstrap?.params.snapshot.syncWorld, true)
+  assert.equal(bootstrap?.params.snapshot.syncCheckpoint, true)
+  assert.equal('syncWorld' in bootstrap.params.snapshot, false)
 
   socket.calls.length = 0
   await runtime.flushSnapshot()
   assert.equal(socket.calls[0].action, 'dungeon.snapshot')
-  assert.equal('syncWorld' in socket.calls[0].params.snapshot, false)
+  assert.equal('syncCheckpoint' in socket.calls[0].params.snapshot, false)
   runtime.stop()
 })
 
-test('host answers reconnect sync request even when the remote player entity already exists', async () => {
+test('current authority answers reconnect sync request even when the remote player entity already exists', async () => {
   const scene = sceneFixture('host')
   scene.floor = 4
   const socket = socketFixture()
@@ -210,19 +219,22 @@ test('host answers reconnect sync request even when the remote player entity alr
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
     playerId: 'guest',
-    snapshot: { id: 'guest', state: state(120), syncWorld: true },
+    snapshot: { id: 'guest', state: state(120), syncCheckpoint: true },
   }))
   await nextTurn()
+  await nextTurn()
 
-  const fact = socket.calls.find((call) => call.action === 'dungeon.fact')?.params.fact
-  assert.equal(fact?.type, 'world.state')
-  assert.equal(fact?.floor, 4)
-  assert.equal(fact?.runSeed, 'ABC123')
+  const fact = socket.calls
+    .filter((call) => call.action === 'dungeon.fact')
+    .map((call) => call.params.fact)
+    .find((candidate) => candidate?.type === 'session.checkpoint')
+  assert.equal(fact?.checkpoint?.world?.floor, 4)
+  assert.equal(fact?.checkpoint?.runSeed, 'ABC123')
   assert.equal(scene.players.get('guest').state.x, 120)
   runtime.stop()
 })
 
-test('guest mirrors only real local attacks as semantic commands', async () => {
+test('follower mirrors only real local attacks as semantic commands', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
   scene.autoAttack = (time, player) => {
