@@ -4,15 +4,25 @@ import assert from 'node:assert/strict'
 import { installCoopWorldSimulation, nearestLivingDungeonPlayer } from './coop-world-runtime.js'
 
 function player(id, x, y, { dead = false, hp = 100 } = {}) {
-  return { id, dead, state: { x, y, hp, maxHp: 100 }, lastContactAt: 0 }
+  return { id, dead, state: { x, y, hp, maxHp: 100, healthPotions: 0 }, lastContactAt: 0 }
 }
 
 function eventBus() {
   const listeners = new Map()
   return {
-    on(name, handler) { listeners.set(name, handler) },
-    off(name, handler) { if (listeners.get(name) === handler) listeners.delete(name) },
-    emit(name, ...args) { listeners.get(name)?.(...args) },
+    on(name, handler) {
+      const list = listeners.get(name) ?? []
+      list.push(handler)
+      listeners.set(name, list)
+    },
+    off(name, handler) {
+      const list = (listeners.get(name) ?? []).filter((candidate) => candidate !== handler)
+      if (list.length) listeners.set(name, list)
+      else listeners.delete(name)
+    },
+    emit(name, ...args) {
+      for (const handler of [...(listeners.get(name) ?? [])]) handler(...args)
+    },
   }
 }
 
@@ -21,6 +31,8 @@ function sceneFixture() {
   const p2 = player('p2', 100, 0)
   const calls = []
   const projectileCalls = []
+  const inventoryCounts = []
+  let statsEmitted = 0
   const scene = {
     players: new Map([['p1', p1], ['p2', p2]]),
     localPlayer: p1,
@@ -32,13 +44,15 @@ function sceneFixture() {
     enemyProjectiles: [{ id: 'shot' }],
     runComplete: false,
     events: eventBus(),
+    __dungeonInventoryStats(value) { inventoryCounts.push(value) },
+    emitStats() { statsEmitted++ },
     moveEnemyTowardPlayer(enemy, time, dt, target) { calls.push({ kind: 'melee', enemy: enemy.id, target: target.id, time, dt }) },
     updateRangedEnemy(enemy, time, dt, target) { calls.push({ kind: 'ranged', enemy: enemy.id, target: target.id, time, dt }) },
     updateBoss(enemy, time, dt, target) { calls.push({ kind: 'boss', enemy: enemy.id, target: target.id, time, dt }) },
     updateEnemies() { throw new Error('legacy single-player target selection must be replaced') },
     updateEnemyProjectiles(dt, target) { projectileCalls.push({ dt, target: target?.id ?? null }) },
   }
-  return { scene, p1, p2, calls, projectileCalls }
+  return { scene, p1, p2, calls, projectileCalls, inventoryCounts, statsEmitted: () => statsEmitted }
 }
 
 test('nearest living target ignores downed players', () => {
@@ -105,5 +119,19 @@ test('downed continuation does not double-step a frame already simulated by scen
   scene.events.emit('update', 2000, 40)
 
   assert.equal(calls.length, 3)
+  runtime.restore()
+})
+
+test('canonical local potion count is reconciled to the HUD on the next co-op frame', () => {
+  const { scene, p1, inventoryCounts, statsEmitted } = sceneFixture()
+  const runtime = installCoopWorldSimulation(scene)
+
+  p1.state.healthPotions = 3
+  scene.events.emit('update', 1000, 16)
+
+  assert.deepEqual(inventoryCounts, [3])
+  assert.equal(statsEmitted(), 1)
+  scene.events.emit('update', 1016, 16)
+  assert.deepEqual(inventoryCounts, [3])
   runtime.restore()
 })
