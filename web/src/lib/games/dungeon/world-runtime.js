@@ -1,6 +1,7 @@
 import { applyPickup } from './combat.js'
 import { ensureDungeonCombatRuntime } from './combat-runtime.js'
 import { installCoopPortalRuntime } from './coop-portal-runtime.js'
+import { ensureDungeonEnemyRuntime, installDungeonEnemySceneBridge } from './enemy-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
@@ -67,6 +68,8 @@ export function createDungeonWorldRuntime(scene, {
 
   const seed = normalizeRunSeed(runSeed)
   const combat = ensureDungeonCombatRuntime(scene)
+  installDungeonEnemySceneBridge(scene)
+  const enemies = ensureDungeonEnemyRuntime(scene)
   installDungeonFloorSceneBridge(scene)
   const floor = ensureDungeonFloorRuntime(scene)
   installDungeonLootSceneBridge(scene)
@@ -75,15 +78,13 @@ export function createDungeonWorldRuntime(scene, {
   const portal = ensureDungeonPortalRuntime(scene)
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
-  const originals = {
-    spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
-  }
   const dropSequences = new Map()
   let started = false
   let applyingFact = false
   let lastFactSequence = -1
   let coopPortalRuntime = null
   let restoreCombatAuthority = null
+  let restoreEnemyObserver = null
   let restoreFloorAuthority = null
   let restoreLootAuthority = null
   let restoreLootPickupOwner = null
@@ -291,7 +292,7 @@ export function createDungeonWorldRuntime(scene, {
   const applyEnemyState = (snapshot, index) => {
     const id = String(snapshot?.id ?? stableWorldEntityId(seed, scene.floor, 'enemy', index))
     let enemy = findEnemy(scene, id)
-    if (!enemy && originals.spawnEnemy) enemy = originals.spawnEnemy(index, { elite: Boolean(snapshot?.elite) })
+    if (!enemy) enemy = enemies.spawn(index, { elite: Boolean(snapshot?.elite) }, { source: 'replicated-state' })
     if (!enemy) return null
 
     const previous = { archetype: enemy.archetype, boss: Boolean(enemy.boss), elite: Boolean(enemy.elite) }
@@ -425,6 +426,12 @@ export function createDungeonWorldRuntime(scene, {
       onDamageApplied: publishDamageFact,
     })
 
+    restoreEnemyObserver = enemies.setObserver({
+      onSpawned({ enemy, index }) {
+        enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
+      },
+    })
+
     restoreFloorAuthority = floor.setAuthority({
       mayAdvance: () => isHost || applyingFact,
       onAdvanced({ fromFloor, toFloor }) {
@@ -480,14 +487,6 @@ export function createDungeonWorldRuntime(scene, {
       },
     })
 
-    if (originals.spawnEnemy) {
-      scene.spawnEnemy = function stableSpawnEnemy(index = 0, options = {}) {
-        const enemy = originals.spawnEnemy(index, options)
-        if (enemy) enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
-        return enemy
-      }
-    }
-
     coopPortalRuntime = installCoopPortalRuntime(scene, {
       localPlayer: scene.localPlayer,
       isAuthority: () => isHost,
@@ -509,9 +508,10 @@ export function createDungeonWorldRuntime(scene, {
     restoreLootAuthority = null
     restoreFloorAuthority?.()
     restoreFloorAuthority = null
+    restoreEnemyObserver?.()
+    restoreEnemyObserver = null
     restoreCombatAuthority?.()
     restoreCombatAuthority = null
-    if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
     started = false
   }
 
