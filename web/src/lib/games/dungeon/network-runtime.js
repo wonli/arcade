@@ -145,12 +145,12 @@ export function createDungeonNetworkRuntime({
   if (!normalizedRoomId) throw new TypeError('Dungeon room id is required')
   if (!normalizedLocalId) throw new TypeError('Local player id is required')
   if (!normalizedHostId) throw new TypeError('Initial Dungeon authority id is required')
-  bindLocalPlayerId(scene, normalizedLocalId)
+  const localPlayer = bindLocalPlayerId(scene, normalizedLocalId)
 
   if (Number.isInteger(playerSlot) && playerSlot >= 0) {
     scene.__dungeonPlayerSlot = playerSlot
-    scene.localPlayer.slot = playerSlot
-    placePlayerAtRoomSpawn(scene, scene.localPlayer, playerSlot)
+    localPlayer.slot = playerSlot
+    placePlayerAtRoomSpawn(scene, localPlayer, playerSlot)
   }
 
   const topic = `room:${normalizedRoomId}`
@@ -288,11 +288,11 @@ export function createDungeonNetworkRuntime({
     const expectedRemoteIds = new Set()
     for (const [id, snapshot] of Object.entries(checkpoint.players ?? {})) {
       if (id === normalizedLocalId) {
-        applyPlayerSnapshot(scene.localPlayer, { ...snapshot, id })
-        syncLocalPlayerLabel(scene.localPlayer)
-        scene.localPlayer.actor?.setPosition?.(scene.localPlayer.state.x, scene.localPlayer.state.y)
-        scene.updateHealthBar?.(scene.localPlayer.bar, scene.localPlayer.state.x, scene.localPlayer.state.y - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
-        scene.syncPlayerAnimation?.(null, scene.localPlayer)
+        applyPlayerSnapshot(localPlayer, { ...snapshot, id })
+        syncLocalPlayerLabel(localPlayer)
+        localPlayer.actor?.setPosition?.(localPlayer.state.x, localPlayer.state.y)
+        scene.updateHealthBar?.(localPlayer.bar, localPlayer.state.x, localPlayer.state.y - 42, localPlayer.state.hp, localPlayer.state.maxHp)
+        scene.syncPlayerAnimation?.(null, localPlayer)
         scene.emitStats?.()
         continue
       }
@@ -305,7 +305,7 @@ export function createDungeonNetworkRuntime({
     }
 
     for (const player of [...scene.players.values()]) {
-      if (player === scene.localPlayer) continue
+      if (player === localPlayer) continue
       if (!expectedRemoteIds.has(String(player.id))) despawnRemotePlayer(scene, player)
     }
 
@@ -321,9 +321,9 @@ export function createDungeonNetworkRuntime({
   async function flushSnapshot({ syncCheckpoint = false } = {}) {
     if (snapshotInFlight) return false
     snapshotInFlight = true
-    syncLocalPlayerLabel(scene.localPlayer)
+    syncLocalPlayerLabel(localPlayer)
     try {
-      const snapshot = serializePlayerSnapshot(scene.localPlayer)
+      const snapshot = serializePlayerSnapshot(localPlayer)
       if (syncCheckpoint) snapshot.syncCheckpoint = true
       await socket.request('dungeon.snapshot', {
         roomId: normalizedRoomId,
@@ -354,7 +354,7 @@ export function createDungeonNetworkRuntime({
     const pickupRuntime = scene.__dungeonPickupRuntime
     if (typeof pickupRuntime?.setPickupIntentHandler !== 'function') return
     previousPickupIntentHandler = pickupRuntime.setPickupIntentHandler((player, drop) => {
-      if (player !== scene.localPlayer || isAuthority()) return false
+      if (player !== localPlayer || isAuthority()) return false
       const dropId = String(drop?.id ?? '').trim()
       if (!dropId) return true
       const now = Number(scene.time?.now) || 0
@@ -380,7 +380,7 @@ export function createDungeonNetworkRuntime({
     const spatial = scene.__dungeonSpatial
     if (typeof spatial?.setChestIntentHandler === 'function') {
       previousChestIntentHandler = spatial.setChestIntentHandler((player, chest) => {
-        if (player !== scene.localPlayer || isAuthority()) return false
+        if (player !== localPlayer || isAuthority()) return false
         const chestId = String(chest?.id ?? '').trim()
         if (!chestId) return true
         void sendCommand({ type: 'open_chest', chestId })
@@ -517,10 +517,10 @@ export function createDungeonNetworkRuntime({
 
     if (typeof scene.autoAttack === 'function') {
       originalAutoAttack = scene.autoAttack
-      scene.autoAttack = function networkedAutoAttack(time, player = scene.localPlayer) {
+      scene.autoAttack = function networkedAutoAttack(time, player = localPlayer) {
         const before = player?.lastAttackAt
         const value = originalAutoAttack.call(scene, time, player)
-        if (!isAuthority() && player === scene.localPlayer && player?.lastAttackAt !== before) {
+        if (!isAuthority() && player === localPlayer && player?.lastAttackAt !== before) {
           void sendCommand({ type: 'attack', time: Number(time) || 0 })
         }
         return value
@@ -529,11 +529,11 @@ export function createDungeonNetworkRuntime({
 
     if (typeof scene.trySkill === 'function') {
       originalTrySkill = scene.trySkill
-      scene.trySkill = function networkedTrySkill(time, player = scene.localPlayer) {
+      scene.trySkill = function networkedTrySkill(time, player = localPlayer) {
         const before = getPlayerSkillReadyAt(player, 'primary')
         const value = originalTrySkill.call(scene, time, player)
         const after = getPlayerSkillReadyAt(player, 'primary')
-        if (!isAuthority() && player === scene.localPlayer && after > before) {
+        if (!isAuthority() && player === localPlayer && after > before) {
           void sendCommand({ type: 'skill', skillId: 'primary', time: Number(time) || 0 })
         }
         return value
@@ -575,9 +575,9 @@ export function createDungeonNetworkRuntime({
   function start() {
     if (started) return api
     started = true
-    createLocalPlayerLabel(scene, scene.localPlayer)
+    createLocalPlayerLabel(scene, localPlayer)
     ensureLifecycleRuntime()
-    coopWorldRuntime = installCoopWorldSimulation(scene)
+    coopWorldRuntime = installCoopWorldSimulation(scene, { localPlayer })
     lastLifecycleTickAt = lifecycleClock()
     worldRuntime = createWorldRuntime()
     worldRuntime.start()
@@ -612,10 +612,10 @@ export function createDungeonNetworkRuntime({
     lifecycleRuntime = null
     lastLifecycleTickAt = null
     for (const player of [...scene.players.values()]) {
-      if (player !== scene.localPlayer) despawnRemotePlayer(scene, player)
+      if (player !== localPlayer) despawnRemotePlayer(scene, player)
     }
-    scene.localPlayer?.label?.destroy?.()
-    if (scene.localPlayer) scene.localPlayer.label = null
+    localPlayer.label?.destroy?.()
+    localPlayer.label = null
     started = false
   }
 
