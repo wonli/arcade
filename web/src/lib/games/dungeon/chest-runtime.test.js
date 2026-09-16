@@ -64,7 +64,7 @@ test('authoritative chest rewards do not wait for the Phaser render clock', () =
   assert.equal(result.opened, true)
   assert.equal(spawned.length, 1)
   assert.equal(notifications.length, 1)
-  assert.equal(typeof delayed, 'undefined')
+  assert.equal(delayed, null)
 })
 
 test('open by id rejects dead, distant and unknown players without rewards', () => {
