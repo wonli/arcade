@@ -1,4 +1,5 @@
 import { portalDwellState } from './portal-dwell.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 
 const PORTAL_TRIGGER_RADIUS = 38
 
@@ -35,16 +36,25 @@ export function installCoopPortalRuntime(scene, {
   localPlayer,
   isAuthority = () => false,
   publishFact = () => {},
+  now = null,
 } = {}) {
   if (!scene || !localPlayer) throw new TypeError('Dungeon scene and local player are required')
   if (scene.__dungeonCoopPortal) return scene.__dungeonCoopPortal
+  if (now != null && typeof now !== 'function') throw new TypeError('Dungeon portal clock must be a function')
 
-  const originalUpdatePortal = typeof scene.updatePortal === 'function' ? scene.updatePortal : null
+  installDungeonPortalSceneBridge(scene)
+  const portalRuntime = ensureDungeonPortalRuntime(scene)
+  let restoreUpdateOwner = null
   let dwell = { enteredAt: null, seconds: null, complete: false }
   let lastPublished = null
   let transitionCommitted = false
   let activePortalId = scene.portal?.id == null ? null : String(scene.portal.id)
   if (scene.portal && scene.portal.countdownLabel == null) scene.portal.countdownLabel = null
+
+  const dwellClock = (time) => {
+    const value = Number(now ? now() : time)
+    return Number.isFinite(value) ? value : 0
+  }
 
   const syncPortalIdentity = (portal) => {
     if (!portal) return
@@ -87,14 +97,14 @@ export function installCoopPortalRuntime(scene, {
     })
   }
 
-  scene.updatePortal = function updateCoopPortal(time) {
+  const updateCoopPortal = (time) => {
     const portal = scene.portal
-    if (!portal || scene.runComplete || time < Number(portal.unlockAt ?? 0)) {
+    if (!portal || scene.runComplete || Number(time) < Number(portal.unlockAt ?? 0)) {
       if (portal) clear({ publish: isAuthority() })
-      return
+      return null
     }
     syncPortalIdentity(portal)
-    if (!isAuthority()) return
+    if (!isAuthority()) return null
 
     const allPlayers = [...(scene.players?.values?.() ?? [])]
     const living = livingPlayers(scene)
@@ -103,13 +113,13 @@ export function installCoopPortalRuntime(scene, {
       Math.hypot(portal.x - player.state.x, portal.y - player.state.y) <= PORTAL_TRIGGER_RADIUS
     ))
     const wasActive = dwell.enteredAt != null
-    const next = portalDwellState(dwell, { inside: allInside, now: Number(time) || 0 })
+    const next = portalDwellState(dwell, { inside: allInside, now: dwellClock(time) })
     dwell = next
 
     if (!allInside) {
       destroyCountdown(portal)
       if (wasActive) publishDwell(portal, next)
-      return
+      return null
     }
 
     if (next.complete) {
@@ -119,12 +129,15 @@ export function installCoopPortalRuntime(scene, {
         transitionCommitted = true
         scene.advanceFloor?.(localPlayer)
       }
-      return
+      return null
     }
 
     renderCountdown(scene, portal, next.seconds)
     publishDwell(portal, next)
+    return next
   }
+
+  restoreUpdateOwner = portalRuntime.setUpdateOwner(updateCoopPortal)
 
   const applyFact = (fact) => {
     if (fact?.type !== 'portal.dwell') return null
@@ -145,7 +158,8 @@ export function installCoopPortalRuntime(scene, {
   let api = null
   const restore = () => {
     clear()
-    if (scene.updatePortal !== originalUpdatePortal && originalUpdatePortal) scene.updatePortal = originalUpdatePortal
+    restoreUpdateOwner?.()
+    restoreUpdateOwner = null
     if (scene.__dungeonCoopPortal === api) scene.__dungeonCoopPortal = null
   }
 
