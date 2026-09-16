@@ -59,6 +59,7 @@ jobs:
             src/lib/games/dungeon/coop-portal-ownership-contract.test.js \
             src/lib/games/dungeon/coop-portal-clock.test.js \
             src/lib/games/dungeon/coop-portal-runtime.test.js \
+            src/lib/games/dungeon/backtrack-coop-ownership-contract.test.js \
             src/lib/games/dungeon/infinite-portal-ownership-contract.test.js \
             src/lib/games/dungeon/world-portal-ownership-contract.test.js \
             src/lib/games/dungeon/loot-runtime.test.js \
