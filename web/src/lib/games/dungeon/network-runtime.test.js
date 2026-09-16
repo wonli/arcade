@@ -242,21 +242,21 @@ test('current authority answers reconnect sync request without accepting reconne
   runtime.stop()
 })
 
-test('follower forwards explicit local player intents as semantic commands', async () => {
+test('follower forwards explicit local player intents as clock-free semantic commands', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
   const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host' })
 
-  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'guest', time: 1200 }), true)
-  assert.equal(runtime.handleLocalIntent({ type: 'skill', playerId: 'guest', skillId: 'primary', time: 1400 }), true)
-  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'spoofed', time: 1600 }), false)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'guest' }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'skill', playerId: 'guest', skillId: 'primary' }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'spoofed' }), false)
   await Promise.resolve()
   await Promise.resolve()
 
   const commands = socket.calls.filter((call) => call.action === 'dungeon.command')
   assert.deepEqual(commands.map((call) => call.params.command), [
-    { type: 'attack', time: 1200 },
-    { type: 'skill', skillId: 'primary', time: 1400 },
+    { type: 'attack' },
+    { type: 'skill', skillId: 'primary' },
   ])
 })
 
@@ -265,7 +265,7 @@ test('authority ignores local player intents because it already owns gameplay', 
   const socket = socketFixture()
   const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
 
-  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'host', time: 1200 }), false)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'host' }), false)
   await Promise.resolve()
 
   assert.equal(socket.calls.some((call) => call.action === 'dungeon.command'), false)
