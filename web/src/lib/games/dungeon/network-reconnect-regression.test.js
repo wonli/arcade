@@ -71,14 +71,16 @@ function sceneFixture(localId = 'host', localState = state(10)) {
   return scene
 }
 
-function socketFixture() {
+function socketFixture({ sessionStates = [] } = {}) {
   const calls = []
   const listeners = new Map()
+  const states = [...sessionStates]
   return {
     calls,
     listeners,
     async request(action, params) {
       calls.push({ action, params })
+      if (action === 'session.state.get') return { state: states.length ? states.shift() : null }
       return { ok: true }
     },
     subscribe(action, listener) {
@@ -114,15 +116,32 @@ function checkpoint({ guestState, drops = [] } = {}) {
       drops,
       portal: null,
     },
-    players: guestState ? { guest: { id: 'guest', state: guestState } } : {},
-    lifecycle: guestState ? { guest: { status: 'alive' } } : {},
+    players: {
+      host: { id: 'host', state: state(10) },
+      ...(guestState ? { guest: { id: 'guest', state: guestState } } : {}),
+    },
+    lifecycle: {
+      host: { status: 'alive', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
+      ...(guestState ? { guest: { status: 'alive', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 } } : {}),
+    },
     openedChestIds: [],
   }
 }
 
-test('reconnect sync request never overwrites the authority copy of the guest loadout before checkpoint capture', async () => {
+function storedState(value) {
+  return {
+    authorityId: value.authority.authorityId,
+    authorityEpoch: value.authority.epoch,
+    revision: value.authority.sequence,
+    schemaVersion: value.version,
+    payload: value,
+  }
+}
+
+test('server-restored authority keeps durable guest loadout when a fresh client snapshot arrives', async () => {
   const scene = sceneFixture('host')
-  const socket = socketFixture()
+  const canonical = checkpoint({ guestState: state(120, 20, weapon('weapon.katana', 31)) })
+  const socket = socketFixture({ sessionStates: [storedState(canonical)] })
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
@@ -134,38 +153,30 @@ test('reconnect sync request never overwrites the authority copy of the guest lo
   })
   runtime.start()
   await nextTurn()
-  socket.calls.length = 0
+  await nextTurn()
+
+  assert.equal(scene.players.get('guest')?.state.x, 120)
+  assert.equal(currentWeapon(scene.players.get('guest')?.state)?.type, 'weapon.katana')
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
     playerId: 'guest',
-    snapshot: { id: 'guest', state: state(120, 20, weapon('weapon.katana', 31)) },
+    snapshot: { id: 'guest', state: state(10, 20, null) },
   }))
+
+  assert.equal(scene.players.get('guest').state.x, 10)
   assert.equal(currentWeapon(scene.players.get('guest').state)?.type, 'weapon.katana')
-
-  runtime.handleMessage(roomMessage({
-    type: 'dungeon.snapshot',
-    playerId: 'guest',
-    snapshot: { id: 'guest', state: state(10, 20, null), syncCheckpoint: true },
-  }))
-  await nextTurn()
-  await nextTurn()
-
-  assert.equal(scene.players.get('guest').state.x, 120)
-  assert.equal(currentWeapon(scene.players.get('guest').state)?.type, 'weapon.katana')
-
-  const fact = socket.calls
-    .filter((call) => call.action === 'dungeon.fact')
-    .map((call) => call.params.fact)
-    .find((candidate) => candidate?.type === 'session.checkpoint')
-  assert.equal(fact?.checkpoint?.players?.guest?.state?.x, 120)
-  assert.equal(fact?.checkpoint?.players?.guest?.state?.equipment?.weapon?.type, 'weapon.katana')
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.fact' && call.params.fact?.type === 'session.checkpoint'), false)
   runtime.stop()
 })
 
-test('fresh follower retries checkpoint sync without publishing ordinary snapshots until hydration then restores presentation', async () => {
+test('fresh follower retries server checkpoint without publishing snapshots until hydration then restores presentation', async () => {
   const scene = sceneFixture('guest', state(10, 20, null))
-  const socket = socketFixture()
+  const canonical = checkpoint({
+    guestState: state(180, 40, weapon('weapon.spear', 27)),
+    drops: [{ entityId: 'drop:ABC123:1:0', x: 260, y: 90, item: weapon('weapon.axe', 24) }],
+  })
+  const socket = socketFixture({ sessionStates: [null, storedState(canonical)] })
   let tick = null
   let weaponSyncs = 0
   let groundReconciles = 0
@@ -196,27 +207,14 @@ test('fresh follower retries checkpoint sync without publishing ordinary snapsho
   runtime.start()
   await nextTurn()
 
-  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot').length, 1)
-  assert.equal(socket.calls.find((call) => call.action === 'dungeon.snapshot')?.params.snapshot.syncCheckpoint, true)
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
+  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot').length, 0)
 
-  tick()
+  tick?.()
   await nextTurn()
-  const hydrationSnapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
-  assert.equal(hydrationSnapshots.length, 2)
-  assert.equal(hydrationSnapshots[1].params.snapshot.syncCheckpoint, true)
+  await nextTurn()
 
-  runtime.handleMessage(roomMessage({
-    type: 'dungeon.fact',
-    playerId: 'host',
-    fact: {
-      type: 'session.checkpoint',
-      checkpoint: checkpoint({
-        guestState: state(180, 40, weapon('weapon.spear', 27)),
-        drops: [{ entityId: 'drop:ABC123:1:0', x: 260, y: 90, item: weapon('weapon.axe', 24) }],
-      }),
-    },
-  }))
-
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 2)
   assert.equal(scene.localPlayer.state.x, 180)
   assert.equal(currentWeapon(scene.localPlayer.state)?.type, 'weapon.spear')
   assert.equal(scene.drops.length, 1)
@@ -224,18 +222,16 @@ test('fresh follower retries checkpoint sync without publishing ordinary snapsho
   assert.equal(weaponSyncs, 1)
   assert.equal(groundReconciles, 1)
 
-  tick()
-  await nextTurn()
   const snapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
-  assert.equal(snapshots.length, 3)
-  assert.equal('syncCheckpoint' in snapshots[2].params.snapshot, false)
-  assert.equal(snapshots[2].params.snapshot.state.equipment.weapon.type, 'weapon.spear')
+  assert.equal(snapshots.length >= 1, true)
+  assert.equal(snapshots.some((call) => call.params.snapshot.syncCheckpoint === true), false)
+  assert.equal(snapshots.at(-1).params.snapshot.state.equipment.weapon.type, 'weapon.spear')
   runtime.stop()
 })
 
-test('host portal countdown uses both live player positions and restarts from three after either player leaves', () => {
+test('host portal countdown uses both live player positions and restarts from three after either player leaves', async () => {
   const scene = sceneFixture('host', state(100, 100))
-  const socket = socketFixture()
+  const socket = socketFixture({ sessionStates: [null] })
   scene.portal = { id: 'portal:ABC123:1:0', x: 100, y: 100, unlockAt: 0, countdownLabel: null }
 
   const runtime = createDungeonNetworkRuntime({
@@ -248,6 +244,8 @@ test('host portal countdown uses both live player positions and restarts from th
     clearIntervalImpl: () => {},
   })
   runtime.start()
+  await nextTurn()
+  await nextTurn()
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
