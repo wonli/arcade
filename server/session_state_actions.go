@@ -92,12 +92,16 @@ func (a *Actions) sessionStatePut(c *ws.Context) {
 	case err != nil:
 		c.SendCode(500, err.Error())
 	default:
+		// Persisted session state is also the canonical anti-entropy snapshot.
+		// Reuse the existing Dungeon checkpoint fact path so online peers apply
+		// the same monotonic authority/revision validation as reconnect hydration.
 		c.Pub(roomTopic(roomID), ws.H{
-			"type":           "session.state.updated",
-			"playerId":       playerID,
-			"authorityEpoch": req.AuthorityEpoch,
-			"revision":       req.Revision,
-			"schemaVersion":  req.SchemaVersion,
+			"type":     "dungeon.fact",
+			"playerId": playerID,
+			"fact": ws.H{
+				"type":       "session.checkpoint",
+				"checkpoint": req.Payload,
+			},
 		})
 		c.Send(ws.H{"ok": true})
 	}
