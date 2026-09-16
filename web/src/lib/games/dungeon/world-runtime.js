@@ -17,7 +17,7 @@ const ENEMY_STATE_FIELDS = [
   'phaseThreshold', 'chargeCooldown', 'shockwaveCooldown', 'nextChargeAt', 'nextShockwaveAt',
   'chargingUntil', 'chargeVx', 'chargeVy', 'attackRange', 'preferredRange', 'projectileDamage',
   'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'contactDamage', 'tint', 'scale', 'barOffset',
-  'nextSpecialAt', 'dashUntil', 'specialLockedUntil', 'pendingSpecial',
+  'nextSpecialAt', 'dashUntil', 'dashVx', 'dashVy', 'specialLockedUntil', 'strafeSign', 'pendingSpecial',
 ]
 
 function normalizeFloor(floor) {
