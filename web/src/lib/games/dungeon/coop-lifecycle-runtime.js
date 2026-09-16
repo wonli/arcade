@@ -73,6 +73,12 @@ export function installCoopLifecycleRuntime(scene, {
     }
   }
 
+  const presentWipe = (player = scene.localPlayer) => {
+    if (wipePresented) return
+    wipePresented = true
+    originalGameOver?.call(scene, player)
+  }
+
   const down = (player) => {
     const id = normalizeId(player)
     if (!id || !scene.players?.has?.(id)) return null
@@ -87,10 +93,7 @@ export function installCoopLifecycleRuntime(scene, {
     syncPlayerPresentation(scene, player)
     notify({ downed: [id] })
 
-    if (partyWiped && !wipePresented) {
-      wipePresented = true
-      originalGameOver?.call(scene, scene.localPlayer ?? player)
-    }
+    if (partyWiped) presentWipe(scene.localPlayer ?? player)
     return { lifecycle: structuredClone(lifecycle), partyWiped }
   }
 
@@ -120,8 +123,9 @@ export function installCoopLifecycleRuntime(scene, {
       lifecycle = structuredClone(nextLifecycle ?? {})
       ensureRoster()
       partyWiped = status === 'wiped'
-      wipePresented = partyWiped
       applyPlayerLifecycle()
+      if (partyWiped) presentWipe(scene.localPlayer)
+      else wipePresented = false
       return api.snapshot()
     },
     tick(elapsedMs = 0) {
