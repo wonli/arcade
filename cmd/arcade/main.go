@@ -35,6 +35,7 @@ func main() {
 	actions.Register(router)
 	actions.RegisterChess(router)
 	actions.RegisterDungeon(router)
+	actions.RegisterSessionState(router)
 
 	frontend.Register(engine)
 
