@@ -1,26 +1,20 @@
 import { getPlayerSkillReadyAt } from './player-entity.js'
 
-function intentTime(value, fallback = 0) {
-  const time = Number(value)
-  return Number.isFinite(time) ? time : fallback
-}
-
 export function createPlayerIntentRuntime({ player, emit = () => {} } = {}) {
   if (!player) throw new TypeError('Player is required')
 
   let lastAttackAt = Number(player.lastAttackAt) || 0
   let primaryReadyAt = getPlayerSkillReadyAt(player, 'primary')
 
-  function observe(time = 0) {
-    const now = intentTime(time)
+  function observe() {
     const nextAttackAt = Number(player.lastAttackAt) || 0
     const nextPrimaryReadyAt = getPlayerSkillReadyAt(player, 'primary')
 
     if (nextAttackAt > lastAttackAt) {
-      emit({ type: 'attack', playerId: String(player.id), time: nextAttackAt || now })
+      emit({ type: 'attack', playerId: String(player.id) })
     }
     if (nextPrimaryReadyAt > primaryReadyAt) {
-      emit({ type: 'skill', playerId: String(player.id), skillId: 'primary', time: now })
+      emit({ type: 'skill', playerId: String(player.id), skillId: 'primary' })
     }
 
     lastAttackAt = nextAttackAt
@@ -33,7 +27,7 @@ export function createPlayerIntentRuntime({ player, emit = () => {} } = {}) {
 export function installPlayerIntentRuntime(scene, { player = scene?.localPlayer, onIntent = () => {} } = {}) {
   if (!scene?.events?.on || !scene?.events?.off) throw new TypeError('Scene events are required')
   const runtime = createPlayerIntentRuntime({ player, emit: onIntent })
-  const observe = () => runtime.observe(scene.time?.now)
+  const observe = () => runtime.observe()
 
   scene.events.on('postupdate', observe)
 
