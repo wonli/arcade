@@ -28,6 +28,7 @@ export function ensureDungeonCombatRuntime(scene) {
   }
   let damageDepth = 0
   let deferredDamageEvents = []
+  let afterDamageCallbacks = []
 
   const coreDamage = (hit) => core.damageEnemy?.(
     hit.enemy,
@@ -40,6 +41,20 @@ export function ensureDungeonCombatRuntime(scene) {
 
   const notifyDamageApplied = (event) => {
     try { slots.authority?.onDamageApplied?.(event) } catch {}
+  }
+
+  const flushDeferredDamageEvents = () => {
+    const pending = deferredDamageEvents
+    deferredDamageEvents = []
+    for (const nested of pending) notifyDamageApplied(nested)
+  }
+
+  const flushAfterDamage = () => {
+    const callbacks = afterDamageCallbacks
+    afterDamageCallbacks = []
+    for (const callback of callbacks) {
+      try { callback() } catch {}
+    }
   }
 
   const api = {
@@ -63,6 +78,17 @@ export function ensureDungeonCombatRuntime(scene) {
 
     beginWeaponAttack(target, player = scene.localPlayer) {
       return slots.weaponPolicy?.onAttack?.(target, player) ?? null
+    },
+
+    afterDamage(callback) {
+      if (typeof callback !== 'function') return false
+      if (damageDepth > 0) afterDamageCallbacks.push(callback)
+      else callback()
+      return true
+    },
+
+    inDamageTransaction() {
+      return damageDepth > 0
     },
 
     damageEnemy(
@@ -91,6 +117,7 @@ export function ensureDungeonCombatRuntime(scene) {
 
       const beforeHp = Number(enemy.hp) || 0
       damageDepth++
+      let completed = false
       try {
         const result = slots.damageResolver
           ? slots.damageResolver(hit, coreDamage)
@@ -107,17 +134,16 @@ export function ensureDungeonCombatRuntime(scene) {
           if (event) deferredDamageEvents.push(event)
         } else {
           if (event) notifyDamageApplied(event)
-          const pending = deferredDamageEvents
-          deferredDamageEvents = []
-          for (const nested of pending) notifyDamageApplied(nested)
+          flushDeferredDamageEvents()
+          flushAfterDamage()
         }
+        completed = true
         return result
       } finally {
         damageDepth--
-        if (damageDepth === 0 && deferredDamageEvents.length) {
-          const pending = deferredDamageEvents
+        if (damageDepth === 0 && !completed) {
           deferredDamageEvents = []
-          for (const nested of pending) notifyDamageApplied(nested)
+          afterDamageCallbacks = []
         }
       }
     },
