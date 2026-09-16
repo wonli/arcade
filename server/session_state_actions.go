@@ -67,13 +67,16 @@ func (a *Actions) sessionStatePut(c *ws.Context) {
 	}
 
 	var req sessionStatePutRequest
-	if err := c.BindingJson(&req); err != nil || sessionRoomID(req.RoomID) == "" ||
-		req.AuthorityEpoch == 0 || req.Revision == 0 || req.SchemaVersion == 0 || len(req.Payload) == 0 {
+	roomID := ""
+	if err := c.BindingJson(&req); err == nil {
+		roomID = sessionRoomID(req.RoomID)
+	}
+	if roomID == "" || req.AuthorityEpoch == 0 || req.Revision == 0 || req.SchemaVersion == 0 || len(req.Payload) == 0 {
 		c.SendCode(400, "invalid session state")
 		return
 	}
 
-	err := a.service.PutSessionState(sessionRoomID(req.RoomID), playerID, arcade.SessionState{
+	err := a.service.PutSessionState(roomID, playerID, arcade.SessionState{
 		AuthorityEpoch: req.AuthorityEpoch,
 		Revision:       req.Revision,
 		SchemaVersion:  req.SchemaVersion,
@@ -89,6 +92,13 @@ func (a *Actions) sessionStatePut(c *ws.Context) {
 	case err != nil:
 		c.SendCode(500, err.Error())
 	default:
+		c.Pub(roomTopic(roomID), ws.H{
+			"type":           "session.state.updated",
+			"playerId":       playerID,
+			"authorityEpoch": req.AuthorityEpoch,
+			"revision":       req.Revision,
+			"schemaVersion":  req.SchemaVersion,
+		})
 		c.Send(ws.H{"ok": true})
 	}
 }
