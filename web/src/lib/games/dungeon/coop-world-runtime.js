@@ -1,3 +1,5 @@
+import { installTransientVfxRuntime } from './transient-vfx-runtime.js'
+
 function isLivingPlayer(player) {
   return Boolean(player && !player.dead && Number(player.state?.hp ?? 0) > 0)
 }
@@ -26,6 +28,14 @@ export function installCoopWorldSimulation(scene, { localPlayer = scene?.localPl
   if (!localPlayer) throw new TypeError('Dungeon local player is required')
   if (scene.__dungeonCoopWorldSimulation) return scene.__dungeonCoopWorldSimulation
 
+  const ownsTransientVfx = !scene.__dungeonTransientVfx
+  const transientVfx = installTransientVfxRuntime(scene).wrapMethods([
+    'damageText',
+    'deathBurst',
+    'pickupBurst',
+    'effectLine',
+    'showBanner',
+  ])
   const originalUpdateEnemies = typeof scene.updateEnemies === 'function' ? scene.updateEnemies : null
   const originalUpdateEnemyProjectiles = typeof scene.updateEnemyProjectiles === 'function'
     ? scene.updateEnemyProjectiles
@@ -74,6 +84,7 @@ export function installCoopWorldSimulation(scene, { localPlayer = scene?.localPl
       if (scene.updateEnemyProjectiles === updateEnemyProjectiles && originalUpdateEnemyProjectiles) {
         scene.updateEnemyProjectiles = originalUpdateEnemyProjectiles
       }
+      if (ownsTransientVfx) transientVfx.restore()
       if (scene.__dungeonCoopWorldSimulation === api) scene.__dungeonCoopWorldSimulation = null
     },
   }
