@@ -45,12 +45,13 @@ export function ensureDungeonCombatRuntime(scene) {
   const api = {
     __dungeonCombatRuntime: true,
 
-    attack(time, player = scene.localPlayer) {
-      return (slots.attackOwner ?? core.attack)?.(time, player) ?? null
+    attack(player = scene.localPlayer, time = scene.time?.now ?? 0) {
+      if (slots.attackOwner) return slots.attackOwner(player, time)
+      return core.attack?.(time, player) ?? null
     },
 
-    skill(skillId = 'primary', time = scene.time?.now ?? 0, player = scene.localPlayer) {
-      if (slots.skillOwner) return slots.skillOwner(skillId, time, player)
+    skill(player = scene.localPlayer, skillId = 'primary', time = scene.time?.now ?? 0) {
+      if (slots.skillOwner) return slots.skillOwner(player, skillId, time)
       if (skillId !== 'primary') return null
       return core.skill?.(time, player) ?? null
     },
