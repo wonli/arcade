@@ -28,6 +28,10 @@ function normalizeAuthority(authority) {
   return { mayAdvance, onAdvanced }
 }
 
+function canonicalMaterialization(context) {
+  return context?.source === 'world-state' || context?.source === 'replicated-fact'
+}
+
 export function ensureDungeonFloorRuntime(scene) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
   if (scene.dungeon?.progression?.__dungeonFloorRuntime === true) return scene.dungeon.progression
@@ -56,6 +60,12 @@ export function ensureDungeonFloorRuntime(scene) {
       if (handled) value = before?.value ?? null
       else if (slots.advanceOwner) value = slots.advanceOwner(player, core.advance, normalizedContext)
       else value = core.advance?.(player) ?? null
+
+      if (!handled && normalizeFloor(scene.floor) <= fromFloor && canonicalMaterialization(normalizedContext)) {
+        scene.floor = fromFloor + 1
+        scene.startFloor?.(false, player)
+        value = scene.floor
+      }
 
       const toFloor = normalizeFloor(scene.floor)
       const transition = {
