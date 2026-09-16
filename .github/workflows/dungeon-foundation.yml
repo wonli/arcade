@@ -69,4 +69,5 @@ jobs:
             src/lib/games/dungeon/network-foundation-contract.test.js \
             src/lib/games/dungeon/network-session-authority.test.js \
             src/lib/games/dungeon/network-reconnect-regression.test.js \
+            src/lib/games/dungeon/coop-session-command-regression.test.js \
             src/lib/games/dungeon/network-runtime.test.js
