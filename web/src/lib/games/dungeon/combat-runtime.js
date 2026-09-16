@@ -24,12 +24,14 @@ export function ensureDungeonCombatRuntime(scene) {
   const core = {
     attack: callable(scene.autoAttack)?.bind(scene) ?? null,
     skill: callable(scene.trySkill)?.bind(scene) ?? null,
+    slash: callable(scene.slash)?.bind(scene) ?? null,
     damageEnemy: callable(scene.damageEnemy)?.bind(scene) ?? null,
     applyWeaponProcs: callable(scene.applyWeaponProcs)?.bind(scene) ?? null,
   }
   const slots = {
     attackOwner: bound(existing, 'attack'),
     skillOwner: bound(existing, 'skill'),
+    slashOwner: bound(existing, 'slash'),
     damageResolver: existingDamageOwner
       ? (hit) => existingDamageOwner(
           hit.enemy,
@@ -91,6 +93,14 @@ export function ensureDungeonCombatRuntime(scene) {
       if (slots.skillOwner) return slots.skillOwner(player, skillId, time)
       if (skillId !== 'primary') return null
       return core.skill?.(time, player) ?? null
+    },
+
+    slash(target, player = scene.localPlayer) {
+      const coreSlash = (nextTarget = target, nextPlayer = player) => (
+        core.slash?.(nextTarget, nextPlayer) ?? null
+      )
+      if (slots.slashOwner) return slots.slashOwner(target, player, coreSlash)
+      return coreSlash(target, player)
     },
 
     weaponDamageStat(player, value) {
@@ -188,6 +198,12 @@ export function ensureDungeonCombatRuntime(scene) {
       return restoreSlot(slots, 'skillOwner', slots.skillOwner, previous)
     },
 
+    setSlashOwner(owner = null) {
+      const previous = slots.slashOwner
+      slots.slashOwner = callable(owner)
+      return restoreSlot(slots, 'slashOwner', slots.slashOwner, previous)
+    },
+
     setDamageResolver(owner = null) {
       const previous = slots.damageResolver
       slots.damageResolver = callable(owner)
@@ -228,6 +244,9 @@ export function installDungeonCombatSceneBridge(scene) {
     autoAttack(time, player = scene.localPlayer) {
       return combat.attack(player, time)
     },
+    slash(target, player = scene.localPlayer) {
+      return combat.slash(target, player)
+    },
     damageEnemy(...args) {
       return combat.damageEnemy(...args)
     },
@@ -237,6 +256,7 @@ export function installDungeonCombatSceneBridge(scene) {
   }
 
   scene.autoAttack = bridge.autoAttack
+  scene.slash = bridge.slash
   scene.damageEnemy = bridge.damageEnemy
   scene.applyWeaponProcs = bridge.applyWeaponProcs
   scene.__dungeonCombatSceneBridge = bridge
