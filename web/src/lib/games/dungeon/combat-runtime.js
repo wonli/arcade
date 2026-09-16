@@ -2,6 +2,11 @@ function callable(value) {
   return typeof value === 'function' ? value : null
 }
 
+function bound(owner, name) {
+  const value = callable(owner?.[name])
+  return value ? value.bind(owner) : null
+}
+
 function restoreSlot(slots, name, owner, previous) {
   return () => {
     if (slots[name] === owner) slots[name] = previous
@@ -12,6 +17,10 @@ export function ensureDungeonCombatRuntime(scene) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
   if (scene.dungeon?.combat?.__dungeonCombatRuntime === true) return scene.dungeon.combat
 
+  const existing = scene.dungeon?.combat && typeof scene.dungeon.combat === 'object'
+    ? scene.dungeon.combat
+    : null
+  const existingDamageOwner = bound(existing, 'damageEnemy')
   const core = {
     attack: callable(scene.autoAttack)?.bind(scene) ?? null,
     skill: callable(scene.trySkill)?.bind(scene) ?? null,
@@ -19,12 +28,25 @@ export function ensureDungeonCombatRuntime(scene) {
     applyWeaponProcs: callable(scene.applyWeaponProcs)?.bind(scene) ?? null,
   }
   const slots = {
-    attackOwner: null,
-    skillOwner: null,
-    damageResolver: null,
-    procOwner: null,
-    weaponPolicy: null,
-    authority: null,
+    attackOwner: bound(existing, 'attack'),
+    skillOwner: bound(existing, 'skill'),
+    damageResolver: existingDamageOwner
+      ? (hit) => existingDamageOwner(
+          hit.enemy,
+          hit.damage,
+          hit.critical,
+          hit.knockback,
+          hit.context,
+          hit.player,
+        )
+      : null,
+    procOwner: bound(existing, 'applyWeaponProcs'),
+    weaponPolicy: existing?.weaponPolicy && typeof existing.weaponPolicy === 'object'
+      ? existing.weaponPolicy
+      : null,
+    authority: existing?.authority && typeof existing.authority === 'object'
+      ? existing.authority
+      : null,
   }
   let damageDepth = 0
   let deferredDamageEvents = []
