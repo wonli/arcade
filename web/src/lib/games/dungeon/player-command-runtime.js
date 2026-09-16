@@ -21,11 +21,11 @@ function resolvePlayer(scene, command) {
   return { player, playerId }
 }
 
-function commandTime(scene, command) {
-  const supplied = Number(command?.time)
-  if (Number.isFinite(supplied)) return supplied
-  const now = Number(scene?.time?.now)
-  return Number.isFinite(now) ? now : 0
+function gameplayTime(scene, now) {
+  const injected = typeof now === 'function' ? Number(now()) : NaN
+  if (Number.isFinite(injected)) return injected
+  const sceneNow = Number(scene?.time?.now)
+  return Number.isFinite(sceneNow) ? sceneNow : 0
 }
 
 function validateCommand(scene, command) {
@@ -55,7 +55,7 @@ function validateCommand(scene, command) {
   return { ...resolved, type, chestId }
 }
 
-export function executePlayerCommand(scene, command, { authoritative = true } = {}) {
+export function executePlayerCommand(scene, command, { authoritative = true, now = null } = {}) {
   const validated = validateCommand(scene, command)
   if (validated.error) return result(command, { reason: validated.error })
 
@@ -68,6 +68,8 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
+  const executionTime = gameplayTime(scene, now)
+
   if (type === 'attack') {
     const attack = ensureDungeonCapabilities(scene).combat?.attack
     if (typeof attack !== 'function') {
@@ -75,7 +77,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     }
 
     const beforeAttackAt = player.lastAttackAt
-    const value = attack(player, commandTime(scene, command))
+    const value = attack(player, executionTime)
     const applied = player.lastAttackAt !== beforeAttackAt
     return result(command, {
       accepted: true,
@@ -91,7 +93,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
       scene,
       player,
       validated.skillId,
-      commandTime(scene, command),
+      executionTime,
     )
     return result(command, {
       accepted: true,
