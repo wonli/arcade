@@ -163,7 +163,7 @@ test('reconnect sync request never overwrites the authority copy of the guest lo
   runtime.stop()
 })
 
-test('fresh follower stays snapshot-silent until checkpoint hydration then restores local weapon and ground presentation', async () => {
+test('fresh follower retries checkpoint sync without publishing ordinary snapshots until hydration then restores presentation', async () => {
   const scene = sceneFixture('guest', state(10, 20, null))
   const socket = socketFixture()
   let tick = null
@@ -201,7 +201,9 @@ test('fresh follower stays snapshot-silent until checkpoint hydration then resto
 
   tick()
   await nextTurn()
-  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot').length, 1)
+  const hydrationSnapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
+  assert.equal(hydrationSnapshots.length, 2)
+  assert.equal(hydrationSnapshots[1].params.snapshot.syncCheckpoint, true)
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.fact',
@@ -225,9 +227,9 @@ test('fresh follower stays snapshot-silent until checkpoint hydration then resto
   tick()
   await nextTurn()
   const snapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
-  assert.equal(snapshots.length, 2)
-  assert.equal('syncCheckpoint' in snapshots[1].params.snapshot, false)
-  assert.equal(snapshots[1].params.snapshot.state.equipment.weapon.type, 'weapon.spear')
+  assert.equal(snapshots.length, 3)
+  assert.equal('syncCheckpoint' in snapshots[2].params.snapshot, false)
+  assert.equal(snapshots[2].params.snapshot.state.equipment.weapon.type, 'weapon.spear')
   runtime.stop()
 })
 
