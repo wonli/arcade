@@ -6,6 +6,7 @@ on:
       - refactor/dungeon-coop-foundation
     paths:
       - 'web/src/lib/games/dungeon/**'
+      - 'web/src/routes/room/[code]/dungeon/+page.svelte'
       - '.github/workflows/dungeon-foundation.yml'
       - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
       - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
@@ -33,7 +34,9 @@ jobs:
           node --test \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
+            src/lib/games/dungeon/player-intent-runtime.test.js \
             src/lib/games/dungeon/player-command-runtime.test.js \
+            src/lib/games/dungeon/coop-network-intent-wiring.test.js \
             src/lib/games/dungeon/network-foundation-contract.test.js \
             src/lib/games/dungeon/network-session-authority.test.js \
             src/lib/games/dungeon/network-reconnect-regression.test.js \
