@@ -35,6 +35,7 @@ jobs:
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
             src/lib/games/dungeon/combat-runtime.test.js \
+            src/lib/games/dungeon/combat-slash-ownership.test.js \
             src/lib/games/dungeon/combat-ownership-contract.test.js \
             src/lib/games/dungeon/player-lifecycle-runtime.test.js \
             src/lib/games/dungeon/coop-lifecycle-ownership-contract.test.js \
