@@ -195,7 +195,7 @@ test('fresh follower start explicitly requests canonical session checkpoint', as
   runtime.stop()
 })
 
-test('current authority answers reconnect sync request even when the remote player entity already exists', async () => {
+test('current authority answers reconnect sync request without accepting reconnect bootstrap state', async () => {
   const scene = sceneFixture('host')
   scene.floor = 4
   const socket = socketFixture()
@@ -230,7 +230,8 @@ test('current authority answers reconnect sync request even when the remote play
     .find((candidate) => candidate?.type === 'session.checkpoint')
   assert.equal(fact?.checkpoint?.world?.floor, 4)
   assert.equal(fact?.checkpoint?.runSeed, 'ABC123')
-  assert.equal(scene.players.get('guest').state.x, 120)
+  assert.equal(fact?.checkpoint?.players?.guest?.state?.x, 100)
+  assert.equal(scene.players.get('guest').state.x, 100)
   runtime.stop()
 })
 
