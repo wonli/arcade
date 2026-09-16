@@ -34,6 +34,9 @@ jobs:
           node --test \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
+            src/lib/games/dungeon/player-lifecycle-runtime.test.js \
+            src/lib/games/dungeon/coop-lifecycle-ownership-contract.test.js \
+            src/lib/games/dungeon/network-lifecycle-clock.test.js \
             src/lib/games/dungeon/loot-runtime.test.js \
             src/lib/games/dungeon/infinite-loot-policy-contract.test.js \
             src/lib/games/dungeon/loot-world-ownership-contract.test.js \
