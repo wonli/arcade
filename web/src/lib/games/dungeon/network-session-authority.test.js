@@ -249,3 +249,53 @@ test('manual takeover increments epoch and keeps replicated checkpoint state', (
   assert.equal(takeover.world.floor, 11)
   assert.equal(runtime.isAuthority(), true)
 })
+
+test('live follower takeover rebinds world runtime as authority', async () => {
+  const runtime = createDungeonNetworkRuntime({
+    socket: socketFixture(),
+    scene: sceneFixture('guest'),
+    roomId: 'ABC123',
+    localPlayerId: 'guest',
+    hostId: 'host',
+    setIntervalImpl: () => 7,
+    clearIntervalImpl: () => {},
+  })
+  runtime.start()
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.fact',
+    playerId: 'host',
+    fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'host', epoch: 1, sequence: 5, floor: 8 }) },
+  }))
+
+  assert.equal(runtime.world()?.isHost, false)
+  runtime.takeAuthority()
+  await nextTurn()
+
+  assert.equal(runtime.isAuthority(), true)
+  assert.equal(runtime.world()?.isHost, true)
+  runtime.stop()
+})
+
+test('live former host rebinds world runtime as follower after newer checkpoint', () => {
+  const runtime = createDungeonNetworkRuntime({
+    socket: socketFixture(),
+    scene: sceneFixture('host'),
+    roomId: 'ABC123',
+    localPlayerId: 'host',
+    hostId: 'host',
+    setIntervalImpl: () => 7,
+    clearIntervalImpl: () => {},
+  })
+  runtime.start()
+  assert.equal(runtime.world()?.isHost, true)
+
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.fact',
+    playerId: 'guest',
+    fact: { type: 'session.checkpoint', checkpoint: checkpoint({ authorityId: 'guest', epoch: 2, sequence: 0, floor: 8 }) },
+  }))
+
+  assert.equal(runtime.isAuthority(), false)
+  assert.equal(runtime.world()?.isHost, false)
+  runtime.stop()
+})
