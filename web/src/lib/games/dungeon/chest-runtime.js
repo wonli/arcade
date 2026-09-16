@@ -74,17 +74,18 @@ export function createDungeonChestRuntime(scene, {
       Boolean(progress.fortuneActive),
     )
     const floor = Math.max(1, Math.floor(Number(progress.floor ?? scene.floor) || 1))
-    const spawn = () => {
-      for (let index = 0; index < profile.dropCount; index++) {
-        scene.spawnDrop?.(
-          chest.x + (index - (profile.dropCount - 1) / 2) * 28,
-          chest.y + 18,
-          rollChestWeapon(profile, floor, random),
-        )
-      }
+
+    // Reward creation is authoritative gameplay state, not presentation. Keep it
+    // synchronous so a background authority tab cannot delay world mutation by
+    // pausing Phaser's render clock. Any desired chest-opening delay belongs in
+    // presentation/VFX only.
+    for (let index = 0; index < profile.dropCount; index++) {
+      scene.spawnDrop?.(
+        chest.x + (index - (profile.dropCount - 1) / 2) * 28,
+        chest.y + 18,
+        rollChestWeapon(profile, floor, random),
+      )
     }
-    if (scene.time?.delayedCall) scene.time.delayedCall(90, spawn)
-    else spawn()
     return { floor, progress, profile }
   }
 
