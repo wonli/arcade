@@ -218,6 +218,31 @@ export function ensureDungeonCombatRuntime(scene) {
   return api
 }
 
+export function installDungeonCombatSceneBridge(scene) {
+  if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
+  if (scene.__dungeonCombatSceneBridge) return scene.__dungeonCombatSceneBridge
+
+  const combat = ensureDungeonCombatRuntime(scene)
+  const bridge = {
+    combat,
+    autoAttack(time, player = scene.localPlayer) {
+      return combat.attack(player, time)
+    },
+    damageEnemy(...args) {
+      return combat.damageEnemy(...args)
+    },
+    applyWeaponProcs(...args) {
+      return combat.applyWeaponProcs(...args)
+    },
+  }
+
+  scene.autoAttack = bridge.autoAttack
+  scene.damageEnemy = bridge.damageEnemy
+  scene.applyWeaponProcs = bridge.applyWeaponProcs
+  scene.__dungeonCombatSceneBridge = bridge
+  return bridge
+}
+
 export function dungeonCombat(scene) {
   return scene?.dungeon?.combat?.__dungeonCombatRuntime === true
     ? scene.dungeon.combat
