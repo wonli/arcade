@@ -41,7 +41,7 @@ test('combat runtime owns behavior without replacing Scene gameplay methods', ()
   assert.equal(scene.trySkill, originals.trySkill)
   assert.equal(scene.applyWeaponProcs, originals.applyWeaponProcs)
   assert.equal(scene.damageEnemy, originals.damageEnemy)
-  assert.equal(combat.attack(100, scene.localPlayer), 'owned-attack')
+  assert.equal(combat.attack(scene.localPlayer, 100), 'owned-attack')
   assert.equal(combat.applyWeaponProcs({ id: 'enemy' }, 12, false, scene.localPlayer), 'owned-procs')
 })
 
@@ -120,4 +120,25 @@ test('nested applied damage is reported outer-first so authority facts keep caus
     ['outer', 10, 0],
     ['nested', 10, 7],
   ])
+})
+
+test('damage transaction flushes world side effects only after applied damage facts', () => {
+  const { scene } = sceneFixture()
+  const combat = ensureDungeonCombatRuntime(scene)
+  const order = []
+  const enemy = { id: 'enemy', hp: 10 }
+
+  combat.setAuthority({
+    mayDamage: () => true,
+    onDamageApplied(hit) { order.push(`damage:${hit.enemy.id}`) },
+  })
+  combat.setDamageResolver((hit, core) => {
+    const result = core(hit)
+    combat.afterDamage(() => order.push(`side-effect:${hit.enemy.id}`))
+    return result
+  })
+
+  combat.damageEnemy(enemy, 10, false, 0, { source: 'weapon' }, scene.localPlayer)
+
+  assert.deepEqual(order, ['damage:enemy', 'side-effect:enemy'])
 })
