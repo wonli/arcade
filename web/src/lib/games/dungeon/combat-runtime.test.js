@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { ensureDungeonCombatRuntime } from './combat-runtime.js'
+import { ensureDungeonCombatRuntime, installDungeonCombatSceneBridge } from './combat-runtime.js'
 
 function sceneFixture() {
   const calls = []
@@ -43,6 +43,33 @@ test('combat runtime owns behavior without replacing Scene gameplay methods', ()
   assert.equal(scene.damageEnemy, originals.damageEnemy)
   assert.equal(combat.attack(scene.localPlayer, 100), 'owned-attack')
   assert.equal(combat.applyWeaponProcs({ id: 'enemy' }, 12, false, scene.localPlayer), 'owned-procs')
+})
+
+test('combat Scene bridge is installed once and remains stable across runtime owner changes', () => {
+  const { scene } = sceneFixture()
+  const first = installDungeonCombatSceneBridge(scene)
+  const refs = {
+    autoAttack: scene.autoAttack,
+    damageEnemy: scene.damageEnemy,
+    applyWeaponProcs: scene.applyWeaponProcs,
+  }
+  const combat = ensureDungeonCombatRuntime(scene)
+  const restoreAttack = combat.setAttackOwner(() => 'owned-attack')
+  const restoreProcs = combat.setProcOwner(() => 'owned-procs')
+  const second = installDungeonCombatSceneBridge(scene)
+
+  assert.equal(second, first)
+  assert.equal(scene.autoAttack, refs.autoAttack)
+  assert.equal(scene.damageEnemy, refs.damageEnemy)
+  assert.equal(scene.applyWeaponProcs, refs.applyWeaponProcs)
+  assert.equal(scene.autoAttack(100, scene.localPlayer), 'owned-attack')
+  assert.equal(scene.applyWeaponProcs({ id: 'enemy' }, 5, false, scene.localPlayer), 'owned-procs')
+
+  restoreProcs()
+  restoreAttack()
+  assert.equal(scene.autoAttack, refs.autoAttack)
+  assert.equal(scene.damageEnemy, refs.damageEnemy)
+  assert.equal(scene.applyWeaponProcs, refs.applyWeaponProcs)
 })
 
 test('existing explicit attack owner is adopted when stable runtime is created', () => {
