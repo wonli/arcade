@@ -91,6 +91,7 @@ test('checkpoint player reconciliation applies local state and despawns remotes 
   const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'guest' })
 
   const stale = replication.applyRemote('stale', { id: 'stale', state: state(50) })
+  const staleActor = stale.actor
   const host = replication.applyRemote('host', { id: 'host', state: state(70) })
 
   replication.reconcileCheckpointPlayers({
@@ -104,7 +105,8 @@ test('checkpoint player reconciliation applies local state and despawns remotes 
   assert.equal(scene.players.get('host'), host)
   assert.equal(host.state.x, 240)
   assert.equal(scene.players.has('stale'), false)
-  assert.equal(stale.actor.destroyed, true)
+  assert.equal(staleActor.destroyed, true)
+  assert.equal(stale.actor, null)
 })
 
 test('despawnAllRemotes preserves the local PlayerEntity', () => {
