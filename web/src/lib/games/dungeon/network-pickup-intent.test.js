@@ -47,6 +47,7 @@ function socketFixture() {
 test('guest pickup intent is relayed and throttled instead of mutating the local world', async () => {
   const scene = sceneFixture()
   const socket = socketFixture()
+  let logicalNow = 1000
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
@@ -54,6 +55,7 @@ test('guest pickup intent is relayed and throttled instead of mutating the local
     runSeed: 'ABC123',
     localPlayerId: 'guest',
     hostId: 'host',
+    now: () => logicalNow,
     setIntervalImpl: () => 77,
     clearIntervalImpl: () => {},
   })
@@ -71,7 +73,7 @@ test('guest pickup intent is relayed and throttled instead of mutating the local
   assert.equal(commands.length, 1)
   assert.deepEqual(commands[0].params.command, { type: 'pickup', dropId: drop.id })
 
-  scene.time.now += 251
+  logicalNow += 251
   handler(scene.localPlayer, drop)
   await Promise.resolve()
   commands = socket.calls.filter((call) => call.action === 'dungeon.command')
