@@ -6,6 +6,8 @@ on:
       - refactor/dungeon-coop-foundation
       - fix/dungeon-coop-hydration-presentation
     paths:
+      - 'arcade/**'
+      - 'server/**'
       - 'web/src/lib/games/dungeon/**'
       - 'web/src/routes/room/[code]/dungeon/+page.svelte'
       - '.github/workflows/dungeon-foundation.yml'
@@ -23,6 +25,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Arcade server contracts
+        run: go test ./arcade ./server
 
       - name: Setup Node
         uses: actions/setup-node@v4
