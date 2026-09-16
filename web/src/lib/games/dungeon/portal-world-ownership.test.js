@@ -85,6 +85,7 @@ test('reapplying the same canonical portal keeps one presentation instance', () 
 
 test('canonical portal removal destroys the presentation and countdown once and remains idempotent', () => {
   const { scene, portal, destroys } = sceneFixture()
+  const countdownLabel = portal.countdownLabel
   const runtime = createDungeonWorldRuntime(scene, { runSeed: 'ABC123', isHost: false })
   const world = (sequence) => ({
     type: 'world.state',
@@ -105,5 +106,6 @@ test('canonical portal removal destroys the presentation and countdown once and 
   assert.equal(portal.glow.destroyed, 1)
   assert.equal(portal.ring.destroyed, 1)
   assert.equal(portal.core.destroyed, 1)
-  assert.equal(portal.countdownLabel.destroyed, 1)
+  assert.equal(portal.countdownLabel, null)
+  assert.equal(countdownLabel.destroyed, 1)
 })
