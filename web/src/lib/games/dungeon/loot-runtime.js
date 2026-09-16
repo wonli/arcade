@@ -22,6 +22,7 @@ export function ensureDungeonLootRuntime(scene) {
     step: callable(scene.updateDrops)?.bind(scene) ?? null,
   }
   const slots = {
+    spawnPolicy: null,
     spawnOwner: null,
     removeOwner: null,
     clearOwner: null,
@@ -129,6 +130,12 @@ export function ensureDungeonLootRuntime(scene) {
       return typeof slots.openChestOwner === 'function'
     },
 
+    setSpawnPolicy(owner = null) {
+      const previous = slots.spawnPolicy
+      slots.spawnPolicy = callable(owner)
+      return restoreSlot(slots, 'spawnPolicy', slots.spawnPolicy, previous)
+    },
+
     setSpawnOwner(owner = null) {
       const previous = slots.spawnOwner
       slots.spawnOwner = callable(owner)
@@ -173,16 +180,21 @@ export function ensureDungeonLootRuntime(scene) {
   }
 
   function spawn(request) {
-    if (slots.authority?.maySpawn && slots.authority.maySpawn(request) === false) return null
+    let nextRequest = request
+    if (request.prepare !== false && slots.spawnPolicy) {
+      const prepared = slots.spawnPolicy(request)
+      if (prepared && typeof prepared === 'object') nextRequest = prepared
+    }
+    if (slots.authority?.maySpawn && slots.authority.maySpawn(nextRequest) === false) return null
     const drop = slots.spawnOwner
-      ? slots.spawnOwner(request, coreSpawn)
-      : coreSpawn(request)
+      ? slots.spawnOwner(nextRequest, coreSpawn)
+      : coreSpawn(nextRequest)
     if (!drop) return null
     try {
       slots.authority?.onSpawned?.({
-        request,
+        request: nextRequest,
         drop,
-        exact: request.exact === true,
+        exact: nextRequest.exact === true,
       })
     } catch {}
     return drop
