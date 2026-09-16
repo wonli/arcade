@@ -3,10 +3,9 @@ import assert from 'node:assert/strict'
 
 import { ensureDungeonCapabilities } from './gameplay-capabilities.js'
 
-test('capability installation is stable and does not replace existing owners', () => {
-  const ownedAttack = () => 'owned'
+test('capability installation keeps one stable CombatRuntime owner', () => {
   const scene = {
-    dungeon: { combat: { attack: ownedAttack } },
+    autoAttack() { return 'base' },
   }
 
   const first = ensureDungeonCapabilities(scene)
@@ -17,45 +16,72 @@ test('capability installation is stable and does not replace existing owners', (
   assert.equal(second, first)
   assert.equal(second.combat, firstCombat)
   assert.equal(second.loot, firstLoot)
-  assert.equal(second.combat.attack, ownedAttack)
+  assert.equal(second.combat.__dungeonCombatRuntime, true)
 })
 
-test('compatibility capabilities delegate to the current legacy gameplay owners without capturing stale methods', () => {
+test('combat core is captured once while explicit owners can be installed and restored', () => {
   const calls = []
   const scene = {
     autoAttack(time, player) {
-      calls.push(['attack-v1', time, player.id])
+      calls.push(['base', time, player.id])
       player.lastAttackAt = time
     },
+  }
+  const player = { id: 'p2', lastAttackAt: 0 }
+  const combat = ensureDungeonCapabilities(scene).combat
+
+  scene.autoAttack = (time, nextPlayer) => {
+    calls.push(['late-scene-replacement', time, nextPlayer.id])
+  }
+  combat.attack(player, 100)
+
+  const restore = combat.setAttackOwner((nextPlayer, time) => {
+    calls.push(['owner', time, nextPlayer.id])
+    nextPlayer.lastAttackAt = time
+  })
+  combat.attack(player, 200)
+  restore()
+  combat.attack(player, 300)
+
+  assert.deepEqual(calls, [
+    ['base', 100, 'p2'],
+    ['owner', 200, 'p2'],
+    ['base', 300, 'p2'],
+  ])
+})
+
+test('loot compatibility capabilities still delegate to current runtime owners', () => {
+  const calls = []
+  const scene = {
     __dungeonPickupRuntime: {
       pickupById(player, dropId) {
-        calls.push(['pickup', dropId, player.id])
+        calls.push(['pickup-v1', dropId, player.id])
         return { picked: true }
       },
     },
     __dungeonSpatial: {
       openChestById(player, chestId) {
-        calls.push(['chest', chestId, player.id])
+        calls.push(['chest-v1', chestId, player.id])
         return { opened: true }
       },
     },
   }
-  const player = { id: 'p2', lastAttackAt: 0 }
+  const player = { id: 'p2' }
   const capabilities = ensureDungeonCapabilities(scene)
 
-  capabilities.combat.attack(player, 100)
-  scene.autoAttack = (time, nextPlayer) => {
-    calls.push(['attack-v2', time, nextPlayer.id])
-    nextPlayer.lastAttackAt = time
+  scene.__dungeonPickupRuntime.pickupById = (nextPlayer, dropId) => {
+    calls.push(['pickup-v2', dropId, nextPlayer.id])
+    return { picked: true }
   }
-  capabilities.combat.attack(player, 200)
+  scene.__dungeonSpatial.openChestById = (nextPlayer, chestId) => {
+    calls.push(['chest-v2', chestId, nextPlayer.id])
+    return { opened: true }
+  }
   capabilities.loot.pickup(player, 'drop-1')
   capabilities.loot.openChest(player, 'chest-1')
 
   assert.deepEqual(calls, [
-    ['attack-v1', 100, 'p2'],
-    ['attack-v2', 200, 'p2'],
-    ['pickup', 'drop-1', 'p2'],
-    ['chest', 'chest-1', 'p2'],
+    ['pickup-v2', 'drop-1', 'p2'],
+    ['chest-v2', 'chest-1', 'p2'],
   ])
 })
