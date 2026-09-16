@@ -17,10 +17,10 @@ test('observer emits one semantic attack intent when local attack state advances
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
   localPlayer.lastAttackAt = 1200
-  runtime.observe(1200)
-  runtime.observe(1200)
+  runtime.observe()
+  runtime.observe()
 
-  assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest', time: 1200 }])
+  assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest' }])
 })
 
 test('observer emits no attack intent when gameplay declined the attack', () => {
@@ -28,7 +28,7 @@ test('observer emits no attack intent when gameplay declined the attack', () => 
   const intents = []
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
-  runtime.observe(900)
+  runtime.observe()
 
   assert.deepEqual(intents, [])
 })
@@ -39,10 +39,10 @@ test('observer emits one semantic skill intent when local primary cooldown advan
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
   setPlayerSkillReadyAt(localPlayer, 'primary', 5000)
-  runtime.observe(1500)
-  runtime.observe(1500)
+  runtime.observe()
+  runtime.observe()
 
-  assert.deepEqual(intents, [{ type: 'skill', playerId: 'guest', skillId: 'primary', time: 1500 }])
+  assert.deepEqual(intents, [{ type: 'skill', playerId: 'guest', skillId: 'primary' }])
 })
 
 test('installed intent runtime observes postupdate without replacing gameplay methods', () => {
@@ -63,7 +63,7 @@ test('installed intent runtime observes postupdate without replacing gameplay me
   scene.time.now = 1400
   listeners.get('postupdate')?.()
 
-  assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest', time: 1400 }])
+  assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest' }])
   runtime.restore()
   assert.equal(listeners.has('postupdate'), false)
 })
