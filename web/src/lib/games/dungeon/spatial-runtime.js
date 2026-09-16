@@ -307,10 +307,12 @@ function renderFloor(scene, geometry) {
   if (geometry.grid) renderDungeon3Terrain(scene, geometry)
   else if (floorTexture) renderAuthoredFloorSkin(scene, geometry, floorTexture, spatialTextureFrame('floor', frames), floorSkin)
   else {
-    for (let y = tile; y < geometry.height - tile; y += tile) for (let x = left; x < right; x += tile) {
-      const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
-      background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
-      background.lineStyle(1, 0x3a312a, 0.55).strokeRect(x, y, tile, tile)
+    for (let y = tile; y < geometry.height - tile; y += tile) {
+      for (let x = tile; x < geometry.width - tile; x += tile) {
+        const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
+        background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
+        background.lineStyle(1, 0x3a312a, 0.55).strokeRect(x, y, tile, tile)
+      }
     }
   }
 
