@@ -1,4 +1,4 @@
-import { captureCheckpointClockState } from './checkpoint-clock-state.js'
+import { captureCheckpointClockState, materializeCheckpointClockState } from './checkpoint-clock-state.js'
 import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { installCoopWorldSimulation } from './coop-world-runtime.js'
 import { executePlayerCommand } from './player-command-runtime.js'
@@ -284,7 +284,8 @@ export function createDungeonNetworkRuntime({
 
   function applyCheckpointPresentation(checkpoint) {
     if (!checkpoint) return null
-    const world = { ...checkpoint.world, runSeed: normalizedRunSeed }
+    const localCheckpoint = materializeCheckpointClockState(checkpoint, lifecycleClock())
+    const world = { ...localCheckpoint.world, runSeed: normalizedRunSeed }
     if (worldRuntime) worldRuntime.applyFact(world)
     else {
       scene.floor = Math.max(1, Math.floor(Number(world.floor) || 1))
@@ -294,13 +295,13 @@ export function createDungeonNetworkRuntime({
       scene.runComplete = Boolean(world.runComplete)
     }
     scene.__dungeonPickupRuntime?.reconcileVisuals?.()
-    replicationRuntime.reconcileCheckpointPlayers(checkpoint.players ?? {})
+    replicationRuntime.reconcileCheckpointPlayers(localCheckpoint.players ?? {})
 
     const lifecycle = ensureLifecycleRuntime()
-    lifecycle.apply(checkpoint.lifecycle ?? {}, { status: checkpoint.status })
+    lifecycle.apply(localCheckpoint.lifecycle ?? {}, { status: localCheckpoint.status })
     scene.__dungeonSessionLifecycle = lifecycle.snapshot()
-    scene.__dungeonOpenedChestIds = new Set(checkpoint.openedChestIds ?? [])
-    scene.__dungeonSpatial?.applyOpenedChestIds?.(checkpoint.openedChestIds ?? [])
+    scene.__dungeonOpenedChestIds = new Set(localCheckpoint.openedChestIds ?? [])
+    scene.__dungeonSpatial?.applyOpenedChestIds?.(localCheckpoint.openedChestIds ?? [])
     lastLifecycleTickAt = lifecycleClock()
     return checkpoint
   }
