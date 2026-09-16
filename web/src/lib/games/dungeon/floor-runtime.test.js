@@ -82,3 +82,23 @@ test('transition policy may handle a transition without invoking the progression
   assert.deepEqual(events, [])
   assert.deepEqual(policyEvents, [['before', 'cached'], ['after', true, 1, 7]])
 })
+
+test('canonical materialization always makes forward progress even when progression owner is unavailable', () => {
+  const starts = []
+  const scene = {
+    floor: 4,
+    localPlayer: { id: 'local' },
+    startFloor(fresh, player) {
+      starts.push([fresh, player.id, this.floor])
+    },
+  }
+  installDungeonFloorSceneBridge(scene)
+  const floor = ensureDungeonFloorRuntime(scene)
+
+  assert.equal(scene.advanceFloor(scene.localPlayer), null)
+  assert.equal(scene.floor, 4)
+
+  assert.equal(floor.advance(scene.localPlayer, { source: 'world-state' }), 5)
+  assert.equal(scene.floor, 5)
+  assert.deepEqual(starts, [[false, 'local', 5]])
+})
