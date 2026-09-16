@@ -104,18 +104,41 @@ function materializePlayer(player, now) {
   }
 }
 
+function capturePendingSpecial(enemy, now) {
+  const pending = enemy.pendingSpecial
+  if (!pending || typeof pending !== 'object' || !('resolveAt' in pending)) return
+  pending.resolveRemainingMs = remainingUntil(pending.resolveAt, now)
+  delete pending.resolveAt
+}
+
+function consumePendingSpecial(enemy, elapsedMs) {
+  const pending = enemy.pendingSpecial
+  if (!pending || typeof pending !== 'object' || !('resolveRemainingMs' in pending)) return
+  pending.resolveRemainingMs = consumeRemaining(pending.resolveRemainingMs, elapsedMs)
+}
+
+function materializePendingSpecial(enemy, now) {
+  const pending = enemy.pendingSpecial
+  if (!pending || typeof pending !== 'object' || !('resolveRemainingMs' in pending)) return
+  const remaining = Math.max(0, clockValue(pending.resolveRemainingMs))
+  pending.resolveAt = remaining > 0 ? clockValue(now) + remaining : clockValue(now)
+  delete pending.resolveRemainingMs
+}
+
 function captureEnemy(enemy, now) {
   for (const [absoluteField, portableField] of ENEMY_FUTURE_TIMES) {
     if (!(absoluteField in enemy)) continue
     enemy[portableField] = remainingUntil(enemy[absoluteField], now)
     delete enemy[absoluteField]
   }
+  capturePendingSpecial(enemy, now)
 }
 
 function consumeEnemy(enemy, elapsedMs) {
   for (const [, portableField] of ENEMY_FUTURE_TIMES) {
     if (portableField in enemy) enemy[portableField] = consumeRemaining(enemy[portableField], elapsedMs)
   }
+  consumePendingSpecial(enemy, elapsedMs)
 }
 
 function materializeEnemy(enemy, now) {
@@ -126,6 +149,7 @@ function materializeEnemy(enemy, now) {
     enemy[absoluteField] = remaining > 0 ? current + remaining : 0
     delete enemy[portableField]
   }
+  materializePendingSpecial(enemy, current)
 }
 
 function eachPlayer(state, callback) {
