@@ -24,8 +24,9 @@ function sceneFixture() {
   return { scene, p1, p2 }
 }
 
-test('attack command never bypasses host autoAttack even when a target hint is supplied', () => {
+test('attack command never bypasses host autoAttack even when target and sender-time hints are supplied', () => {
   const { scene, p2 } = sceneFixture()
+  scene.time = { now: 1200 }
   scene.enemies = [{ id: 'enemy-7', x: 80, y: 0, hp: 50 }]
   let slashCalls = 0
   let autoAttackCall = null
@@ -39,7 +40,7 @@ test('attack command never bypasses host autoAttack even when a target hint is s
     type: 'attack',
     playerId: 'p2',
     targetId: 'enemy-7',
-    time: 1200,
+    time: 999999,
   })
 
   assert.equal(result.accepted, true)
