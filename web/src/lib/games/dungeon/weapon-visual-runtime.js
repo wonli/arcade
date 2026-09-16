@@ -161,11 +161,14 @@ export function createWeaponVisual(scene, item, x, y, { selected = false, presen
   const presentation = resolveWeaponPresentation(presentationConfig ?? DEFAULT_WEAPON_PRESENTATION, item, 'down')
   const textureAvailable = Boolean(scene.textures?.exists?.(profile.textureKey))
   let visual = null
-  if (textureAvailable && scene.add?.image) {
+  // Procedural archetypes intentionally have no dedicated sprite art. Their
+  // legacy sword texture is only a catalog fallback and must never replace the
+  // actual greatsword/spear/axe/bow/staff shape after a refresh or cache hit.
+  if (profile.procedural && scene.add?.container) {
+    visual = createProceduralWeapon(scene, profile.archetype, x, y)
+  } else if (textureAvailable && scene.add?.image) {
     visual = scene.add.image(x, y, profile.textureKey)
     visual?.setOrigin?.(presentation.grip.x, presentation.grip.y)
-  } else if (PROCEDURAL_ARCHETYPES.has(profile.archetype) && scene.add?.container) {
-    visual = createProceduralWeapon(scene, profile.archetype, x, y)
   }
   visual?.setScale?.(profile.scale * presentation.scale)
   return visual
