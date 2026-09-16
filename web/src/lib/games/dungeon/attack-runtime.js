@@ -2,7 +2,7 @@ import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwind
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
-import { ensureDungeonCombatRuntime } from './combat-runtime.js'
+import { ensureDungeonCombatRuntime, installDungeonCombatSceneBridge } from './combat-runtime.js'
 import { currentEffects } from './player-loadout.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
@@ -81,6 +81,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
 
   scene.__dungeonAttackRuntimeInstalled = true
   const combat = ensureDungeonCombatRuntime(scene)
+  installDungeonCombatSceneBridge(scene)
 
   installDungeonSfx(scene, { player })
   installDungeonWorldVfx(scene, { player })
@@ -91,9 +92,6 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   installDungeonEnemyBehaviors(scene, { player })
 
   const originalSlash = scene.slash
-  const originalAutoAttack = scene.autoAttack
-  const originalDamageEnemy = scene.damageEnemy
-  const originalApplyWeaponProcs = scene.applyWeaponProcs
   const audio = createImpactAudio()
 
   scene.slash = function spatialSlash(target, attacker = player) {
@@ -294,21 +292,11 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   const restoreDamageResolver = combat.setDamageResolver(damageResolver)
   const restoreProcOwner = combat.setProcOwner(procOwner)
 
-  const autoAttackDelegate = (time, attacker = player) => combat.attack(attacker, time)
-  const damageDelegate = (...args) => combat.damageEnemy(...args)
-  const procDelegate = (...args) => combat.applyWeaponProcs(...args)
-  scene.autoAttack = autoAttackDelegate
-  scene.damageEnemy = damageDelegate
-  scene.applyWeaponProcs = procDelegate
-
   let restored = false
   const restore = () => {
     if (restored) return
     restored = true
     if (scene.slash !== originalSlash) scene.slash = originalSlash
-    if (scene.autoAttack === autoAttackDelegate) scene.autoAttack = originalAutoAttack
-    if (scene.damageEnemy === damageDelegate) scene.damageEnemy = originalDamageEnemy
-    if (scene.applyWeaponProcs === procDelegate) scene.applyWeaponProcs = originalApplyWeaponProcs
     restoreProcOwner()
     restoreDamageResolver()
     scene.__dungeonEnemyBehaviors?.restore?.()
