@@ -1,3 +1,4 @@
+import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { getPlayerSkillReadyAt } from './player-entity.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
@@ -163,8 +164,12 @@ export function createDungeonNetworkRuntime({
   let originalAutoAttack = null
   let originalTrySkill = null
   let previousPickupIntentHandler = null
+  let previousChestIntentHandler = null
+  let previousChestOpenedHandler = null
   let factQueue = Promise.resolve(null)
   let worldRuntime = null
+  let lifecycleRuntime = null
+  let lastLifecycleTickAt = null
   const pickupIntentRetryAt = new Map()
 
   const reportError = (error) => {
@@ -172,6 +177,43 @@ export function createDungeonNetworkRuntime({
   }
 
   const isAuthority = () => authorityState.authorityId === normalizedLocalId
+  const lifecycleClock = () => {
+    const value = Number(scene.time?.now)
+    return Number.isFinite(value) ? value : 0
+  }
+
+  function ensureLifecycleRuntime() {
+    if (lifecycleRuntime) return lifecycleRuntime
+    lifecycleRuntime = installCoopLifecycleRuntime(scene, {
+      isAuthority,
+      onChange(change) {
+        scene.__dungeonSessionLifecycle = structuredClone(change.lifecycle ?? {})
+        if (!isAuthority()) return
+        const durableChange = Boolean(
+          change.partyWiped ||
+          (Array.isArray(change.downed) && change.downed.length) ||
+          (Array.isArray(change.revived) && change.revived.length),
+        )
+        if (!durableChange) return
+        if (!sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
+        void publishCheckpoint()
+      },
+    })
+    return lifecycleRuntime
+  }
+
+  function tickLifecycle() {
+    const runtime = ensureLifecycleRuntime()
+    const now = lifecycleClock()
+    if (lastLifecycleTickAt == null) {
+      lastLifecycleTickAt = now
+      return runtime.snapshot()
+    }
+    const elapsed = Math.max(0, now - lastLifecycleTickAt)
+    lastLifecycleTickAt = now
+    if (elapsed > 0) runtime.tick(elapsed)
+    return runtime.snapshot()
+  }
 
   function createWorldRuntime() {
     return createDungeonWorldRuntime(scene, {
@@ -194,17 +236,7 @@ export function createDungeonNetworkRuntime({
   }
 
   function captureLifecycle() {
-    const previous = sessionRuntime.snapshot()?.lifecycle ?? {}
-    const result = structuredClone(previous)
-    for (const [id, player] of scene.players) {
-      const existing = result[id] ?? {}
-      result[id] = {
-        status: player?.dead ? 'downed' : (existing.status === 'respawning' ? 'respawning' : 'alive'),
-        respawnRemainingMs: Math.max(0, Number(existing.respawnRemainingMs) || 0),
-        invulnerabilityRemainingMs: Math.max(0, Number(existing.invulnerabilityRemainingMs) || 0),
-      }
-    }
-    return result
+    return ensureLifecycleRuntime().snapshot()
   }
 
   function capturePlayers() {
@@ -215,6 +247,7 @@ export function createDungeonNetworkRuntime({
 
   function deriveSessionStatus() {
     if (scene.runComplete) return 'complete'
+    if (ensureLifecycleRuntime().status() === 'wiped') return 'wiped'
     const players = [...scene.players.values()]
     if (players.length >= 2 && players.every((player) => player?.dead)) return 'wiped'
     return 'playing'
@@ -222,15 +255,19 @@ export function createDungeonNetworkRuntime({
 
   function captureCheckpoint() {
     const previous = sessionRuntime.snapshot()
+    const openedChestIds = [...new Set([
+      ...(previous?.openedChestIds ?? []),
+      ...captureOpenedChestIds(scene),
+    ])].sort()
     return createSessionCheckpoint({
       roomId: normalizedRoomId,
       runSeed: normalizedRunSeed,
       authority: authorityState,
-      status: previous?.status === 'wiped' || previous?.status === 'complete' ? previous.status : deriveSessionStatus(),
+      status: previous?.status === 'complete' ? 'complete' : deriveSessionStatus(),
       world: captureWorldState(scene),
       players: capturePlayers(),
       lifecycle: captureLifecycle(),
-      openedChestIds: previous?.openedChestIds?.length ? previous.openedChestIds : captureOpenedChestIds(scene),
+      openedChestIds,
     })
   }
 
@@ -270,12 +307,12 @@ export function createDungeonNetworkRuntime({
       if (!expectedRemoteIds.has(String(player.id))) despawnRemotePlayer(scene, player)
     }
 
-    for (const [id, lifecycle] of Object.entries(checkpoint.lifecycle ?? {})) {
-      const player = scene.players.get(id)
-      if (player) player.dead = lifecycle.status !== 'alive'
-    }
-    scene.__dungeonSessionLifecycle = structuredClone(checkpoint.lifecycle ?? {})
+    const lifecycle = ensureLifecycleRuntime()
+    lifecycle.apply(checkpoint.lifecycle ?? {}, { status: checkpoint.status })
+    scene.__dungeonSessionLifecycle = lifecycle.snapshot()
     scene.__dungeonOpenedChestIds = new Set(checkpoint.openedChestIds ?? [])
+    scene.__dungeonSpatial?.applyOpenedChestIds?.(checkpoint.openedChestIds ?? [])
+    lastLifecycleTickAt = lifecycleClock()
     return checkpoint
   }
 
@@ -335,6 +372,36 @@ export function createDungeonNetworkRuntime({
     }
     previousPickupIntentHandler = null
     pickupIntentRetryAt.clear()
+  }
+
+  function installChestMirrors() {
+    const spatial = scene.__dungeonSpatial
+    if (typeof spatial?.setChestIntentHandler === 'function') {
+      previousChestIntentHandler = spatial.setChestIntentHandler((player, chest) => {
+        if (player !== scene.localPlayer || isAuthority()) return false
+        const chestId = String(chest?.id ?? '').trim()
+        if (!chestId) return true
+        void sendCommand({ type: 'open_chest', chestId })
+        return true
+      })
+    }
+    if (typeof spatial?.setChestOpenedHandler === 'function') {
+      previousChestOpenedHandler = spatial.setChestOpenedHandler(() => {
+        if (isAuthority()) void publishCheckpoint()
+      })
+    }
+  }
+
+  function restoreChestMirrors() {
+    const spatial = scene.__dungeonSpatial
+    if (typeof spatial?.setChestIntentHandler === 'function') {
+      spatial.setChestIntentHandler(previousChestIntentHandler)
+    }
+    if (typeof spatial?.setChestOpenedHandler === 'function') {
+      spatial.setChestOpenedHandler(previousChestOpenedHandler)
+    }
+    previousChestIntentHandler = null
+    previousChestOpenedHandler = null
   }
 
   function sendFact(fact) {
@@ -507,13 +574,19 @@ export function createDungeonNetworkRuntime({
     if (started) return api
     started = true
     createLocalPlayerLabel(scene, scene.localPlayer)
+    ensureLifecycleRuntime()
+    lastLifecycleTickAt = lifecycleClock()
     worldRuntime = createWorldRuntime()
     worldRuntime.start()
     if (isAuthority() && !sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
     installPickupIntentMirror()
+    installChestMirrors()
     unsubscribe = socket.subscribe(topic, handleMessage)
     installLocalCommandMirrors()
-    timer = setIntervalImpl(() => { void flushSnapshot() }, snapshotInterval)
+    timer = setIntervalImpl(() => {
+      tickLifecycle()
+      void flushSnapshot()
+    }, snapshotInterval)
     void flushSnapshot({ syncCheckpoint: !isAuthority() })
     return api
   }
@@ -527,8 +600,12 @@ export function createDungeonNetworkRuntime({
     unsubscribe = () => {}
     restoreLocalCommandMirrors()
     restorePickupIntentMirror()
+    restoreChestMirrors()
     worldRuntime?.stop()
     worldRuntime = null
+    lifecycleRuntime?.restore?.()
+    lifecycleRuntime = null
+    lastLifecycleTickAt = null
     for (const player of [...scene.players.values()]) {
       if (player !== scene.localPlayer) despawnRemotePlayer(scene, player)
     }
@@ -558,6 +635,7 @@ export function createDungeonNetworkRuntime({
     start,
     stop,
     world: () => worldRuntime,
+    lifecycle: () => lifecycleRuntime,
   }
   return api
 }
