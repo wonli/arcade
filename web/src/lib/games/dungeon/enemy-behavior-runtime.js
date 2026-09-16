@@ -33,6 +33,17 @@ function cue(scene, enemy, kind) {
   if (profile.flash) enemy.visual.setTintFill?.(0xbfffee)
 }
 
+function playerById(scene, id, fallback = null) {
+  const normalized = String(id ?? '')
+  if (normalized && scene.players instanceof Map) {
+    const player = scene.players.get(normalized)
+    if (player) return player
+  }
+  if (fallback && (!normalized || String(fallback.id ?? '') === normalized)) return fallback
+  if (scene.localPlayer && (!normalized || String(scene.localPlayer.id ?? '') === normalized)) return scene.localPlayer
+  return null
+}
+
 export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlayer } = {}) {
   if (!scene || !player || scene.__dungeonEnemyBehaviors) return scene?.__dungeonEnemyBehaviors ?? null
 
@@ -50,6 +61,27 @@ export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlaye
     return requested ?? player
   }
 
+  const resolvePendingSpecial = (enemy, time, fallbackTarget = null) => {
+    const pending = enemy?.pendingSpecial
+    if (!pending || pending.type !== 'brute_slam' || time < (pending.resolveAt ?? Infinity)) return false
+
+    enemy.pendingSpecial = null
+    if (enemy.hp <= 0) return true
+
+    const target = playerById(scene, pending.targetId, fallbackTarget)
+    if (!target || target.dead) return true
+
+    const center = {
+      x: Number.isFinite(Number(pending.x)) ? Number(pending.x) : enemy.x,
+      y: Number.isFinite(Number(pending.y)) ? Number(pending.y) : enemy.y,
+    }
+    const radius = Math.max(0, Number(pending.radius) || 0)
+    if (distanceToPlayer(target, center) <= radius) {
+      scene.hitPlayer?.(Math.max(0, Number(pending.damage) || 0), target)
+    }
+    return true
+  }
+
   const approach = (enemy, time, dt, target = null) => {
     const resolved = resolveTarget(enemy, target)
     if (!resolved) return
@@ -57,9 +89,16 @@ export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlaye
   }
 
   const update = (enemy, time, dt, target = null) => {
-    if (!enemy || enemy.hp <= 0) return
+    if (!enemy) return
+    if (enemy.hp <= 0) {
+      enemy.pendingSpecial = null
+      return
+    }
+
     const resolved = resolveTarget(enemy, target)
     if (!resolved) return
+
+    resolvePendingSpecial(enemy, time, resolved)
 
     const dx = (resolved.state?.x ?? 0) - enemy.x
     const dy = (resolved.state?.y ?? 0) - enemy.y
@@ -109,6 +148,15 @@ export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlaye
       cue(scene, enemy, 'brute')
       enemy.specialLockedUntil = time + step.durationMs
       enemy.nextSpecialAt = enemy.specialLockedUntil + step.cooldownMs
+      enemy.pendingSpecial = {
+        type: 'brute_slam',
+        resolveAt: enemy.specialLockedUntil,
+        targetId: String(resolved.id ?? ''),
+        x: enemy.x,
+        y: enemy.y,
+        radius: step.radius,
+        damage: enemy.contactDamage + 4,
+      }
 
       const warning = scene.add
         ?.circle?.(enemy.x, enemy.y, 20, 0xffa34d, 0.08)
@@ -124,13 +172,6 @@ export function installDungeonEnemyBehaviors(scene, { player = scene?.localPlaye
           onComplete: () => warning.destroy?.(),
         })
       }
-
-      scene.time?.delayedCall?.(step.durationMs, () => {
-        if (enemy.hp <= 0 || resolved.dead) return
-        if (distanceToPlayer(resolved, enemy) <= step.radius) {
-          scene.hitPlayer?.(enemy.contactDamage + 4, resolved)
-        }
-      })
 
       scene.syncEnemyVisual?.(enemy, time, dx, distance, resolved)
       return
