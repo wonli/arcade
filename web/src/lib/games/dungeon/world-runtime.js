@@ -253,7 +253,7 @@ export function createDungeonWorldRuntime(scene, {
     drop.y = Number(fact.y) || 0
     drop.item = structuredClone(fact.item ?? drop.item ?? {})
     drop.visual?.setPosition?.(drop.x, drop.y)
-    scene.__dungeonPickupRuntime?.reconcileVisuals?.()
+    loot.reconcilePresentation({ reason: 'replicated-drop', dropId: drop.id })
     return drop
   }
 
