@@ -95,6 +95,14 @@ export function ensureDungeonLootRuntime(scene) {
       return slots.openChestOwner?.(player, chestId) ?? null
     },
 
+    hasPickupOwner() {
+      return typeof slots.pickupOwner === 'function'
+    },
+
+    hasOpenChestOwner() {
+      return typeof slots.openChestOwner === 'function'
+    },
+
     setSpawnOwner(owner = null) {
       const previous = slots.spawnOwner
       slots.spawnOwner = callable(owner)
