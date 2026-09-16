@@ -47,6 +47,11 @@ function updateCountdown(scene, portal, dwell, player, color = '#f4f0e8') {
 
 function destroyBackPortal(portal) {
   if (!portal) return
+  for (const tween of portal.tweens ?? []) {
+    tween?.stop?.()
+    tween?.remove?.()
+  }
+  portal.tweens = []
   destroyCountdown(portal)
   for (const object of portal.objects ?? []) object?.destroy?.()
 }
@@ -62,12 +67,16 @@ function createBackPortal(scene, id = '') {
   const x = spawn.x
   const y = Math.min((scene.__roomGeometry?.height ?? 600) - 72, spawn.y + 74)
   const objects = []
+  const tweens = []
   if (scene.add) {
     const glow = scene.add.circle?.(x, y, 34, 0x67a8ff, 0.07)?.setDepth?.(8)
     const ring = scene.add.circle?.(x, y, 23, 0x17365f, 0.34)?.setStrokeStyle?.(4, 0x67a8ff, 0.9)?.setDepth?.(9)
     const text = scene.add.text?.(x, y, '↩', { fontSize: '19px', fontStyle: 'bold', color: '#b8d5ff', stroke: '#08090b', strokeThickness: 4 })?.setOrigin?.(0.5)?.setDepth?.(10)
     for (const object of [glow, ring, text]) if (object) objects.push(object)
-    if (glow) scene.tweens?.add?.({ targets: glow, scale: 1.25, alpha: 0.16, duration: 760, yoyo: true, repeat: -1 })
+    if (glow) {
+      const tween = scene.tweens?.add?.({ targets: glow, scale: 1.25, alpha: 0.16, duration: 760, yoyo: true, repeat: -1 })
+      if (tween) tweens.push(tween)
+    }
   }
   return {
     id: String(id || `backtrack:${Math.max(1, Number(scene.floor) || 1)}`),
@@ -75,6 +84,7 @@ function createBackPortal(scene, id = '') {
     y,
     unlockAt: (scene.time?.now ?? 0) + 650,
     objects,
+    tweens,
     visible: true,
     dwell: { enteredAt: null, seconds: null, complete: false },
     countdownLabel: null,
