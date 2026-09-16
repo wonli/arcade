@@ -1,4 +1,5 @@
 import { applyPickup } from './combat.js'
+import { ensureDungeonCombatRuntime } from './combat-runtime.js'
 import { installCoopPortalRuntime } from './coop-portal-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
@@ -61,11 +62,11 @@ export function createDungeonWorldRuntime(scene, {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
 
   const seed = normalizeRunSeed(runSeed)
+  const combat = ensureDungeonCombatRuntime(scene)
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
   const originals = {
     spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
-    damageEnemy: typeof scene.damageEnemy === 'function' ? scene.damageEnemy.bind(scene) : null,
     spawnDrop: typeof scene.spawnDrop === 'function' ? scene.spawnDrop.bind(scene) : null,
     destroyDrop: typeof scene.destroyDrop === 'function' ? scene.destroyDrop.bind(scene) : null,
     clearDrops: typeof scene.clearDrops === 'function' ? scene.clearDrops.bind(scene) : null,
@@ -79,10 +80,9 @@ export function createDungeonWorldRuntime(scene, {
   let applyingFact = false
   let clearingDrops = false
   let pickupPlayer = null
-  let damageDepth = 0
-  let deferredFacts = []
   let lastFactSequence = -1
   let coopPortalRuntime = null
+  let restoreCombatAuthority = null
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -100,8 +100,33 @@ export function createDungeonWorldRuntime(scene, {
   const emitFact = (fact) => {
     if (!isHost || applyingFact || !fact) return
     const next = { floor: normalizeFloor(scene.floor), ...fact }
-    if (damageDepth > 0) deferredFacts.push(next)
+    if (combat.inDamageTransaction()) combat.afterDamage(() => publishNow(next))
     else publishNow(next)
+  }
+
+  const publishDamageFact = (hit) => {
+    if (!isHost || applyingFact || !hit?.enemy || Number(hit.beforeHp) <= 0) return
+    const enemy = hit.enemy
+    const fact = enemy.hp <= 0
+      ? {
+          type: 'enemy.death',
+          entityId: enemy.id,
+          x: enemy.x,
+          y: enemy.y,
+          kills: scene.kills,
+          floorKills: scene.floorKills,
+        }
+      : {
+          type: 'enemy.hit',
+          entityId: enemy.id,
+          hp: enemy.hp,
+          maxHp: enemy.maxHp,
+          x: enemy.x,
+          y: enemy.y,
+          damage: hit.damage,
+          critical: Boolean(hit.critical),
+        }
+    publishNow({ floor: normalizeFloor(scene.floor), ...fact })
   }
 
   const removeDropById = (id) => {
@@ -410,38 +435,16 @@ export function createDungeonWorldRuntime(scene, {
     assignExistingEnemyIds()
     reconcileDrops({ announce: false })
 
+    restoreCombatAuthority = combat.setAuthority({
+      mayDamage: () => isHost,
+      onDamageApplied: publishDamageFact,
+    })
+
     if (originals.spawnEnemy) {
       scene.spawnEnemy = function stableSpawnEnemy(index = 0, options = {}) {
         const enemy = originals.spawnEnemy(index, options)
         if (enemy) enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
         return enemy
-      }
-    }
-
-    if (originals.damageEnemy) {
-      scene.damageEnemy = function authoritativeDamageEnemy(enemy, damage, critical, knockback, context, player) {
-        if (!isHost && !applyingFact) return null
-        if (applyingFact) return originals.damageEnemy(enemy, damage, critical, knockback, context, player)
-        const before = Number(enemy?.hp) || 0
-        damageDepth++
-        let value
-        try {
-          value = originals.damageEnemy(enemy, damage, critical, knockback, context, player)
-        } finally {
-          damageDepth--
-        }
-        if (before > 0 && enemy) {
-          const primary = enemy.hp <= 0
-            ? { type: 'enemy.death', entityId: enemy.id, x: enemy.x, y: enemy.y, kills: scene.kills, floorKills: scene.floorKills }
-            : { type: 'enemy.hit', entityId: enemy.id, hp: enemy.hp, maxHp: enemy.maxHp, x: enemy.x, y: enemy.y, damage, critical: Boolean(critical) }
-          if (damageDepth === 0) {
-            const pending = deferredFacts
-            deferredFacts = []
-            publishNow({ floor: normalizeFloor(scene.floor), ...primary })
-            for (const fact of pending) publishNow(fact)
-          } else deferredFacts.push({ floor: normalizeFloor(scene.floor), ...primary })
-        }
-        return value
       }
     }
 
@@ -532,8 +535,9 @@ export function createDungeonWorldRuntime(scene, {
     if (!started) return
     coopPortalRuntime?.restore?.()
     coopPortalRuntime = null
+    restoreCombatAuthority?.()
+    restoreCombatAuthority = null
     if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
-    if (originals.damageEnemy) scene.damageEnemy = originals.damageEnemy
     if (originals.spawnDrop) scene.spawnDrop = originals.spawnDrop
     if (originals.destroyDrop) scene.destroyDrop = originals.destroyDrop
     if (originals.clearDrops) scene.clearDrops = originals.clearDrops
