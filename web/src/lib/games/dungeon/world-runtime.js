@@ -1,4 +1,5 @@
 import { applyPickup } from './combat.js'
+import { installCoopPortalRuntime } from './coop-portal-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
 import { currentWeapon } from './player-loadout.js'
@@ -81,6 +82,7 @@ export function createDungeonWorldRuntime(scene, {
   let damageDepth = 0
   let deferredFacts = []
   let lastFactSequence = -1
+  let coopPortalRuntime = null
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -361,7 +363,11 @@ export function createDungeonWorldRuntime(scene, {
       if (fact.type === 'drop.spawn') return applyDropSpawn(fact)
       if (fact.type === 'drop.pickup') return applyDropPickup(fact)
       if (fact.type === 'portal.open') return applyPortalOpen(fact)
-      if (fact.type === 'floor.transition') return applyFloorTransition(fact)
+      if (fact.type === 'portal.dwell') return coopPortalRuntime?.applyFact(fact) ?? null
+      if (fact.type === 'floor.transition') {
+        coopPortalRuntime?.clear()
+        return applyFloorTransition(fact)
+      }
       return null
     } finally {
       applyingFact = false
@@ -513,12 +519,19 @@ export function createDungeonWorldRuntime(scene, {
       }
     }
 
+    coopPortalRuntime = installCoopPortalRuntime(scene, {
+      localPlayer: scene.localPlayer,
+      isAuthority: () => isHost,
+      publishFact: emitFact,
+    })
     if (scene.__dungeonPickupRuntime) scene.__dungeonPickupRuntime.pickupById = authoritativePickupById
     return api
   }
 
   function stop() {
     if (!started) return
+    coopPortalRuntime?.restore?.()
+    coopPortalRuntime = null
     if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
     if (originals.damageEnemy) scene.damageEnemy = originals.damageEnemy
     if (originals.spawnDrop) scene.spawnDrop = originals.spawnDrop
