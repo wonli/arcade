@@ -1,8 +1,7 @@
 import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { installCoopWorldSimulation } from './coop-world-runtime.js'
 import { executePlayerCommand } from './player-command-runtime.js'
-import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
-import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
+import { createPlayerReplicationRuntime } from './player-replication-runtime.js'
 import { placePlayerAtRoomSpawn } from './room-anchors.js'
 import { acceptAuthorityEnvelope, createInitialAuthority, nextAuthorityEnvelope } from './session-authority.js'
 import { createDungeonSessionRuntime, createSessionCheckpoint } from './session-runtime.js'
@@ -158,6 +157,11 @@ export function createDungeonNetworkRuntime({
   let authorityState = createInitialAuthority(normalizedHostId)
   const sessionRuntime = createDungeonSessionRuntime()
   const syncRuntime = createSessionSyncRuntime({ authority: initialHost })
+  const replicationRuntime = createPlayerReplicationRuntime({
+    scene,
+    localPlayer,
+    localPlayerId: normalizedLocalId,
+  })
   let unsubscribe = () => {}
   let timer = null
   let snapshotInFlight = false
@@ -240,9 +244,7 @@ export function createDungeonNetworkRuntime({
   }
 
   function capturePlayers() {
-    const players = {}
-    for (const [id, player] of scene.players) players[id] = serializePlayerSnapshot(player)
-    return players
+    return replicationRuntime.serializePlayers()
   }
 
   function deriveSessionStatus() {
@@ -283,31 +285,7 @@ export function createDungeonNetworkRuntime({
       scene.runComplete = Boolean(world.runComplete)
     }
     scene.__dungeonPickupRuntime?.reconcileVisuals?.()
-
-    const expectedRemoteIds = new Set()
-    for (const [id, snapshot] of Object.entries(checkpoint.players ?? {})) {
-      if (id === normalizedLocalId) {
-        applyPlayerSnapshot(localPlayer, { ...snapshot, id })
-        syncLocalPlayerLabel(localPlayer)
-        localPlayer.actor?.setPosition?.(localPlayer.state.x, localPlayer.state.y)
-        scene.updateHealthBar?.(localPlayer.bar, localPlayer.state.x, localPlayer.state.y - 42, localPlayer.state.hp, localPlayer.state.maxHp)
-        localPlayer.runtime?.weaponVisuals?.sync?.()
-        scene.syncPlayerAnimation?.(null, localPlayer)
-        scene.emitStats?.()
-        continue
-      }
-      expectedRemoteIds.add(id)
-      const existing = scene.players.get(id)
-      if (existing) {
-        applyPlayerSnapshot(existing, { ...snapshot, id })
-        syncRemotePlayerPresentation(scene, existing)
-      } else spawnRemotePlayer(scene, { ...snapshot, id })
-    }
-
-    for (const player of [...scene.players.values()]) {
-      if (player === localPlayer) continue
-      if (!expectedRemoteIds.has(String(player.id))) despawnRemotePlayer(scene, player)
-    }
+    replicationRuntime.reconcileCheckpointPlayers(checkpoint.players ?? {})
 
     const lifecycle = ensureLifecycleRuntime()
     lifecycle.apply(checkpoint.lifecycle ?? {}, { status: checkpoint.status })
@@ -323,7 +301,7 @@ export function createDungeonNetworkRuntime({
     snapshotInFlight = true
     syncLocalPlayerLabel(localPlayer)
     try {
-      const snapshot = serializePlayerSnapshot(localPlayer)
+      const snapshot = replicationRuntime.serializeLocal()
       if (syncCheckpoint) snapshot.syncCheckpoint = true
       await socket.request('dungeon.snapshot', {
         roomId: normalizedRoomId,
@@ -459,19 +437,6 @@ export function createDungeonNetworkRuntime({
     return sendFact({ type: 'session.checkpoint', checkpoint: captureCheckpoint() })
   }
 
-  function applyRemoteSnapshot(playerId, snapshot) {
-    const id = String(playerId ?? '').trim()
-    if (!id || id === normalizedLocalId || !snapshot || typeof snapshot !== 'object') return null
-    const trustedSnapshot = { ...snapshot, id }
-    delete trustedSnapshot.syncCheckpoint
-    delete trustedSnapshot.syncWorld
-    const existing = scene.players.get(id)
-    if (!existing) return spawnRemotePlayer(scene, trustedSnapshot)
-    applyPlayerSnapshot(existing, trustedSnapshot)
-    syncRemotePlayerPresentation(scene, existing)
-    return existing
-  }
-
   function applySessionCheckpoint(sourcePlayerId, fact) {
     const checkpoint = fact?.checkpoint
     if (!checkpoint || String(checkpoint?.authority?.authorityId ?? '') !== sourcePlayerId) return null
@@ -513,11 +478,11 @@ export function createDungeonNetworkRuntime({
       if (isAuthority() && payload.snapshot?.syncCheckpoint === true) {
         const player = scene.players.has(sourcePlayerId)
           ? scene.players.get(sourcePlayerId)
-          : applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
+          : replicationRuntime.applyRemote(sourcePlayerId, payload.snapshot)
         void publishCheckpoint()
         return player ?? null
       }
-      return applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
+      return replicationRuntime.applyRemote(sourcePlayerId, payload.snapshot)
     }
 
     if (payload.type === 'dungeon.command') {
@@ -599,9 +564,7 @@ export function createDungeonNetworkRuntime({
     lifecycleRuntime?.restore?.()
     lifecycleRuntime = null
     lastLifecycleTickAt = null
-    for (const player of [...scene.players.values()]) {
-      if (player !== localPlayer) despawnRemotePlayer(scene, player)
-    }
+    replicationRuntime.despawnAllRemotes()
     localPlayer.label?.destroy?.()
     localPlayer.label = null
     started = false
