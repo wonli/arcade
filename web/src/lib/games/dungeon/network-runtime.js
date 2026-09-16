@@ -1,6 +1,5 @@
 import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { installCoopWorldSimulation } from './coop-world-runtime.js'
-import { getPlayerSkillReadyAt } from './player-entity.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
 import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
@@ -163,9 +162,6 @@ export function createDungeonNetworkRuntime({
   let timer = null
   let snapshotInFlight = false
   let started = false
-  let mirrorsInstalled = false
-  let originalAutoAttack = null
-  let originalTrySkill = null
   let previousPickupIntentHandler = null
   let previousChestIntentHandler = null
   let previousChestOpenedHandler = null
@@ -354,6 +350,26 @@ export function createDungeonNetworkRuntime({
     }
   }
 
+  function handleLocalIntent(intent) {
+    if (!intent || typeof intent !== 'object' || isAuthority()) return false
+    if (String(intent.playerId ?? normalizedLocalId) !== normalizedLocalId) return false
+
+    const type = String(intent.type ?? '')
+    if (type === 'attack') {
+      void sendCommand({ type: 'attack', time: Number(intent.time) || 0 })
+      return true
+    }
+    if (type === 'skill') {
+      void sendCommand({
+        type: 'skill',
+        skillId: String(intent.skillId ?? 'primary') || 'primary',
+        time: Number(intent.time) || 0,
+      })
+      return true
+    }
+    return false
+  }
+
   function installPickupIntentMirror() {
     const pickupRuntime = scene.__dungeonPickupRuntime
     if (typeof pickupRuntime?.setPickupIntentHandler !== 'function') return
@@ -521,45 +537,6 @@ export function createDungeonNetworkRuntime({
     return null
   }
 
-  function installLocalCommandMirrors() {
-    if (mirrorsInstalled) return
-    mirrorsInstalled = true
-
-    if (typeof scene.autoAttack === 'function') {
-      originalAutoAttack = scene.autoAttack
-      scene.autoAttack = function networkedAutoAttack(time, player = localPlayer) {
-        const before = player?.lastAttackAt
-        const value = originalAutoAttack.call(scene, time, player)
-        if (!isAuthority() && player === localPlayer && player?.lastAttackAt !== before) {
-          void sendCommand({ type: 'attack', time: Number(time) || 0 })
-        }
-        return value
-      }
-    }
-
-    if (typeof scene.trySkill === 'function') {
-      originalTrySkill = scene.trySkill
-      scene.trySkill = function networkedTrySkill(time, player = localPlayer) {
-        const before = getPlayerSkillReadyAt(player, 'primary')
-        const value = originalTrySkill.call(scene, time, player)
-        const after = getPlayerSkillReadyAt(player, 'primary')
-        if (!isAuthority() && player === localPlayer && after > before) {
-          void sendCommand({ type: 'skill', skillId: 'primary', time: Number(time) || 0 })
-        }
-        return value
-      }
-    }
-  }
-
-  function restoreLocalCommandMirrors() {
-    if (!mirrorsInstalled) return
-    if (originalAutoAttack && scene.autoAttack !== originalAutoAttack) scene.autoAttack = originalAutoAttack
-    if (originalTrySkill && scene.trySkill !== originalTrySkill) scene.trySkill = originalTrySkill
-    originalAutoAttack = null
-    originalTrySkill = null
-    mirrorsInstalled = false
-  }
-
   function takeAuthority() {
     if (!sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
     const takeover = sessionRuntime.takeAuthority(normalizedLocalId)
@@ -598,7 +575,6 @@ export function createDungeonNetworkRuntime({
     installPickupIntentMirror()
     installChestMirrors()
     unsubscribe = socket.subscribe(topic, handleMessage)
-    installLocalCommandMirrors()
     timer = setIntervalImpl(() => {
       tickLifecycle()
       if (syncRuntime.mayPublishSnapshot()) void flushSnapshot()
@@ -614,7 +590,6 @@ export function createDungeonNetworkRuntime({
     }
     unsubscribe?.()
     unsubscribe = () => {}
-    restoreLocalCommandMirrors()
     restorePickupIntentMirror()
     restoreChestMirrors()
     worldRuntime?.stop()
@@ -647,10 +622,10 @@ export function createDungeonNetworkRuntime({
     updatePeers,
     flushSnapshot,
     sendCommand,
+    handleLocalIntent,
     sendFact,
     publishCheckpoint,
     handleMessage,
-    installLocalCommandMirrors,
     start,
     stop,
     world: () => worldRuntime,
