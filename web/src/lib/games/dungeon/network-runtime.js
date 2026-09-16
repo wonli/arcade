@@ -167,6 +167,26 @@ export function createDungeonNetworkRuntime({
 
   const isAuthority = () => authorityState.authorityId === normalizedLocalId
 
+  function createWorldRuntime() {
+    return createDungeonWorldRuntime(scene, {
+      runSeed: normalizedRunSeed,
+      isHost: isAuthority(),
+      publishFact: sendFact,
+      sendCommand,
+      onError: reportError,
+    })
+  }
+
+  function rebindWorldRuntime() {
+    if (!started) return worldRuntime
+    const desiredAuthority = isAuthority()
+    if (worldRuntime && Boolean(worldRuntime.isHost) === desiredAuthority) return worldRuntime
+    worldRuntime?.stop()
+    worldRuntime = createWorldRuntime()
+    worldRuntime.start()
+    return worldRuntime
+  }
+
   function captureLifecycle() {
     const previous = sessionRuntime.snapshot()?.lifecycle ?? {}
     const result = structuredClone(previous)
@@ -364,6 +384,7 @@ export function createDungeonNetworkRuntime({
     if (!acceptedAuthority) return null
     if (!sessionRuntime.applyCheckpoint(checkpoint)) return null
     authorityState = acceptedAuthority
+    rebindWorldRuntime()
     const materialized = sessionRuntime.snapshot()
     applyCheckpointPresentation(materialized)
     onFact(fact, { playerId: sourcePlayerId, applied: materialized })
@@ -458,6 +479,7 @@ export function createDungeonNetworkRuntime({
     if (!sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
     const takeover = sessionRuntime.takeAuthority(normalizedLocalId)
     authorityState = { ...takeover.authority }
+    rebindWorldRuntime()
     applyCheckpointPresentation(takeover)
     const returned = createSessionCheckpoint(takeover)
     void publishCheckpoint()
@@ -468,13 +490,7 @@ export function createDungeonNetworkRuntime({
     if (started) return api
     started = true
     createLocalPlayerLabel(scene, scene.localPlayer)
-    worldRuntime = createDungeonWorldRuntime(scene, {
-      runSeed: normalizedRunSeed,
-      isHost: isAuthority(),
-      publishFact: sendFact,
-      sendCommand,
-      onError: reportError,
-    })
+    worldRuntime = createWorldRuntime()
     worldRuntime.start()
     if (isAuthority() && !sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
     installPickupIntentMirror()
