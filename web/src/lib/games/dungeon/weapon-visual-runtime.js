@@ -286,6 +286,9 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
   if (scene.load?.once && scene.load?.start) {
     scene.load.once('complete', () => {
       ready = true
+      visual?.destroy?.()
+      visual = null
+      currentKey = null
       sync()
     })
     scene.load.start()
