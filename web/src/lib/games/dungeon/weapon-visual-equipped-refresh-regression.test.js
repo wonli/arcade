@@ -87,5 +87,3 @@ test('equipped named weapon upgrades its procedural fallback after textures fini
   assert.equal(runtime.visual()?.kind, 'image')
   assert.equal(runtime.visual()?.textureKey, 'dungeon-named-weapon-034-base')
 })
-
-// CI verification trigger; removed by the following commit.
