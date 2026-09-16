@@ -45,6 +45,28 @@ test('combat runtime owns behavior without replacing Scene gameplay methods', ()
   assert.equal(combat.applyWeaponProcs({ id: 'enemy' }, 12, false, scene.localPlayer), 'owned-procs')
 })
 
+test('existing explicit attack owner is adopted when stable runtime is created', () => {
+  const calls = []
+  const scene = {
+    dungeon: {
+      combat: {
+        attack(player, time) {
+          calls.push([player.id, time])
+          player.lastAttackAt = time
+        },
+      },
+    },
+    autoAttack() { throw new Error('legacy autoAttack should not run') },
+  }
+  const player = { id: 'guest', lastAttackAt: 0 }
+  const combat = ensureDungeonCombatRuntime(scene)
+
+  combat.attack(player, 900)
+
+  assert.deepEqual(calls, [['guest', 900]])
+  assert.equal(player.lastAttackAt, 900)
+})
+
 test('authority gate rejects damage before any mutation or presentation resolver', () => {
   const { scene, calls } = sceneFixture()
   const combat = ensureDungeonCombatRuntime(scene)
@@ -122,7 +144,7 @@ test('nested applied damage is reported outer-first so authority facts keep caus
   ])
 })
 
-test('damage transaction flushes world side effects only after applied damage facts', () => {
+test('damage transaction flushes world side effects after facts and after transaction depth returns to zero', () => {
   const { scene } = sceneFixture()
   const combat = ensureDungeonCombatRuntime(scene)
   const order = []
@@ -134,11 +156,11 @@ test('damage transaction flushes world side effects only after applied damage fa
   })
   combat.setDamageResolver((hit, core) => {
     const result = core(hit)
-    combat.afterDamage(() => order.push(`side-effect:${hit.enemy.id}`))
+    combat.afterDamage(() => order.push(`side-effect:${hit.enemy.id}:${combat.inDamageTransaction()}`))
     return result
   })
 
   combat.damageEnemy(enemy, 10, false, 0, { source: 'weapon' }, scene.localPlayer)
 
-  assert.deepEqual(order, ['damage:enemy', 'side-effect:enemy'])
+  assert.deepEqual(order, ['damage:enemy', 'side-effect:enemy:false'])
 })
