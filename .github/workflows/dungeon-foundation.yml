@@ -35,6 +35,7 @@ jobs:
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/checkpoint-clock-state.test.js \
             src/lib/games/dungeon/session-gameplay-clock.test.js \
+            src/lib/games/dungeon/wire-clock-state.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
             src/lib/games/dungeon/combat-runtime.test.js \
             src/lib/games/dungeon/combat-slash-ownership.test.js \
@@ -60,6 +61,7 @@ jobs:
             src/lib/games/dungeon/player-replication-runtime.test.js \
             src/lib/games/dungeon/network-authority-snapshot-ownership.test.js \
             src/lib/games/dungeon/network-checkpoint-clock.test.js \
+            src/lib/games/dungeon/network-wire-clock.test.js \
             src/lib/games/dungeon/coop-network-intent-wiring.test.js \
             src/lib/games/dungeon/network-foundation-contract.test.js \
             src/lib/games/dungeon/network-session-authority.test.js \
