@@ -7,6 +7,7 @@ import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } 
 import { placePlayerAtRoomSpawn } from './room-anchors.js'
 import { acceptAuthorityEnvelope, createInitialAuthority, nextAuthorityEnvelope } from './session-authority.js'
 import { createDungeonSessionRuntime, createSessionCheckpoint } from './session-runtime.js'
+import { createSessionSyncRuntime } from './session-sync-runtime.js'
 import { normalizeRunSeed } from './world-seed.js'
 import { createDungeonWorldRuntime } from './world-runtime.js'
 
@@ -157,11 +158,11 @@ export function createDungeonNetworkRuntime({
   const initialHost = normalizedLocalId === normalizedHostId
   let authorityState = createInitialAuthority(normalizedHostId)
   const sessionRuntime = createDungeonSessionRuntime()
+  const syncRuntime = createSessionSyncRuntime({ authority: initialHost })
   let unsubscribe = () => {}
   let timer = null
   let snapshotInFlight = false
   let started = false
-  let hydrated = initialHost
   let mirrorsInstalled = false
   let originalAutoAttack = null
   let originalTrySkill = null
@@ -465,7 +466,7 @@ export function createDungeonNetworkRuntime({
     rebindWorldRuntime()
     const materialized = sessionRuntime.snapshot()
     applyCheckpointPresentation(materialized)
-    hydrated = true
+    syncRuntime.acceptCheckpoint()
     onFact(fact, { playerId: sourcePlayerId, applied: materialized })
     return materialized
   }
@@ -565,7 +566,7 @@ export function createDungeonNetworkRuntime({
     authorityState = { ...takeover.authority }
     rebindWorldRuntime()
     applyCheckpointPresentation(takeover)
-    hydrated = true
+    syncRuntime.takeAuthority()
     const returned = createSessionCheckpoint(takeover)
     void publishCheckpoint()
     return returned
@@ -592,13 +593,15 @@ export function createDungeonNetworkRuntime({
     worldRuntime = createWorldRuntime()
     worldRuntime.start()
     if (isAuthority() && !sessionRuntime.snapshot()) sessionRuntime.applyCheckpoint(captureCheckpoint())
+    if (isAuthority()) syncRuntime.takeAuthority()
+    else syncRuntime.startFollowerHydration()
     installPickupIntentMirror()
     installChestMirrors()
     unsubscribe = socket.subscribe(topic, handleMessage)
     installLocalCommandMirrors()
     timer = setIntervalImpl(() => {
       tickLifecycle()
-      if (hydrated) void flushSnapshot()
+      if (syncRuntime.mayPublishSnapshot()) void flushSnapshot()
     }, snapshotInterval)
     void flushSnapshot({ syncCheckpoint: !isAuthority() })
     return api
@@ -637,6 +640,7 @@ export function createDungeonNetworkRuntime({
     isHost: initialHost,
     authority: () => ({ ...authorityState }),
     isAuthority,
+    syncPhase: () => syncRuntime.phase(),
     checkpoint: () => sessionRuntime.snapshot(),
     captureCheckpoint,
     takeAuthority,
