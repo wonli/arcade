@@ -1,3 +1,4 @@
+import { syncLocalInventoryPresentation } from './inventory-presentation.js'
 import { installTransientVfxRuntime } from './transient-vfx-runtime.js'
 
 function isLivingPlayer(player) {
@@ -41,6 +42,7 @@ export function installCoopWorldSimulation(scene, { localPlayer = scene?.localPl
     ? scene.updateEnemyProjectiles
     : null
   let lastEnemyStepTime = null
+  let lastHealthPotions = Math.max(0, Number(localPlayer.state?.healthPotions) || 0)
 
   const updateEnemies = function updateCoopEnemies(time, dt) {
     lastEnemyStepTime = Number(time)
@@ -73,13 +75,22 @@ export function installCoopWorldSimulation(scene, { localPlayer = scene?.localPl
     updateEnemyProjectiles(dt)
   }
 
+  const syncCanonicalInventory = () => {
+    const next = Math.max(0, Number(localPlayer.state?.healthPotions) || 0)
+    if (next === lastHealthPotions) return
+    lastHealthPotions = next
+    syncLocalInventoryPresentation(scene, localPlayer)
+  }
+
   if (originalUpdateEnemies) scene.updateEnemies = updateEnemies
   if (originalUpdateEnemyProjectiles) scene.updateEnemyProjectiles = updateEnemyProjectiles
   scene.events?.on?.('update', continueWorldWhileLocalDown)
+  scene.events?.on?.('update', syncCanonicalInventory)
 
   const api = {
     restore() {
       scene.events?.off?.('update', continueWorldWhileLocalDown)
+      scene.events?.off?.('update', syncCanonicalInventory)
       if (scene.updateEnemies === updateEnemies && originalUpdateEnemies) scene.updateEnemies = originalUpdateEnemies
       if (scene.updateEnemyProjectiles === updateEnemyProjectiles && originalUpdateEnemyProjectiles) {
         scene.updateEnemyProjectiles = originalUpdateEnemyProjectiles
