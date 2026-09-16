@@ -73,7 +73,7 @@ function nextTurn() {
   return new Promise((resolve) => setImmediate(resolve))
 }
 
-function checkpoint({ authorityId = 'host', epoch = 1, sequence = 4, floor = 4, guestWeapon = null } = {}) {
+function checkpoint({ authorityId = 'host', epoch = 1, sequence = 4, floor = 4, guestWeapon = null, openedChestIds = [] } = {}) {
   const hostScene = sceneFixture('host')
   const guestScene = sceneFixture('guest')
   guestScene.localPlayer.state = state(220, guestWeapon)
@@ -91,7 +91,7 @@ function checkpoint({ authorityId = 'host', epoch = 1, sequence = 4, floor = 4, 
       host: { status: 'alive', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
       guest: { status: 'alive', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
     },
-    openedChestIds: [],
+    openedChestIds,
   })
 }
 
@@ -191,6 +191,31 @@ test('authority checkpoint restores follower durable local equipment', () => {
   assert.equal(runtime.isAuthority(), false)
   assert.deepEqual(scene.localPlayer.state.equipment.weapon, weapon)
   assert.equal(scene.floor, 9)
+})
+
+test('checkpoint restores opened chest presentation through the spatial owner', () => {
+  const scene = sceneFixture('guest')
+  let restored = null
+  scene.__dungeonSpatial = {
+    applyOpenedChestIds(ids) { restored = [...ids] },
+  }
+  const runtime = createDungeonNetworkRuntime({
+    socket: socketFixture(), scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host',
+  })
+
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.fact',
+    playerId: 'host',
+    fact: {
+      type: 'session.checkpoint',
+      checkpoint: checkpoint({
+        authorityId: 'host', epoch: 1, sequence: 5, floor: 9,
+        openedChestIds: ['floor-9:chest-0'],
+      }),
+    },
+  }))
+
+  assert.deepEqual(restored, ['floor-9:chest-0'])
 })
 
 test('newer checkpoint from surviving peer transfers authority on former host', () => {
@@ -297,5 +322,75 @@ test('live former host rebinds world runtime as follower after newer checkpoint'
 
   assert.equal(runtime.isAuthority(), false)
   assert.equal(runtime.world()?.isHost, false)
+  runtime.stop()
+})
+
+test('follower chest interaction is delegated as an open_chest command', async () => {
+  const socket = socketFixture()
+  const scene = sceneFixture('guest')
+  let chestIntent = null
+  scene.__dungeonSpatial = {
+    setChestIntentHandler(handler) { chestIntent = handler; return null },
+    setChestOpenedHandler() { return null },
+  }
+  const runtime = createDungeonNetworkRuntime({
+    socket, scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host',
+    setIntervalImpl: () => 7,
+    clearIntervalImpl: () => {},
+  })
+  runtime.start()
+  socket.calls.length = 0
+
+  const delegated = chestIntent?.(scene.localPlayer, { id: 'floor-4:chest-0' })
+  await nextTurn()
+
+  assert.equal(delegated, true)
+  const call = socket.calls.find((candidate) => candidate.action === 'dungeon.command')
+  assert.deepEqual(call?.params?.command, { type: 'open_chest', chestId: 'floor-4:chest-0' })
+  runtime.stop()
+})
+
+test('authority death and three-second revive are checkpointed by the network lifecycle owner', async () => {
+  const socket = socketFixture()
+  const scene = sceneFixture('host')
+  let gameOvers = 0
+  let intervalCallback = null
+  scene.players.set('guest', { id: 'guest', state: state(80), dead: false, runtime: {} })
+  scene.gameOver = () => { gameOvers++ }
+  scene.hitPlayer = function hitPlayer(damage, player = scene.localPlayer) {
+    player.state.hp = Math.max(0, player.state.hp - damage)
+    if (player.state.hp <= 0) scene.gameOver(player)
+  }
+  const runtime = createDungeonNetworkRuntime({
+    socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host',
+    setIntervalImpl(callback) { intervalCallback = callback; return 7 },
+    clearIntervalImpl: () => {},
+  })
+  runtime.start()
+  socket.calls.length = 0
+
+  scene.hitPlayer(999, scene.localPlayer)
+  await nextTurn()
+  await nextTurn()
+
+  assert.equal(scene.localPlayer.dead, true)
+  assert.equal(gameOvers, 0)
+  let checkpoints = socket.calls
+    .filter((call) => call.action === 'dungeon.fact' && call.params.fact?.type === 'session.checkpoint')
+    .map((call) => call.params.fact.checkpoint)
+  assert.equal(checkpoints.at(-1)?.lifecycle?.host?.status, 'downed')
+  assert.equal(checkpoints.at(-1)?.lifecycle?.host?.respawnRemainingMs, 3000)
+
+  scene.time.now += 3000
+  intervalCallback?.()
+  await nextTurn()
+  await nextTurn()
+
+  assert.equal(scene.localPlayer.dead, false)
+  assert.equal(scene.localPlayer.state.hp, 50)
+  checkpoints = socket.calls
+    .filter((call) => call.action === 'dungeon.fact' && call.params.fact?.type === 'session.checkpoint')
+    .map((call) => call.params.fact.checkpoint)
+  assert.equal(checkpoints.at(-1)?.lifecycle?.host?.status, 'alive')
   runtime.stop()
 })
