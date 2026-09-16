@@ -59,6 +59,7 @@ export function createDungeonWorldRuntime(scene, {
   publishFact = async () => null,
   sendCommand = async () => null,
   onError = () => {},
+  now = null,
 } = {}) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
 
@@ -491,6 +492,7 @@ export function createDungeonWorldRuntime(scene, {
       localPlayer: scene.localPlayer,
       isAuthority: () => isHost,
       publishFact: emitFact,
+      now,
     })
     return api
   }
