@@ -33,6 +33,7 @@ jobs:
         run: |
           node --test \
             src/lib/games/dungeon/session-sync-runtime.test.js \
+            src/lib/games/dungeon/checkpoint-clock-state.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
             src/lib/games/dungeon/combat-runtime.test.js \
             src/lib/games/dungeon/combat-slash-ownership.test.js \
