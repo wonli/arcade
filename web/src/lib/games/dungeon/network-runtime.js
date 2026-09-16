@@ -485,6 +485,9 @@ export function createDungeonNetworkRuntime({
         void publishCheckpoint()
         return player ?? null
       }
+      if (isAuthority() && scene.players.has(sourcePlayerId)) {
+        return replicationRuntime.applyRemotePresence(sourcePlayerId, payload.snapshot)
+      }
       return replicationRuntime.applyRemote(sourcePlayerId, payload.snapshot)
     }
 
