@@ -161,6 +161,7 @@ export function createDungeonNetworkRuntime({
   let timer = null
   let snapshotInFlight = false
   let started = false
+  let hydrated = initialHost
   let mirrorsInstalled = false
   let originalAutoAttack = null
   let originalTrySkill = null
@@ -284,6 +285,7 @@ export function createDungeonNetworkRuntime({
       scene.floorCleared = Boolean(world.floorCleared)
       scene.runComplete = Boolean(world.runComplete)
     }
+    scene.__dungeonPickupRuntime?.reconcileVisuals?.()
 
     const expectedRemoteIds = new Set()
     for (const [id, snapshot] of Object.entries(checkpoint.players ?? {})) {
@@ -292,6 +294,7 @@ export function createDungeonNetworkRuntime({
         syncLocalPlayerLabel(localPlayer)
         localPlayer.actor?.setPosition?.(localPlayer.state.x, localPlayer.state.y)
         scene.updateHealthBar?.(localPlayer.bar, localPlayer.state.x, localPlayer.state.y - 42, localPlayer.state.hp, localPlayer.state.maxHp)
+        localPlayer.runtime?.weaponVisuals?.sync?.()
         scene.syncPlayerAnimation?.(null, localPlayer)
         scene.emitStats?.()
         continue
@@ -462,6 +465,7 @@ export function createDungeonNetworkRuntime({
     rebindWorldRuntime()
     const materialized = sessionRuntime.snapshot()
     applyCheckpointPresentation(materialized)
+    hydrated = true
     onFact(fact, { playerId: sourcePlayerId, applied: materialized })
     return materialized
   }
@@ -489,9 +493,14 @@ export function createDungeonNetworkRuntime({
     if (!sourcePlayerId || sourcePlayerId === normalizedLocalId) return null
 
     if (payload.type === 'dungeon.snapshot') {
-      const player = applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
-      if (isAuthority() && payload.snapshot?.syncCheckpoint === true) void publishCheckpoint()
-      return player
+      if (isAuthority() && payload.snapshot?.syncCheckpoint === true) {
+        const player = scene.players.has(sourcePlayerId)
+          ? scene.players.get(sourcePlayerId)
+          : applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
+        void publishCheckpoint()
+        return player ?? null
+      }
+      return applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
     }
 
     if (payload.type === 'dungeon.command') {
@@ -556,6 +565,7 @@ export function createDungeonNetworkRuntime({
     authorityState = { ...takeover.authority }
     rebindWorldRuntime()
     applyCheckpointPresentation(takeover)
+    hydrated = true
     const returned = createSessionCheckpoint(takeover)
     void publishCheckpoint()
     return returned
@@ -588,7 +598,7 @@ export function createDungeonNetworkRuntime({
     installLocalCommandMirrors()
     timer = setIntervalImpl(() => {
       tickLifecycle()
-      void flushSnapshot()
+      if (hydrated) void flushSnapshot()
     }, snapshotInterval)
     void flushSnapshot({ syncCheckpoint: !isAuthority() })
     return api
