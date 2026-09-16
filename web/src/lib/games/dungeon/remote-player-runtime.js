@@ -1,5 +1,7 @@
 import { attachPlayerEntity, detachPlayerEntity } from './player-entity.js'
+import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot } from './player-snapshot.js'
+import { createWeaponVisual, weaponPose, weaponVisualProfile } from './weapon-visual-runtime.js'
 
 function restorePlayerRuntime(player) {
   const restored = new Set()
@@ -34,6 +36,59 @@ function createRemoteActor(scene, x, y) {
   return actor
 }
 
+function installRemoteWeaponPresentation(scene, player) {
+  player.runtime ??= {}
+  let visual = null
+  let currentKey = null
+
+  const destroyVisual = () => {
+    visual?.destroy?.()
+    visual = null
+    currentKey = null
+  }
+
+  const sync = () => {
+    const item = currentWeapon(player.state)
+    const profile = weaponVisualProfile(item)
+    if (!profile) {
+      destroyVisual()
+      return null
+    }
+
+    const nextKey = `${profile.archetype}:${profile.textureKey}`
+    if (!visual || currentKey !== nextKey) {
+      destroyVisual()
+      visual = createWeaponVisual(scene, item, player.state.x, player.state.y, {
+        presentationConfig: scene.__dungeonWeaponPresentation ?? null,
+      })
+      currentKey = visual ? nextKey : null
+    }
+    if (!visual) return null
+
+    const pose = weaponPose(player.state, player.facing, {
+      attacking: Boolean(player.attacking),
+      presentationConfig: scene.__dungeonWeaponPresentation ?? null,
+      item,
+    })
+    visual.setPosition?.(pose.x, pose.y)
+    visual.setAngle?.(pose.angle)
+    visual.setFlipX?.(pose.flipX)
+    visual.setDepth?.(pose.depth)
+    return visual
+  }
+
+  let api = null
+  const restore = () => {
+    destroyVisual()
+    if (player.runtime?.weaponVisuals === api) delete player.runtime.weaponVisuals
+  }
+
+  api = { sync, visual: () => visual, restore }
+  player.runtime.weaponVisuals = api
+  sync()
+  return api
+}
+
 function createPlayerLabel(scene, player) {
   if (!scene.add?.text) return null
   const slot = Number.isInteger(player.slot) ? player.slot + 1 : '?'
@@ -61,6 +116,7 @@ export function syncRemotePlayerPresentation(scene, player) {
     player.state.hp,
     player.state.maxHp,
   )
+  player.runtime?.weaponVisuals?.sync?.()
   scene.syncPlayerAnimation?.(null, player)
 }
 
@@ -87,6 +143,7 @@ export function spawnRemotePlayer(scene, snapshot) {
     0x55e879,
   ) ?? null
   player.label = createPlayerLabel(scene, player)
+  installRemoteWeaponPresentation(scene, player)
 
   syncRemotePlayerPresentation(scene, player)
   return player
