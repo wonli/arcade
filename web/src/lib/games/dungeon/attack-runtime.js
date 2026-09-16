@@ -91,10 +91,9 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   installDungeonEnemyFeedback(scene)
   installDungeonEnemyBehaviors(scene, { player })
 
-  const originalSlash = scene.slash
   const audio = createImpactAudio()
 
-  scene.slash = function spatialSlash(target, attacker = player) {
+  const slashOwner = (target, attacker = player, coreSlash) => {
     if (!target || target.hp <= 0 || !attacker) return
 
     const previousDamage = attacker.state.damage
@@ -107,7 +106,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
       if (weaponProfile(attacker.state).attackMode !== 'ranged') {
         scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
       }
-      return originalSlash.call(scene, target, attacker)
+      return coreSlash?.(target, attacker)
     } finally {
       attacker.state.damage = previousDamage
     }
@@ -289,6 +288,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
     return null
   }
 
+  const restoreSlashOwner = combat.setSlashOwner(slashOwner)
   const restoreDamageResolver = combat.setDamageResolver(damageResolver)
   const restoreProcOwner = combat.setProcOwner(procOwner)
 
@@ -296,9 +296,9 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   const restore = () => {
     if (restored) return
     restored = true
-    if (scene.slash !== originalSlash) scene.slash = originalSlash
     restoreProcOwner()
     restoreDamageResolver()
+    restoreSlashOwner()
     scene.__dungeonEnemyBehaviors?.restore?.()
     scene.__dungeonEnemyFeedback?.restore?.()
     scene.__dungeonPlayerFacing?.restore?.()
