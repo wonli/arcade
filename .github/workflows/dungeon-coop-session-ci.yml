@@ -31,6 +31,7 @@ jobs:
             src/lib/games/dungeon/session-runtime.test.js
             src/lib/games/dungeon/network-runtime.test.js
             src/lib/games/dungeon/network-session-authority.test.js
+            src/lib/games/dungeon/peer-authority.test.js
             src/lib/games/dungeon/coop-lifecycle.test.js
             src/lib/games/dungeon/remote-player-runtime.test.js
           )
