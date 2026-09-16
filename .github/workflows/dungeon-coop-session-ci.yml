@@ -55,4 +55,4 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Test Dungeon relay
-        run: go test ./arcade/...
+        run: go test ./arcade/... ./server
