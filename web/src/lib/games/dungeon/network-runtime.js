@@ -493,7 +493,7 @@ export function createDungeonNetworkRuntime({
       return executePlayerCommand(
         scene,
         { ...payload.command, playerId: sourcePlayerId },
-        { authoritative: true },
+        { authoritative: true, now },
       )
     }
 
