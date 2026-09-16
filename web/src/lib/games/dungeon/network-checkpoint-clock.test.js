@@ -11,7 +11,7 @@ function socketFixture() {
   }
 }
 
-function sceneFixture() {
+function sceneFixture(localId = 'host') {
   const scene = {
     floor: 3,
     kills: 0,
@@ -28,7 +28,7 @@ function sceneFixture() {
     emitStats() {},
   }
   attachLocalPlayerEntity(scene, {
-    id: 'host',
+    id: localId,
     state: {
       x: 120,
       y: 180,
@@ -41,6 +41,10 @@ function sceneFixture() {
     },
   })
   return scene
+}
+
+function roomMessage(payload) {
+  return { data: { topicId: 'room:ABC123', message: payload } }
 }
 
 test('authority checkpoint capture contains portable gameplay durations rather than local absolute timestamps', () => {
@@ -107,4 +111,85 @@ test('authority checkpoint capture contains portable gameplay durations rather t
   assert.equal(enemy.nextSpecialRemainingMs, 1800)
   assert.equal(enemy.dashRemainingMs, 400)
   assert.equal(enemy.specialLockedRemainingMs, 750)
+})
+
+test('follower reanchors portable player gameplay timers without contaminating canonical session state', () => {
+  const scene = sceneFixture('guest')
+  const runtime = createDungeonNetworkRuntime({
+    socket: socketFixture(),
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'guest',
+    hostId: 'host',
+    now: () => 250,
+  })
+
+  runtime.handleMessage(roomMessage({
+    type: 'dungeon.fact',
+    playerId: 'host',
+    fact: {
+      type: 'session.checkpoint',
+      checkpoint: {
+        version: 1,
+        roomId: 'ABC123',
+        runSeed: 'ABC123',
+        authority: { epoch: 1, authorityId: 'host', sequence: 1 },
+        status: 'playing',
+        world: {
+          type: 'world.state',
+          floor: 3,
+          kills: 0,
+          floorKills: 0,
+          floorCleared: false,
+          runComplete: false,
+          enemies: [],
+          drops: [],
+          portal: null,
+        },
+        players: {
+          guest: {
+            id: 'guest',
+            state: {
+              x: 220,
+              y: 180,
+              hp: 75,
+              maxHp: 100,
+              damage: 12,
+              equipment: { weapon: null },
+              modifiers: {},
+              hasteRemainingMs: 1200,
+            },
+            facing: 'left',
+            moving: false,
+            attacking: false,
+            dead: false,
+            lastAttackElapsedMs: 400,
+            lastContactElapsedMs: 200,
+            skillCooldownRemainingMs: { primary: 3000 },
+          },
+        },
+        lifecycle: {
+          guest: { status: 'alive', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
+        },
+        openedChestIds: [],
+      },
+    },
+  }))
+
+  assert.equal(scene.localPlayer.lastAttackAt, -150)
+  assert.equal(scene.localPlayer.lastContactAt, 50)
+  assert.deepEqual(scene.localPlayer.runtime.skills.cooldowns, { primary: 3250 })
+  assert.equal(scene.localPlayer.state.hasteUntil, 1450)
+  assert.equal('lastAttackElapsedMs' in scene.localPlayer, false)
+  assert.equal('skillCooldownRemainingMs' in scene.localPlayer, false)
+  assert.equal('hasteRemainingMs' in scene.localPlayer.state, false)
+
+  const canonical = runtime.checkpoint()
+  assert.equal(canonical.players.guest.lastAttackElapsedMs, 400)
+  assert.equal(canonical.players.guest.lastContactElapsedMs, 200)
+  assert.deepEqual(canonical.players.guest.skillCooldownRemainingMs, { primary: 3000 })
+  assert.equal(canonical.players.guest.state.hasteRemainingMs, 1200)
+  assert.equal('lastAttackAt' in canonical.players.guest, false)
+  assert.equal('skillCooldowns' in canonical.players.guest, false)
+  assert.equal('hasteUntil' in canonical.players.guest.state, false)
 })
