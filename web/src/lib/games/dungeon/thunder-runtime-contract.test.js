@@ -13,9 +13,10 @@ test('thunder rolls directly from its affix chance without requiring a critical 
   assert.match(thunderBlock, /effects\.thunder\s*>\s*0\s*&&\s*random\(\)\s*<\s*effects\.thunder/)
 })
 
-test('thunder damages the primary strike and every chained target', () => {
+test('thunder damages every chained target through the combat capability', () => {
   assert.doesNotMatch(thunderBlock, /index\s*!==\s*0/)
-  assert.match(thunderBlock, /scene\.damageEnemy\(\s*segment\.to,/s)
+  assert.match(thunderBlock, /combat\.damageEnemy\(\s*segment\.to,/s)
+  assert.doesNotMatch(thunderBlock, /scene\.damageEnemy\(\s*segment\.to,/s)
   assert.match(thunderBlock, /source:\s*'thunder'/)
 })
 
