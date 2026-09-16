@@ -1,3 +1,4 @@
+import { consumeCheckpointClockState } from './checkpoint-clock-state.js'
 import { consumeRemainingDuration, nextAuthority } from './session-authority.js'
 
 const SESSION_STATUSES = new Set(['playing', 'wiped', 'complete'])
@@ -87,9 +88,9 @@ function compareCheckpointAuthority(current, candidate) {
   return b.sequence > a.sequence ? 1 : -1
 }
 
-function consumeLifecycle(checkpoint, elapsedMs) {
-  const next = createSessionCheckpoint(checkpoint)
+function consumeCheckpointDurations(checkpoint, elapsedMs) {
   const elapsed = Math.max(0, Number.isFinite(Number(elapsedMs)) ? Number(elapsedMs) : 0)
+  const next = consumeCheckpointClockState(createSessionCheckpoint(checkpoint), elapsed)
   for (const lifecycle of Object.values(next.lifecycle)) {
     lifecycle.respawnRemainingMs = consumeRemainingDuration(lifecycle.respawnRemainingMs, elapsed)
     lifecycle.invulnerabilityRemainingMs = consumeRemainingDuration(lifecycle.invulnerabilityRemainingMs, elapsed)
@@ -110,7 +111,7 @@ export function createDungeonSessionRuntime({ now = () => performance.now() } = 
 
   function materialize() {
     if (!checkpoint) return null
-    return consumeLifecycle(checkpoint, Math.max(0, currentTime() - observedAt))
+    return consumeCheckpointDurations(checkpoint, Math.max(0, currentTime() - observedAt))
   }
 
   function applyCheckpoint(value) {
