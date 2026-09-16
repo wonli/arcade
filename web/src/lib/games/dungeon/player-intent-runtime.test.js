@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createPlayerIntentRuntime } from './player-intent-runtime.js'
-import { createPlayerEntity, getPlayerSkillReadyAt, setPlayerSkillReadyAt } from './player-entity.js'
+import { createPlayerIntentRuntime, installPlayerIntentRuntime } from './player-intent-runtime.js'
+import { createPlayerEntity, setPlayerSkillReadyAt } from './player-entity.js'
 
 function player() {
   return createPlayerEntity({
@@ -11,50 +11,59 @@ function player() {
   })
 }
 
-test('successful local attack emits exactly one semantic attack intent', () => {
+test('observer emits one semantic attack intent when local attack state advances', () => {
   const localPlayer = player()
   const intents = []
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
-  const result = runtime.attack(1200, () => {
-    localPlayer.lastAttackAt = 1200
-    return 'hit'
-  })
+  localPlayer.lastAttackAt = 1200
+  runtime.observe(1200)
+  runtime.observe(1200)
 
-  assert.equal(result, 'hit')
   assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest', time: 1200 }])
 })
 
-test('declined local attack emits no network intent', () => {
+test('observer emits no attack intent when gameplay declined the attack', () => {
   const localPlayer = player()
   const intents = []
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
-  runtime.attack(900, () => undefined)
+  runtime.observe(900)
 
   assert.deepEqual(intents, [])
 })
 
-test('successful local skill emits one semantic skill intent only when cooldown advances', () => {
+test('observer emits one semantic skill intent when local primary cooldown advances', () => {
   const localPlayer = player()
   const intents = []
   const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
 
-  runtime.skill(1500, 'primary', () => {
-    setPlayerSkillReadyAt(localPlayer, 'primary', 5000)
-    return { cast: true }
-  })
+  setPlayerSkillReadyAt(localPlayer, 'primary', 5000)
+  runtime.observe(1500)
+  runtime.observe(1500)
 
-  assert.equal(getPlayerSkillReadyAt(localPlayer, 'primary'), 5000)
   assert.deepEqual(intents, [{ type: 'skill', playerId: 'guest', skillId: 'primary', time: 1500 }])
 })
 
-test('declined local skill emits no intent when cooldown does not advance', () => {
+test('installed intent runtime observes postupdate without replacing gameplay methods', () => {
   const localPlayer = player()
+  const listeners = new Map()
+  const scene = {
+    localPlayer,
+    time: { now: 1000 },
+    events: {
+      on(name, listener) { listeners.set(name, listener) },
+      off(name, listener) { if (listeners.get(name) === listener) listeners.delete(name) },
+    },
+  }
   const intents = []
-  const runtime = createPlayerIntentRuntime({ player: localPlayer, emit: (intent) => intents.push(intent) })
+  const runtime = installPlayerIntentRuntime(scene, { player: localPlayer, onIntent: (intent) => intents.push(intent) })
 
-  runtime.skill(1500, 'primary', () => ({ cast: false }))
+  localPlayer.lastAttackAt = 1400
+  scene.time.now = 1400
+  listeners.get('postupdate')?.()
 
-  assert.deepEqual(intents, [])
+  assert.deepEqual(intents, [{ type: 'attack', playerId: 'guest', time: 1400 }])
+  runtime.restore()
+  assert.equal(listeners.has('postupdate'), false)
 })
