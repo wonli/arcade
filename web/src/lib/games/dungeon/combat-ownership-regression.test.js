@@ -77,7 +77,7 @@ test('combat capability attack preserves weapon damage knockback targeting and p
   ]
 
   installDungeonWeaponCombat(scene)
-  scene.dungeon.combat.attack(1000, scene.localPlayer)
+  scene.dungeon.combat.attack(scene.localPlayer, 1000)
 
   assert.equal(calls.length, 1)
   assert.equal(calls[0].enemy.id, 'near')
