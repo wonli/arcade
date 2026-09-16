@@ -48,7 +48,10 @@ function enemyFixture(pendingSpecial = null) {
     nextProjectileAt: 1800,
     nextSpecialAt: 3200,
     dashUntil: 1310,
+    dashVx: 118,
+    dashVy: -24,
     specialLockedUntil: 1420,
+    strafeSign: -1,
     contactDamage: 8,
     tint: null,
     scale: 1,
@@ -142,7 +145,10 @@ test('world state carries detached enemy behavior timing and pending special sta
 
   assert.equal(state.enemies[0].nextSpecialAt, 3200)
   assert.equal(state.enemies[0].dashUntil, 1310)
+  assert.equal(state.enemies[0].dashVx, 118)
+  assert.equal(state.enemies[0].dashVy, -24)
   assert.equal(state.enemies[0].specialLockedUntil, 1420)
+  assert.equal(state.enemies[0].strafeSign, -1)
   assert.deepEqual(state.enemies[0].pendingSpecial, pending)
   state.enemies[0].pendingSpecial.damage = 999
   assert.equal(scene.enemies[0].pendingSpecial.damage, 12)
@@ -162,7 +168,10 @@ test('world state replaces and clears follower pending enemy special without sha
   const guest = sceneFixture({ ...bruteSlam(), damage: 99, resolveAt: 9999 })
   guest.enemies[0].nextSpecialAt = 9999
   guest.enemies[0].dashUntil = 9999
+  guest.enemies[0].dashVx = 999
+  guest.enemies[0].dashVy = 999
   guest.enemies[0].specialLockedUntil = 9999
+  guest.enemies[0].strafeSign = 1
   const guestRuntime = createDungeonWorldRuntime(guest, {
     runSeed: 'ABC123',
     isHost: false,
@@ -172,7 +181,10 @@ test('world state replaces and clears follower pending enemy special without sha
 
   assert.equal(guest.enemies[0].nextSpecialAt, 3200)
   assert.equal(guest.enemies[0].dashUntil, 1310)
+  assert.equal(guest.enemies[0].dashVx, 118)
+  assert.equal(guest.enemies[0].dashVy, -24)
   assert.equal(guest.enemies[0].specialLockedUntil, 1420)
+  assert.equal(guest.enemies[0].strafeSign, -1)
   assert.deepEqual(guest.enemies[0].pendingSpecial, pending)
   guest.enemies[0].pendingSpecial.damage = 777
   assert.equal(activeState.enemies[0].pendingSpecial.damage, 12)
