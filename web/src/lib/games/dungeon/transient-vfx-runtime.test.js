@@ -112,3 +112,21 @@ test('wrapped transient methods capture created display objects and release them
   assert.equal(label.destroyed, 1)
   assert.equal(runtime.size(), 0)
 })
+
+test('visibility cleanup resets stale camera effects and player tint without touching world state', () => {
+  const { scene, documentRef } = fixture()
+  let cameraResets = 0
+  let tintClears = 0
+  scene.cameras = { main: { resetFX() { cameraResets++ } } }
+  scene.players = new Map([
+    ['p1', { actor: { clearTint() { tintClears++ } } }],
+    ['p2', { actor: { clearTint() { tintClears++ } } }],
+  ])
+  installTransientVfxRuntime(scene, { documentRef })
+
+  documentRef.hidden = true
+  documentRef.emit('visibilitychange')
+
+  assert.equal(cameraResets, 1)
+  assert.equal(tintClears, 2)
+})
