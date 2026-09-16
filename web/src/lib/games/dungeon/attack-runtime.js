@@ -99,13 +99,20 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   scene.slash = function spatialSlash(target, attacker = player) {
     if (!target || target.hp <= 0 || !attacker) return
 
-    const weaponVisuals = attacker.runtime?.weaponVisuals
-      ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
-    const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
-    if (weaponProfile(attacker.state).attackMode !== 'ranged') {
-      scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+    const previousDamage = attacker.state.damage
+    attacker.state.damage = combat.weaponDamageStat(attacker, previousDamage)
+    combat.beginWeaponAttack(target, attacker)
+    try {
+      const weaponVisuals = attacker.runtime?.weaponVisuals
+        ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
+      const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
+      if (weaponProfile(attacker.state).attackMode !== 'ranged') {
+        scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+      }
+      return originalSlash.call(scene, target, attacker)
+    } finally {
+      attacker.state.damage = previousDamage
     }
-    return originalSlash.call(scene, target, attacker)
   }
 
   const damageResolver = (hit, coreDamage) => {
