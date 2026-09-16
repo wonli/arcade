@@ -16,7 +16,7 @@ export function installDungeonWeaponCombat(scene) {
   if (typeof scene.slash !== 'function') return null
 
   const combat = ensureDungeonCombatRuntime(scene)
-  const attackOwner = (time, player = scene.localPlayer) => {
+  const attackOwner = (player = scene.localPlayer, time = scene.time?.now ?? 0) => {
     if (!player || time - player.lastAttackAt < attackInterval(player.state, time)) return null
     const profile = weaponProfile(player.state)
     const target = nearestAttackableTarget(player.state, scene.enemies ?? [], profile, roomGeometry(scene))
