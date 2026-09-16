@@ -7,6 +7,7 @@ import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-
 import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 import { normalizeRunSeed } from './world-seed.js'
 
 const ENEMY_STATE_FIELDS = [
@@ -67,11 +68,12 @@ export function createDungeonWorldRuntime(scene, {
   const combat = ensureDungeonCombatRuntime(scene)
   installDungeonLootSceneBridge(scene)
   const loot = ensureDungeonLootRuntime(scene)
+  installDungeonPortalSceneBridge(scene)
+  const portal = ensureDungeonPortalRuntime(scene)
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
   const originals = {
     spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
-    openPortal: typeof scene.openPortal === 'function' ? scene.openPortal.bind(scene) : null,
     advanceFloor: typeof scene.advanceFloor === 'function' ? scene.advanceFloor.bind(scene) : null,
   }
   const dropSequences = new Map()
@@ -82,6 +84,7 @@ export function createDungeonWorldRuntime(scene, {
   let restoreCombatAuthority = null
   let restoreLootAuthority = null
   let restoreLootPickupOwner = null
+  let restorePortalAuthority = null
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -452,23 +455,20 @@ export function createDungeonWorldRuntime(scene, {
     })
     restoreLootPickupOwner = loot.setPickupOwner(authoritativePickupById)
 
+    restorePortalAuthority = portal.setAuthority({
+      mayOpen: () => isHost || applyingFact,
+      onOpened({ portal: opened }) {
+        if (!opened || applyingFact || !isHost) return
+        opened.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
+        emitFact({ type: 'portal.open', entityId: opened.id, x: opened.x, y: opened.y })
+      },
+    })
+
     if (originals.spawnEnemy) {
       scene.spawnEnemy = function stableSpawnEnemy(index = 0, options = {}) {
         const enemy = originals.spawnEnemy(index, options)
         if (enemy) enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
         return enemy
-      }
-    }
-
-    if (originals.openPortal) {
-      scene.openPortal = function authoritativeOpenPortal(player = scene.localPlayer) {
-        if (!isHost && !applyingFact) return null
-        const value = originals.openPortal(player)
-        if (scene.portal && isHost && !applyingFact) {
-          scene.portal.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
-          emitFact({ type: 'portal.open', entityId: scene.portal.id, x: scene.portal.x, y: scene.portal.y })
-        }
-        return value
       }
     }
 
@@ -501,6 +501,8 @@ export function createDungeonWorldRuntime(scene, {
     if (!started) return
     coopPortalRuntime?.restore?.()
     coopPortalRuntime = null
+    restorePortalAuthority?.()
+    restorePortalAuthority = null
     restoreLootPickupOwner?.()
     restoreLootPickupOwner = null
     restoreLootAuthority?.()
@@ -508,7 +510,6 @@ export function createDungeonWorldRuntime(scene, {
     restoreCombatAuthority?.()
     restoreCombatAuthority = null
     if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
-    if (originals.openPortal) scene.openPortal = originals.openPortal
     if (originals.advanceFloor) scene.advanceFloor = originals.advanceFloor
     started = false
   }
