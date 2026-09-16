@@ -105,11 +105,10 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
   const loot = ensureDungeonCapabilities(scene).loot
 
   if (type === 'open_chest') {
-    const openChest = loot?.openChest
-    if (typeof openChest !== 'function') {
+    if (!loot?.hasOpenChestOwner?.()) {
       return result(command, { accepted: true, playerId, reason: 'chest-unavailable' })
     }
-    const value = openChest(player, validated.chestId)
+    const value = loot.openChest(player, validated.chestId)
     const applied = value === true || Boolean(value?.opened)
     return result(command, {
       accepted: true,
@@ -120,12 +119,11 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
-  const pickup = loot?.pickup
-  if (typeof pickup !== 'function') {
+  if (!loot?.hasPickupOwner?.()) {
     return result(command, { accepted: true, playerId, reason: 'pickup-unavailable' })
   }
 
-  const value = pickup(player, validated.dropId)
+  const value = loot.pickup(player, validated.dropId)
   const applied = value === true || Boolean(value?.picked)
   return result(command, {
     accepted: true,
