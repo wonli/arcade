@@ -282,11 +282,11 @@ export function installPickupInteraction(scene, {
     return drop
   }
 
-  const reconcileVisuals = () => {
+  const reconcileVisuals = ({ force = false } = {}) => {
     let created = 0
     const now = scene.time?.now ?? 0
     for (const drop of scene.drops ?? []) {
-      if (!drop?.item?.type?.startsWith?.('weapon.') || drop.visual) continue
+      if (!drop?.item?.type?.startsWith?.('weapon.') || (drop.visual && !force)) continue
       const x = Number(drop.x) || 0
       const groundY = Number(drop.groundY ?? drop.y) || 0
       const visual = syncGroundWeaponVisual(scene, drop, { x, y: groundY })
@@ -384,8 +384,9 @@ export function installPickupInteraction(scene, {
   const restorePresentationOwner = loot.setPresentationOwner(reconcileVisuals)
 
   const confirmSelected = () => loot.step(player, { confirmSelection: true })
+  const reconcileLoadedVisuals = () => reconcileVisuals({ force: true })
   key?.on?.('down', confirmSelected)
-  scene.load?.on?.('complete', reconcileVisuals)
+  scene.load?.on?.('complete', reconcileLoadedVisuals)
 
   const autoPotionUpdate = () => inventory?.autoUseHealthPotion?.()
   scene.events?.on?.('update', autoPotionUpdate)
@@ -395,7 +396,7 @@ export function installPickupInteraction(scene, {
     restored = true
     key?.off?.('down', confirmSelected)
     scene.events?.off?.('update', autoPotionUpdate)
-    scene.load?.off?.('complete', reconcileVisuals)
+    scene.load?.off?.('complete', reconcileLoadedVisuals)
     publish(null)
     pickupIntentHandler = null
     scene.__dungeonDropNavGrid = null
