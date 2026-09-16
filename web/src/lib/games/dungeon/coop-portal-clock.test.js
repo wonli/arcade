@@ -39,11 +39,13 @@ test('party portal dwell completes on injected monotonic time while Phaser updat
   })
 
   scene.updatePortal(1000)
-  assert.equal(scene.portal.countdownLabel?.text, '3')
+  assert.equal(p1.portalCountdownLabel?.text, '3')
+  assert.equal(p2.portalCountdownLabel?.text, '3')
 
   logicalNow += 3000
   scene.updatePortal(1000)
 
   assert.equal(advances, 1)
-  assert.equal(scene.portal.countdownLabel ?? null, null)
+  assert.equal(p1.portalCountdownLabel ?? null, null)
+  assert.equal(p2.portalCountdownLabel ?? null, null)
 })
