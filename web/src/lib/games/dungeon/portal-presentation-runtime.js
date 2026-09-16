@@ -14,6 +14,10 @@ export function installPortalPresentationRuntime(scene) {
   if (!scene || typeof scene !== 'object') return null
   if (scene.__dungeonPortalPresentation) return scene.__dungeonPortalPresentation
 
+  const originalOpenPortalMethod = scene.openPortal
+  const originalOpenPortal = typeof originalOpenPortalMethod === 'function'
+    ? originalOpenPortalMethod.bind(scene)
+    : null
   const originalDestroyPortalMethod = scene.destroyPortal
   const originalDestroyPortal = typeof originalDestroyPortalMethod === 'function'
     ? originalDestroyPortalMethod.bind(scene)
@@ -35,7 +39,17 @@ export function installPortalPresentationRuntime(scene) {
   }
 
   const create = ({ id = null, x = 0, y = 0, unlockAt = scene.time?.now ?? 0 } = {}) => {
-    if (!scene.add?.circle) return null
+    if (!scene.add?.circle) {
+      originalOpenPortal?.()
+      const portal = scene.portal
+      if (!portal) return null
+      portal.id = id ? String(id) : null
+      portal.x = Number(x) || 0
+      portal.y = Number(y) || 0
+      portal.unlockAt = Number.isFinite(Number(unlockAt)) ? Number(unlockAt) : (scene.time?.now ?? 0)
+      return syncPortal(portal)
+    }
+
     const glow = scene.add.circle(x, y, 40, 0x70ff9f, 0.08).setDepth?.(8)
     const ring = scene.add.circle(x, y, 27, 0x1f5132, 0.28).setStrokeStyle?.(4, 0x70ff9f, 0.9)?.setDepth?.(9)
     const core = scene.add.circle(x, y, 16, 0x70ff9f, 0.42).setDepth?.(10)
