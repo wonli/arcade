@@ -138,3 +138,17 @@ test('follower apply restores lifecycle without advancing timers locally', () =>
   assert.equal(roster.p1.dead, true)
   assert.equal(runtime.snapshot().p1.respawnRemainingMs, 1200)
 })
+
+test('follower presents a replicated party wipe exactly once', () => {
+  const { scene, gameOvers } = sceneFixture()
+  const runtime = installCoopLifecycleRuntime(scene, { isAuthority: () => false })
+  const wiped = {
+    p1: { status: 'downed', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
+    p2: { status: 'downed', respawnRemainingMs: 0, invulnerabilityRemainingMs: 0 },
+  }
+
+  runtime.apply(wiped, { status: 'wiped' })
+  runtime.apply(wiped, { status: 'wiped' })
+
+  assert.equal(gameOvers(), 1)
+})
