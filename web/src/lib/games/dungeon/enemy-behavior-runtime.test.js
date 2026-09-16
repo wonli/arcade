@@ -27,12 +27,50 @@ test('fast enemy commits to a bounded dash and schedules cooldown', () => {
   assert.ok(enemy.dashUntil > 1000); assert.ok(enemy.nextSpecialAt > enemy.dashUntil); assert.ok(enemy.dashVx > 50)
 })
 
-test('brute slam telegraphs then damages only if player remains in radius', () => {
+test('brute slam settles from gameplay time without a Phaser delayed callback', () => {
   const { scene, hits, timers } = makeScene(); const runtime = installDungeonEnemyBehaviors(attachLegacyTestPlayer(scene))
   const enemy = { archetype: 'brute', x: 40, y: 100, speed: 30, hp: 20, contactDamage: 14, nextSpecialAt: 0 }
+
   runtime.update(enemy, 1000, 0.016)
-  assert.equal(timers.length, 1); assert.equal(hits.length, 0)
-  timers[0].fn(); assert.equal(hits.length, 1)
+
+  assert.equal(timers.length, 0)
+  assert.equal(hits.length, 0)
+  assert.equal(enemy.pendingSpecial?.type, 'brute_slam')
+  assert.equal(enemy.pendingSpecial?.resolveAt, 1420)
+
+  runtime.update(enemy, 1419, 0.016)
+  assert.equal(hits.length, 0)
+
+  runtime.update(enemy, 1420, 0.016)
+  assert.deepEqual(hits, [18])
+  assert.equal(enemy.pendingSpecial, null)
+
+  runtime.update(enemy, 1421, 0.016)
+  assert.deepEqual(hits, [18])
+})
+
+test('brute slam misses when its locked target leaves the telegraphed radius', () => {
+  const { scene, hits } = makeScene(); const runtime = installDungeonEnemyBehaviors(attachLegacyTestPlayer(scene))
+  const enemy = { archetype: 'brute', x: 40, y: 100, speed: 30, hp: 20, contactDamage: 14, nextSpecialAt: 0 }
+
+  runtime.update(enemy, 1000, 0.016)
+  scene.localPlayer.state.x = 400
+  runtime.update(enemy, 1420, 0.016)
+
+  assert.deepEqual(hits, [])
+  assert.equal(enemy.pendingSpecial, null)
+})
+
+test('brute slam is cancelled when the enemy dies during windup', () => {
+  const { scene, hits } = makeScene(); const runtime = installDungeonEnemyBehaviors(attachLegacyTestPlayer(scene))
+  const enemy = { archetype: 'brute', x: 40, y: 100, speed: 30, hp: 20, contactDamage: 14, nextSpecialAt: 0 }
+
+  runtime.update(enemy, 1000, 0.016)
+  enemy.hp = 0
+  runtime.update(enemy, 1420, 0.016)
+
+  assert.deepEqual(hits, [])
+  assert.equal(enemy.pendingSpecial, null)
 })
 
 test('skeleton close pressure uses lateral movement', () => {
