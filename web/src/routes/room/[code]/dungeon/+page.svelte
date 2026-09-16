@@ -8,6 +8,7 @@
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
+  import { createComparisonCard } from '$lib/games/dungeon/comparison-runtime.js'
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
   import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
   import { setProceduralRunSeed } from '$lib/games/dungeon/spatial.js'
@@ -77,6 +78,7 @@
   function setLocale(next) {
     locale = normalizeDungeonLocale(next)
     localStorage.setItem('arcade.locale', locale)
+    scene?.__comparisonCard?.refresh?.()
     pickupRuntime?.refreshLabels?.()
     hudRuntime?.update()
   }
@@ -213,12 +215,29 @@
       installAffixVisuals(scene)
       installDungeonVfx(scene, vfxManifest)
 
+      if (!scene.__comparisonCard) {
+        scene.__comparisonCard = createComparisonCard(scene, {
+          getLocale: () => locale,
+          label: (key) => t(({
+            ground: 'ground',
+            current: 'current',
+            dungeonBlade: 'dungeonBlade',
+            emptyWeapon: 'emptyWeapon',
+            equip: 'equip',
+          })[key] ?? key),
+          rarityName,
+        })
+      }
+
       scene.__dungeonInventoryStats = (count) => {
         stats = { ...stats, healthPotions: count }
         hudRuntime?.update()
       }
 
-      pickupRuntime = installPickupInteraction(scene, { getLocale: () => locale })
+      pickupRuntime = installPickupInteraction(scene, {
+        getLocale: () => locale,
+        onSelection(next) { scene.__comparisonCard?.setSelection(next) },
+      })
       if (!scene.__infiniteDungeon) {
         scene.__infiniteDungeon = installInfiniteDungeon(scene, {
           onProgress(next) {
@@ -316,6 +335,8 @@
       unsubscribeRoom()
       unsubscribeConnection()
       touchInput?.stopMove()
+      scene?.__comparisonCard?.destroy?.()
+      if (scene) scene.__comparisonCard = null
       pickupRuntime = null
       hudRuntime = null
       panelOpen = false
