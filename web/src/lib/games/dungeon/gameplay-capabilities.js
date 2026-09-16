@@ -1,3 +1,5 @@
+import { ensureDungeonCombatRuntime } from './combat-runtime.js'
+
 function objectOwner(value, label) {
   if (value == null) return {}
   if (typeof value !== 'object') throw new TypeError(`${label} must be an object`)
@@ -9,15 +11,10 @@ export function ensureDungeonCapabilities(scene) {
 
   const dungeon = objectOwner(scene.dungeon, 'scene.dungeon')
   scene.dungeon = dungeon
+  dungeon.combat = ensureDungeonCombatRuntime(scene)
 
-  const combat = objectOwner(dungeon.combat, 'scene.dungeon.combat')
   const loot = objectOwner(dungeon.loot, 'scene.dungeon.loot')
-  dungeon.combat = combat
   dungeon.loot = loot
-
-  if (typeof combat.attack !== 'function' && typeof scene.autoAttack === 'function') {
-    combat.attack = (player, time) => scene.autoAttack(time, player)
-  }
 
   if (typeof loot.pickup !== 'function' && typeof scene.__dungeonPickupRuntime?.pickupById === 'function') {
     loot.pickup = (player, dropId) => scene.__dungeonPickupRuntime?.pickupById?.(player, dropId)
