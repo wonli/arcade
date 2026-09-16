@@ -59,6 +59,15 @@ test('world.state facts use portable enemy gameplay durations on the wire', () =
       nextSpecialAt: 11800,
       dashUntil: 10400,
       specialLockedUntil: 10750,
+      pendingSpecial: {
+        type: 'brute_slam',
+        resolveAt: 10750,
+        targetId: 'guest',
+        x: 120,
+        y: 140,
+        radius: 82,
+        damage: 12,
+      },
     }],
   }
 
@@ -82,11 +91,15 @@ test('world.state facts use portable enemy gameplay durations on the wire', () =
   assert.equal(enemy.nextSpecialRemainingMs, 1800)
   assert.equal(enemy.dashRemainingMs, 400)
   assert.equal(enemy.specialLockedRemainingMs, 750)
+  assert.equal('resolveAt' in enemy.pendingSpecial, false)
+  assert.equal(enemy.pendingSpecial.resolveRemainingMs, 750)
 
   const local = materializeWireFactClockState(wire, 250)
   assert.equal(local.enemies[0].nextChargeAt, 4250)
   assert.equal(local.enemies[0].nextShockwaveAt, 5750)
   assert.equal(local.enemies[0].chargingUntil, 850)
+  assert.equal(local.enemies[0].pendingSpecial.resolveAt, 1000)
+  assert.equal('resolveRemainingMs' in local.enemies[0].pendingSpecial, false)
 })
 
 test('drop.pickup facts make nested player state portable without touching non-clock payload', () => {
