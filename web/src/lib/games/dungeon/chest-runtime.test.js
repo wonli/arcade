@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import { chestEntityId, createDungeonChestRuntime } from './chest-runtime.js'
 
-function fixture() {
+function fixture({ delayedCall = (_delay, callback) => callback() } = {}) {
   const opened = []
   const hidden = []
   const spawned = []
@@ -14,7 +14,7 @@ function fixture() {
     floor: 2,
     __dungeonOpenedChestIds: new Set(),
     spawnDrop(x, y, item) { spawned.push({ x, y, item }) },
-    time: { delayedCall(_delay, callback) { callback() } },
+    time: { delayedCall },
   }
   const runtime = createDungeonChestRuntime(scene, {
     getChests: () => chests,
@@ -51,6 +51,20 @@ test('authority opens a nearby chest once and duplicate commands are idempotent'
   assert.equal(spawned.length, 1)
   assert.equal(notifications.length, 1)
   assert.deepEqual(runtime.openedChestIds(), [chests[0].id])
+})
+
+test('authoritative chest rewards do not wait for the Phaser render clock', () => {
+  let delayed = null
+  const { runtime, chests, spawned, notifications } = fixture({
+    delayedCall(_delay, callback) { delayed = callback },
+  })
+
+  const result = runtime.openById(player(), chests[0].id)
+
+  assert.equal(result.opened, true)
+  assert.equal(spawned.length, 1)
+  assert.equal(notifications.length, 1)
+  assert.equal(typeof delayed, 'undefined')
 })
 
 test('open by id rejects dead, distant and unknown players without rewards', () => {
