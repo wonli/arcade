@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - refactor/dungeon-coop-foundation
+      - fix/dungeon-coop-hydration-presentation
     paths:
       - 'web/src/lib/games/dungeon/**'
       - 'web/src/routes/room/[code]/dungeon/+page.svelte'
