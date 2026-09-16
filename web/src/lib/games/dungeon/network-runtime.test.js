@@ -122,17 +122,24 @@ test('later remote snapshots update the existing player presentation', () => {
   assert.equal(guest.moving, true)
 })
 
-test('current authority executes guest semantic commands using the relay identity', () => {
+test('current authority executes guest semantic commands using relay identity and authority time', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
   scene.autoAttack = (time, player) => { player.lastAttackAt = time }
-  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'host',
+    hostId: 'host',
+    now: () => 1500,
+  })
   runtime.handleMessage(roomMessage({ type: 'dungeon.snapshot', playerId: 'guest', snapshot: { id: 'guest', state: state(100) } }))
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.command',
     playerId: 'guest',
-    command: { type: 'attack', playerId: 'spoofed', time: 1500 },
+    command: { type: 'attack', playerId: 'spoofed', time: 999999 },
   }))
 
   assert.equal(scene.players.get('guest').lastAttackAt, 1500)
@@ -235,24 +242,33 @@ test('current authority answers reconnect sync request without accepting reconne
   runtime.stop()
 })
 
-test('follower mirrors only real local attacks as semantic commands', async () => {
+test('follower forwards explicit local player intents as clock-free semantic commands', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture()
-  scene.autoAttack = (time, player) => {
-    if (time < 1000) return
-    player.lastAttackAt = time
-  }
   const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host' })
-  runtime.installLocalCommandMirrors()
 
-  scene.autoAttack(900, scene.localPlayer)
-  scene.autoAttack(1200, scene.localPlayer)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'guest' }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'skill', playerId: 'guest', skillId: 'primary' }), true)
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'spoofed' }), false)
   await Promise.resolve()
   await Promise.resolve()
 
   const commands = socket.calls.filter((call) => call.action === 'dungeon.command')
-  assert.equal(commands.length, 1)
-  assert.deepEqual(commands[0].params.command, { type: 'attack', time: 1200 })
+  assert.deepEqual(commands.map((call) => call.params.command), [
+    { type: 'attack' },
+    { type: 'skill', skillId: 'primary' },
+  ])
+})
+
+test('authority ignores local player intents because it already owns gameplay', async () => {
+  const scene = sceneFixture('host')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
+
+  assert.equal(runtime.handleLocalIntent({ type: 'attack', playerId: 'host' }), false)
+  await Promise.resolve()
+
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.command'), false)
 })
 
 test('stop unsubscribes and despawns remote players without touching local player', () => {

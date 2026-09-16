@@ -1,3 +1,4 @@
+import { ensureDungeonCapabilities } from './gameplay-capabilities.js'
 import { castPlayerSkill } from './player-skill-runtime.js'
 
 function result(command, overrides = {}) {
@@ -20,11 +21,11 @@ function resolvePlayer(scene, command) {
   return { player, playerId }
 }
 
-function commandTime(scene, command) {
-  const supplied = Number(command?.time)
-  if (Number.isFinite(supplied)) return supplied
-  const now = Number(scene?.time?.now)
-  return Number.isFinite(now) ? now : 0
+function gameplayTime(scene, now) {
+  const injected = typeof now === 'function' ? Number(now()) : NaN
+  if (Number.isFinite(injected)) return injected
+  const sceneNow = Number(scene?.time?.now)
+  return Number.isFinite(sceneNow) ? sceneNow : 0
 }
 
 function validateCommand(scene, command) {
@@ -54,7 +55,7 @@ function validateCommand(scene, command) {
   return { ...resolved, type, chestId }
 }
 
-export function executePlayerCommand(scene, command, { authoritative = true } = {}) {
+export function executePlayerCommand(scene, command, { authoritative = true, now = null } = {}) {
   const validated = validateCommand(scene, command)
   if (validated.error) return result(command, { reason: validated.error })
 
@@ -67,13 +68,16 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
+  const executionTime = gameplayTime(scene, now)
+
   if (type === 'attack') {
-    if (typeof scene.autoAttack !== 'function') {
+    const attack = ensureDungeonCapabilities(scene).combat?.attack
+    if (typeof attack !== 'function') {
       return result(command, { accepted: true, playerId, reason: 'attack-unavailable' })
     }
 
     const beforeAttackAt = player.lastAttackAt
-    const value = scene.autoAttack(commandTime(scene, command), player)
+    const value = attack(player, executionTime)
     const applied = player.lastAttackAt !== beforeAttackAt
     return result(command, {
       accepted: true,
@@ -89,7 +93,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
       scene,
       player,
       validated.skillId,
-      commandTime(scene, command),
+      executionTime,
     )
     return result(command, {
       accepted: true,
@@ -100,12 +104,13 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
+  const loot = ensureDungeonCapabilities(scene).loot
+
   if (type === 'open_chest') {
-    const openChest = scene.__dungeonSpatial?.openChestById
-    if (typeof openChest !== 'function') {
+    if (!loot?.hasOpenChestOwner?.()) {
       return result(command, { accepted: true, playerId, reason: 'chest-unavailable' })
     }
-    const value = openChest(player, validated.chestId)
+    const value = loot.openChest(player, validated.chestId)
     const applied = value === true || Boolean(value?.opened)
     return result(command, {
       accepted: true,
@@ -116,12 +121,11 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
-  const pickup = scene.__dungeonPickupRuntime?.pickupById
-  if (typeof pickup !== 'function') {
+  if (!loot?.hasPickupOwner?.()) {
     return result(command, { accepted: true, playerId, reason: 'pickup-unavailable' })
   }
 
-  const value = pickup(player, validated.dropId)
+  const value = loot.pickup(player, validated.dropId)
   const applied = value === true || Boolean(value?.picked)
   return result(command, {
     accepted: true,

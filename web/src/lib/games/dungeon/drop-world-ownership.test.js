@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { ensureDungeonLootRuntime } from './loot-runtime.js'
 import { createDungeonWorldRuntime } from './world-runtime.js'
 
 function sceneFixture() {
@@ -29,17 +30,13 @@ function sceneFixture() {
     updateDrops() {},
     openPortal() {},
     advanceFloor() {},
-    __dungeonPickupRuntime: {
-      removeById(id) {
-        removed.push(id)
-        const candidate = scene.drops.find((entry) => entry.id === id) ?? null
-        if (!candidate) return null
-        candidate.visual?.destroy?.()
-        scene.drops = scene.drops.filter((entry) => entry !== candidate)
-        return candidate
-      },
-    },
   }
+  const loot = ensureDungeonLootRuntime(scene)
+  loot.setRemoveOwner((candidate, removeCore) => {
+    removed.push(candidate.id)
+    removeCore(candidate)
+    return candidate
+  })
   return { scene, drop, removed }
 }
 

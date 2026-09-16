@@ -2,6 +2,7 @@ import { piercingAttack, targetsInBeam, targetsInCircle, thunderChain, whirlwind
 import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
+import { ensureDungeonCombatRuntime, installDungeonCombatSceneBridge } from './combat-runtime.js'
 import { currentEffects } from './player-loadout.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
@@ -79,6 +80,9 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   }
 
   scene.__dungeonAttackRuntimeInstalled = true
+  const combat = ensureDungeonCombatRuntime(scene)
+  installDungeonCombatSceneBridge(scene)
+
   installDungeonSfx(scene, { player })
   installDungeonWorldVfx(scene, { player })
   installDungeonWeaponVisuals(scene, { player })
@@ -87,39 +91,44 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
   installDungeonEnemyFeedback(scene)
   installDungeonEnemyBehaviors(scene, { player })
 
-  const originalSlash = scene.slash.bind(scene)
-  const originalDamageEnemy = scene.damageEnemy.bind(scene)
-  const originalApplyWeaponProcs = scene.applyWeaponProcs.bind(scene)
   const audio = createImpactAudio()
 
-  scene.slash = function spatialSlash(target, attacker = player) {
+  const slashOwner = (target, attacker = player, coreSlash) => {
     if (!target || target.hp <= 0 || !attacker) return
 
-    const weaponVisuals = attacker.runtime?.weaponVisuals
-      ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
-    const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
-    if (weaponProfile(attacker.state).attackMode !== 'ranged') {
-      scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+    const previousDamage = attacker.state.damage
+    attacker.state.damage = combat.weaponDamageStat(attacker, previousDamage)
+    combat.beginWeaponAttack(target, attacker)
+    try {
+      const weaponVisuals = attacker.runtime?.weaponVisuals
+        ?? (attacker === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
+      const attackOrigin = weaponVisuals?.swing?.() ?? attacker.state
+      if (weaponProfile(attacker.state).attackMode !== 'ranged') {
+        scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
+      }
+      return coreSlash?.(target, attacker)
+    } finally {
+      attacker.state.damage = previousDamage
     }
-    return originalSlash(target, attacker)
   }
 
-  scene.damageEnemy = function spatialDamageEnemy(
-    enemy,
-    damage,
-    critical,
-    knockback,
-    context = { direct: false, canProc: false, source: 'effect' },
-    attacker = player,
-  ) {
-    if (!enemy || enemy.hp <= 0 || !attacker) return
+  const damageResolver = (hit, coreDamage) => {
+    const {
+      enemy,
+      damage,
+      critical,
+      knockback,
+      context = { direct: false, canProc: false, source: 'effect' },
+      player: attacker = player,
+    } = hit
+    if (!enemy || enemy.hp <= 0 || !attacker) return null
 
     const beforeHp = enemy.hp
     const impactX = enemy.x
     const impactY = enemy.y
 
-    originalDamageEnemy(enemy, damage, critical, 0, context, attacker)
-    if (enemy.hp >= beforeHp) return
+    const value = coreDamage({ ...hit, knockback: 0 })
+    if (enemy.hp >= beforeHp) return value
 
     const killed = enemy.hp <= 0
     const elite = Boolean(enemy.elite || enemy.boss)
@@ -200,10 +209,11 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
         enemy.maxHp,
       )
     }
+    return value
   }
 
-  scene.applyWeaponProcs = function spatialWeaponProcs(primary, damage, critical, attacker = player) {
-    if (!attacker) return
+  const procOwner = (primary, damage, critical, attacker = player) => {
+    if (!attacker) return null
     const effects = currentEffects(attacker.state)
     const groupSkill = weaponGroupSkill(attacker.state)
 
@@ -218,7 +228,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
       scene.__dungeonVfx?.beam?.(attack)
 
       for (const target of targetsInBeam(attack, scene.enemies).filter((enemy) => enemy !== primary)) {
-        scene.damageEnemy(
+        combat.damageEnemy(
           target,
           Math.max(1, Math.round(damage * 0.72)),
           false,
@@ -233,8 +243,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
       const target = secondaryTarget(primary, scene.enemies, 165)
       if (target) {
         scene.__dungeonVfx?.lightning?.(primary, target, { primary: false })
-
-        scene.damageEnemy(
+        combat.damageEnemy(
           target,
           Math.max(1, Math.round(damage * 0.56)),
           false,
@@ -249,7 +258,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
       const segments = thunderChain(attacker.state, primary, scene.enemies, 3, 190)
       segments.forEach((segment, index) => {
         scene.__dungeonVfx?.lightning?.(segment.from, segment.to, { primary: index === 0 })
-        scene.damageEnemy(
+        combat.damageEnemy(
           segment.to,
           Math.max(1, Math.round(damage * 0.68)),
           false,
@@ -266,7 +275,7 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
 
       for (const enemy of targetsInCircle(attack, scene.enemies)) {
         if (enemy === primary) continue
-        scene.damageEnemy(
+        combat.damageEnemy(
           enemy,
           Math.max(1, Math.round(damage * 0.5)),
           false,
@@ -276,33 +285,40 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
         )
       }
     }
+    return null
   }
 
-  scene.events?.once?.('shutdown', () => {
-    scene.slash = originalSlash
-    scene.damageEnemy = originalDamageEnemy
-    scene.applyWeaponProcs = originalApplyWeaponProcs
+  const restoreSlashOwner = combat.setSlashOwner(slashOwner)
+  const restoreDamageResolver = combat.setDamageResolver(damageResolver)
+  const restoreProcOwner = combat.setProcOwner(procOwner)
+
+  let restored = false
+  const restore = () => {
+    if (restored) return
+    restored = true
+    restoreProcOwner()
+    restoreDamageResolver()
+    restoreSlashOwner()
+    scene.__dungeonEnemyBehaviors?.restore?.()
+    scene.__dungeonEnemyFeedback?.restore?.()
+    scene.__dungeonPlayerFacing?.restore?.()
+    scene.__dungeonWeaponCombat?.restore?.()
+    scene.__dungeonWeaponVisuals?.restore?.()
+    scene.__dungeonWorldVfx?.restore?.()
     audio.close()
-  })
+    scene.__dungeonAttackRuntimeInstalled = false
+    if (scene.__dungeonAttackRuntime === api) scene.__dungeonAttackRuntime = null
+  }
 
   const api = {
     playImpactSound(options) {
       audio.play(options)
     },
-    restore() {
-      scene.slash = originalSlash
-      scene.damageEnemy = originalDamageEnemy
-      scene.applyWeaponProcs = originalApplyWeaponProcs
-      scene.__dungeonEnemyBehaviors?.restore?.()
-      scene.__dungeonEnemyFeedback?.restore?.()
-      scene.__dungeonPlayerFacing?.restore?.()
-      scene.__dungeonWeaponCombat?.restore?.()
-      scene.__dungeonWeaponVisuals?.restore?.()
-      scene.__dungeonWorldVfx?.restore?.()
-      audio.close()
-    },
+    restore,
   }
 
+  scene.events?.once?.('shutdown', restore)
+  scene.events?.once?.('destroy', restore)
   scene.__dungeonAttackRuntime = api
   return api
 }

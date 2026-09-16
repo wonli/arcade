@@ -16,6 +16,7 @@
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
   import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
+  import { installPlayerIntentRuntime } from '$lib/games/dungeon/player-intent-runtime.js'
   import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { createDungeonNetworkRuntime, dungeonSceneReadyForNetwork } from '$lib/games/dungeon/network-runtime.js'
   import { formatAffixLabel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
@@ -35,6 +36,7 @@
   let touchInput = null
   let pickupRuntime = null
   let hudRuntime = null
+  let playerIntentRuntime = null
   let networkRuntime = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
@@ -257,6 +259,9 @@
         label: (key) => t(key),
       })
       installDungeonAttackRuntime(scene)
+      playerIntentRuntime = installPlayerIntentRuntime(scene, {
+        onIntent(intent) { networkRuntime?.handleLocalIntent?.(intent) },
+      })
       installDungeonBacktracking(scene, {
         onProgress(next) {
           progress = next
@@ -330,6 +335,8 @@
     })
 
     return () => {
+      playerIntentRuntime?.restore?.()
+      playerIntentRuntime = null
       networkRuntime?.stop()
       networkRuntime = null
       unsubscribeRoom()

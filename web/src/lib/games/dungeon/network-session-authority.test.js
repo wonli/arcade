@@ -43,6 +43,10 @@ function sceneFixture(localId) {
     updateHealthBar() {},
     syncPlayerAnimation() {},
     emitStats() {},
+    advanceFloor() {
+      this.floor += 1
+      return this.floor
+    },
   }
   attachLocalPlayerEntity(scene, { id: localId, state: state(10) })
   return scene
@@ -355,6 +359,7 @@ test('authority death and three-second revive are checkpointed by the network li
   const scene = sceneFixture('host')
   let gameOvers = 0
   let intervalCallback = null
+  let logicalNow = 1000
   scene.players.set('guest', { id: 'guest', state: state(80), dead: false, runtime: {} })
   scene.gameOver = () => { gameOvers++ }
   scene.hitPlayer = function hitPlayer(damage, player = scene.localPlayer) {
@@ -363,6 +368,7 @@ test('authority death and three-second revive are checkpointed by the network li
   }
   const runtime = createDungeonNetworkRuntime({
     socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host',
+    now: () => logicalNow,
     setIntervalImpl(callback) { intervalCallback = callback; return 7 },
     clearIntervalImpl: () => {},
   })
@@ -381,7 +387,7 @@ test('authority death and three-second revive are checkpointed by the network li
   assert.equal(checkpoints.at(-1)?.lifecycle?.host?.status, 'downed')
   assert.equal(checkpoints.at(-1)?.lifecycle?.host?.respawnRemainingMs, 3000)
 
-  scene.time.now += 3000
+  logicalNow += 3000
   intervalCallback?.()
   await nextTurn()
   await nextTurn()

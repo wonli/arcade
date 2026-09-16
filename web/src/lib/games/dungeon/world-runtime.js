@@ -1,10 +1,15 @@
 import { applyPickup } from './combat.js'
+import { ensureDungeonCombatRuntime } from './combat-runtime.js'
 import { installCoopPortalRuntime } from './coop-portal-runtime.js'
+import { ensureDungeonEnemyRuntime, installDungeonEnemySceneBridge } from './enemy-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
+import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
+import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-runtime.js'
 import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 import { normalizeRunSeed } from './world-seed.js'
 
 const ENEMY_STATE_FIELDS = [
@@ -12,6 +17,7 @@ const ENEMY_STATE_FIELDS = [
   'phaseThreshold', 'chargeCooldown', 'shockwaveCooldown', 'nextChargeAt', 'nextShockwaveAt',
   'chargingUntil', 'chargeVx', 'chargeVy', 'attackRange', 'preferredRange', 'projectileDamage',
   'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'contactDamage', 'tint', 'scale', 'barOffset',
+  'nextSpecialAt', 'dashUntil', 'dashVx', 'dashVy', 'specialLockedUntil', 'strafeSign', 'pendingSpecial',
 ]
 
 function normalizeFloor(floor) {
@@ -46,7 +52,7 @@ function serializeEnemyState(enemy) {
   const result = { id: String(enemy?.id ?? '') }
   for (const field of ENEMY_STATE_FIELDS) {
     const value = enemy?.[field]
-    if (value !== undefined) result[field] = value
+    if (value !== undefined) result[field] = field === 'pendingSpecial' ? structuredClone(value) : value
   }
   return result
 }
@@ -57,32 +63,33 @@ export function createDungeonWorldRuntime(scene, {
   publishFact = async () => null,
   sendCommand = async () => null,
   onError = () => {},
+  now = null,
 } = {}) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
 
   const seed = normalizeRunSeed(runSeed)
+  const combat = ensureDungeonCombatRuntime(scene)
+  installDungeonEnemySceneBridge(scene)
+  const enemies = ensureDungeonEnemyRuntime(scene)
+  installDungeonFloorSceneBridge(scene)
+  const floor = ensureDungeonFloorRuntime(scene)
+  installDungeonLootSceneBridge(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  installDungeonPortalSceneBridge(scene)
+  const portal = ensureDungeonPortalRuntime(scene)
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
-  const originals = {
-    spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
-    damageEnemy: typeof scene.damageEnemy === 'function' ? scene.damageEnemy.bind(scene) : null,
-    spawnDrop: typeof scene.spawnDrop === 'function' ? scene.spawnDrop.bind(scene) : null,
-    destroyDrop: typeof scene.destroyDrop === 'function' ? scene.destroyDrop.bind(scene) : null,
-    clearDrops: typeof scene.clearDrops === 'function' ? scene.clearDrops.bind(scene) : null,
-    updateDrops: typeof scene.updateDrops === 'function' ? scene.updateDrops.bind(scene) : null,
-    openPortal: typeof scene.openPortal === 'function' ? scene.openPortal.bind(scene) : null,
-    advanceFloor: typeof scene.advanceFloor === 'function' ? scene.advanceFloor.bind(scene) : null,
-  }
-  const previousPickupById = scene.__dungeonPickupRuntime?.pickupById
   const dropSequences = new Map()
   let started = false
   let applyingFact = false
-  let clearingDrops = false
-  let pickupPlayer = null
-  let damageDepth = 0
-  let deferredFacts = []
   let lastFactSequence = -1
   let coopPortalRuntime = null
+  let restoreCombatAuthority = null
+  let restoreEnemyObserver = null
+  let restoreFloorAuthority = null
+  let restoreLootAuthority = null
+  let restoreLootPickupOwner = null
+  let restorePortalAuthority = null
 
   const reportError = (error) => {
     try { onError(error) } catch {}
@@ -100,29 +107,42 @@ export function createDungeonWorldRuntime(scene, {
   const emitFact = (fact) => {
     if (!isHost || applyingFact || !fact) return
     const next = { floor: normalizeFloor(scene.floor), ...fact }
-    if (damageDepth > 0) deferredFacts.push(next)
+    if (combat.inDamageTransaction()) combat.afterDamage(() => publishNow(next))
     else publishNow(next)
   }
 
-  const removeDropById = (id) => {
-    const normalized = String(id ?? '').trim()
-    if (!normalized) return null
-    const owned = scene.__dungeonPickupRuntime?.removeById?.(normalized)
-    if (owned) return owned
-    const drop = findDrop(scene, normalized)
-    if (!drop) return null
-    originals.destroyDrop?.(drop)
-    scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
-    return drop
+  const publishDamageFact = (hit) => {
+    if (!isHost || applyingFact || !hit?.enemy || Number(hit.beforeHp) <= 0) return
+    const enemy = hit.enemy
+    const fact = enemy.hp <= 0
+      ? {
+          type: 'enemy.death',
+          entityId: enemy.id,
+          x: enemy.x,
+          y: enemy.y,
+          kills: scene.kills,
+          floorKills: scene.floorKills,
+        }
+      : {
+          type: 'enemy.hit',
+          entityId: enemy.id,
+          hp: enemy.hp,
+          maxHp: enemy.maxHp,
+          x: enemy.x,
+          y: enemy.y,
+          damage: hit.damage,
+          critical: Boolean(hit.critical),
+        }
+    publishNow({ floor: normalizeFloor(scene.floor), ...fact })
   }
 
-  const clearWorldDrops = () => {
-    if (typeof scene.__dungeonPickupRuntime?.clearAll === 'function') {
-      scene.__dungeonPickupRuntime.clearAll()
-      return
-    }
-    originals.clearDrops?.()
+  const removeDropById = (id, context = {}) => {
+    const normalized = String(id ?? '').trim()
+    if (!normalized) return null
+    return loot.removeById(normalized, context)
   }
+
+  const clearWorldDrops = () => loot.clear()
 
   const observeDropId = (id, floor = scene.floor) => {
     const level = normalizeFloor(floor)
@@ -182,24 +202,13 @@ export function createDungeonWorldRuntime(scene, {
       player.state = applyPickup(player.state, drop.item, player.state?.baseStats)
     }
 
-    pickupPlayer = player
-    try {
-      removeDropById(drop.id)
-      emitFact({
-        type: 'drop.pickup',
-        entityId: drop.id,
-        playerId: String(player.id),
-        player: serializePlayerSnapshot(player),
-      })
-    } finally {
-      pickupPlayer = null
-    }
+    removeDropById(drop.id, { player, reason: 'pickup' })
 
     scene.pickupBurst?.(x, y, drop.item, healed)
     scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
     if (player === scene.localPlayer) scene.emitStats?.()
 
-    if (previous && drop.item?.type?.startsWith?.('weapon.')) scene.spawnDrop?.(x, y, previous)
+    if (previous && drop.item?.type?.startsWith?.('weapon.')) loot.spawn(x, y, previous)
     return { picked: true, dropId: drop.id, item: drop.item, healed }
   }
 
@@ -231,9 +240,11 @@ export function createDungeonWorldRuntime(scene, {
   const applyDropSpawn = (fact) => {
     let drop = findDrop(scene, fact.entityId)
     if (!drop) {
-      drop = scene.__dungeonPickupRuntime?.spawnExact?.(Number(fact.x) || 0, Number(fact.y) || 0, structuredClone(fact.item ?? {}))
-        ?? originals.spawnDrop?.(Number(fact.x) || 0, Number(fact.y) || 0, structuredClone(fact.item ?? {}))
-        ?? null
+      drop = loot.spawnExact(
+        Number(fact.x) || 0,
+        Number(fact.y) || 0,
+        structuredClone(fact.item ?? {}),
+      ) ?? null
     }
     if (!drop) return null
     drop.id = String(fact.entityId)
@@ -246,7 +257,7 @@ export function createDungeonWorldRuntime(scene, {
   }
 
   const applyDropPickup = (fact) => {
-    const drop = removeDropById(fact.entityId)
+    const drop = removeDropById(fact.entityId, { reason: 'replicated' })
     const id = String(fact.playerId ?? fact.player?.id ?? '')
     const player = scene.players instanceof Map ? scene.players.get(id) : null
     if (player && fact.player) {
@@ -266,8 +277,9 @@ export function createDungeonWorldRuntime(scene, {
 
   const applyFloorTransition = (fact) => {
     const targetFloor = normalizeFloor(fact.toFloor)
-    if (targetFloor <= normalizeFloor(scene.floor)) return scene.floor
-    if (originals.advanceFloor && targetFloor === normalizeFloor(scene.floor) + 1) originals.advanceFloor(scene.localPlayer)
+    const currentFloor = normalizeFloor(scene.floor)
+    if (targetFloor <= currentFloor) return scene.floor
+    if (targetFloor === currentFloor + 1) floor.advance(scene.localPlayer, { source: 'replicated-fact' })
     else {
       portalPresentation?.remove()
       scene.floor = targetFloor
@@ -281,13 +293,15 @@ export function createDungeonWorldRuntime(scene, {
   const applyEnemyState = (snapshot, index) => {
     const id = String(snapshot?.id ?? stableWorldEntityId(seed, scene.floor, 'enemy', index))
     let enemy = findEnemy(scene, id)
-    if (!enemy && originals.spawnEnemy) enemy = originals.spawnEnemy(index, { elite: Boolean(snapshot?.elite) })
+    if (!enemy) enemy = enemies.spawn(index, { elite: Boolean(snapshot?.elite) }, { source: 'replicated-state' })
     if (!enemy) return null
 
     const previous = { archetype: enemy.archetype, boss: Boolean(enemy.boss), elite: Boolean(enemy.elite) }
     enemy.id = id
     for (const field of ENEMY_STATE_FIELDS) {
-      if (snapshot?.[field] !== undefined) enemy[field] = snapshot[field]
+      if (snapshot?.[field] !== undefined) {
+        enemy[field] = field === 'pendingSpecial' ? structuredClone(snapshot[field]) : snapshot[field]
+      }
     }
     enemyPresentation?.reconcile(enemy, previous)
     return enemy
@@ -296,8 +310,8 @@ export function createDungeonWorldRuntime(scene, {
   const applyWorldState = (fact) => {
     const targetFloor = normalizeFloor(fact.floor)
     const currentFloor = normalizeFloor(scene.floor)
-    if (targetFloor > currentFloor && originals.advanceFloor) {
-      while (normalizeFloor(scene.floor) < targetFloor) originals.advanceFloor(scene.localPlayer)
+    if (targetFloor > currentFloor) {
+      while (normalizeFloor(scene.floor) < targetFloor) floor.advance(scene.localPlayer, { source: 'world-state' })
     } else if (targetFloor !== currentFloor) {
       portalPresentation?.remove()
       scene.floor = targetFloor
@@ -410,121 +424,78 @@ export function createDungeonWorldRuntime(scene, {
     assignExistingEnemyIds()
     reconcileDrops({ announce: false })
 
-    if (originals.spawnEnemy) {
-      scene.spawnEnemy = function stableSpawnEnemy(index = 0, options = {}) {
-        const enemy = originals.spawnEnemy(index, options)
-        if (enemy) enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
-        return enemy
-      }
-    }
+    restoreCombatAuthority = combat.setAuthority({
+      mayDamage: () => isHost,
+      onDamageApplied: publishDamageFact,
+    })
 
-    if (originals.damageEnemy) {
-      scene.damageEnemy = function authoritativeDamageEnemy(enemy, damage, critical, knockback, context, player) {
-        if (!isHost && !applyingFact) return null
-        if (applyingFact) return originals.damageEnemy(enemy, damage, critical, knockback, context, player)
-        const before = Number(enemy?.hp) || 0
-        damageDepth++
-        let value
-        try {
-          value = originals.damageEnemy(enemy, damage, critical, knockback, context, player)
-        } finally {
-          damageDepth--
-        }
-        if (before > 0 && enemy) {
-          const primary = enemy.hp <= 0
-            ? { type: 'enemy.death', entityId: enemy.id, x: enemy.x, y: enemy.y, kills: scene.kills, floorKills: scene.floorKills }
-            : { type: 'enemy.hit', entityId: enemy.id, hp: enemy.hp, maxHp: enemy.maxHp, x: enemy.x, y: enemy.y, damage, critical: Boolean(critical) }
-          if (damageDepth === 0) {
-            const pending = deferredFacts
-            deferredFacts = []
-            publishNow({ floor: normalizeFloor(scene.floor), ...primary })
-            for (const fact of pending) publishNow(fact)
-          } else deferredFacts.push({ floor: normalizeFloor(scene.floor), ...primary })
-        }
-        return value
-      }
-    }
+    restoreEnemyObserver = enemies.setObserver({
+      onSpawned({ enemy, index }) {
+        enemy.id = stableWorldEntityId(seed, scene.floor, 'enemy', index)
+      },
+    })
 
-    if (originals.spawnDrop) {
-      scene.spawnDrop = function authoritativeSpawnDrop(x, y, item) {
-        if (!isHost && !applyingFact) return null
-        const before = scene.drops?.length ?? 0
-        const value = originals.spawnDrop(x, y, item)
-        const drop = value && typeof value === 'object' ? value : scene.drops?.[before] ?? scene.drops?.at?.(-1) ?? null
-        if (drop && !drop.id) drop.id = nextDropId(scene.floor)
-        if (drop && isHost && !applyingFact) emitFact({ type: 'drop.spawn', entityId: drop.id, x: drop.x, y: drop.y, item: structuredClone(drop.item ?? item ?? {}) })
-        return value ?? drop
-      }
-    }
-
-    if (originals.destroyDrop) {
-      scene.destroyDrop = function networkedDestroyDrop(drop) {
-        const id = String(drop?.id ?? '')
-        const player = pickupPlayer ?? scene.localPlayer
-        const value = originals.destroyDrop(drop)
-        if (!id || clearingDrops || applyingFact) return value
-        if (isHost) {
-          emitFact({ type: 'drop.pickup', entityId: id, playerId: String(player?.id ?? ''), player: player ? serializePlayerSnapshot(player) : null })
-        } else {
-          void Promise.resolve(sendCommand({ type: 'pickup', dropId: id })).catch(reportError)
-        }
-        return value
-      }
-    }
-
-    if (originals.clearDrops) {
-      scene.clearDrops = function networkedClearDrops() {
-        clearingDrops = true
-        try { return originals.clearDrops() }
-        finally { clearingDrops = false }
-      }
-    }
-
-    if (originals.updateDrops) {
-      scene.updateDrops = function networkedUpdateDrops(player = scene.localPlayer) {
-        pickupPlayer = player
-        try { return originals.updateDrops(player) }
-        finally {
-          pickupPlayer = null
-          reconcileDrops({ announce: isHost })
-        }
-      }
-    }
-
-    if (originals.openPortal) {
-      scene.openPortal = function authoritativeOpenPortal(player = scene.localPlayer) {
-        if (!isHost && !applyingFact) return null
-        const value = originals.openPortal(player)
-        if (scene.portal && isHost && !applyingFact) {
-          scene.portal.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
-          emitFact({ type: 'portal.open', entityId: scene.portal.id, x: scene.portal.x, y: scene.portal.y })
-        }
-        return value
-      }
-    }
-
-    if (originals.advanceFloor) {
-      scene.advanceFloor = function authoritativeAdvanceFloor(player = scene.localPlayer) {
-        if (!isHost && !applyingFact) return null
-        const fromFloor = normalizeFloor(scene.floor)
-        const value = originals.advanceFloor(player)
-        const toFloor = normalizeFloor(scene.floor)
-        if (isHost && !applyingFact && toFloor !== fromFloor) {
+    restoreFloorAuthority = floor.setAuthority({
+      mayAdvance: () => isHost || applyingFact,
+      onAdvanced({ fromFloor, toFloor }) {
+        if (isHost && !applyingFact) {
           emitFact({ type: 'floor.transition', fromFloor, toFloor })
           publishState()
         }
         assignExistingEnemyIds()
         reconcileDrops({ announce: false })
-        return value
-      }
-    }
+      },
+    })
+
+    restoreLootAuthority = loot.setAuthority({
+      maySpawn: () => isHost || applyingFact,
+      onSpawned({ request, drop }) {
+        if (applyingFact || !drop) return
+        if (!drop.id) drop.id = nextDropId(scene.floor)
+        else observeDropId(drop.id, scene.floor)
+        if (isHost) {
+          emitFact({
+            type: 'drop.spawn',
+            entityId: drop.id,
+            x: drop.x,
+            y: drop.y,
+            item: structuredClone(drop.item ?? request?.item ?? {}),
+          })
+        }
+      },
+      onRemoved({ drop, player, clearing }) {
+        const id = String(drop?.id ?? '')
+        if (!id || clearing || applyingFact) return
+        const sourcePlayer = player ?? scene.localPlayer
+        if (isHost) {
+          emitFact({
+            type: 'drop.pickup',
+            entityId: id,
+            playerId: String(sourcePlayer?.id ?? ''),
+            player: sourcePlayer ? serializePlayerSnapshot(sourcePlayer) : null,
+          })
+        } else {
+          void Promise.resolve(sendCommand({ type: 'pickup', dropId: id })).catch(reportError)
+        }
+      },
+    })
+    restoreLootPickupOwner = loot.setPickupOwner(authoritativePickupById)
+
+    restorePortalAuthority = portal.setAuthority({
+      mayOpen: () => isHost || applyingFact,
+      onOpened({ portal: opened }) {
+        if (!opened || applyingFact || !isHost) return
+        opened.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
+        emitFact({ type: 'portal.open', entityId: opened.id, x: opened.x, y: opened.y })
+      },
+    })
 
     coopPortalRuntime = installCoopPortalRuntime(scene, {
       localPlayer: scene.localPlayer,
       isAuthority: () => isHost,
       publishFact: emitFact,
+      now,
     })
-    if (scene.__dungeonPickupRuntime) scene.__dungeonPickupRuntime.pickupById = authoritativePickupById
     return api
   }
 
@@ -532,15 +503,18 @@ export function createDungeonWorldRuntime(scene, {
     if (!started) return
     coopPortalRuntime?.restore?.()
     coopPortalRuntime = null
-    if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
-    if (originals.damageEnemy) scene.damageEnemy = originals.damageEnemy
-    if (originals.spawnDrop) scene.spawnDrop = originals.spawnDrop
-    if (originals.destroyDrop) scene.destroyDrop = originals.destroyDrop
-    if (originals.clearDrops) scene.clearDrops = originals.clearDrops
-    if (originals.updateDrops) scene.updateDrops = originals.updateDrops
-    if (originals.openPortal) scene.openPortal = originals.openPortal
-    if (originals.advanceFloor) scene.advanceFloor = originals.advanceFloor
-    if (scene.__dungeonPickupRuntime) scene.__dungeonPickupRuntime.pickupById = previousPickupById
+    restorePortalAuthority?.()
+    restorePortalAuthority = null
+    restoreLootPickupOwner?.()
+    restoreLootPickupOwner = null
+    restoreLootAuthority?.()
+    restoreLootAuthority = null
+    restoreFloorAuthority?.()
+    restoreFloorAuthority = null
+    restoreEnemyObserver?.()
+    restoreEnemyObserver = null
+    restoreCombatAuthority?.()
+    restoreCombatAuthority = null
     started = false
   }
 

@@ -1,7 +1,9 @@
-import { roomAnchor } from './room-anchors.js'
-import { circleHitsSolid } from './spatial.js'
+import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
 import { canRetreatFromFloor, restoreChestState, restoreDropState, snapshotFloorState } from './floor-history.js'
 import { portalDwellState } from './portal-dwell.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
+import { roomAnchor } from './room-anchors.js'
+import { circleHitsSolid } from './spatial.js'
 
 const PLAYER_RADIUS = 18
 const PORTAL_CLEARANCE = 44
@@ -128,14 +130,17 @@ export function installDungeonBacktracking(scene, { onProgress = () => {}, playe
   if (!scene || !player || scene.__dungeonBacktrackingInstalled || !scene.__infiniteDungeon || !scene.__dungeonSpatial) return scene?.__dungeonBacktracking ?? null
   scene.__dungeonBacktrackingInstalled = true
 
-  const originalAdvanceFloor = scene.advanceFloor.bind(scene)
+  installDungeonFloorSceneBridge(scene)
+  const floorRuntime = ensureDungeonFloorRuntime(scene)
+  installDungeonPortalSceneBridge(scene)
+  const portalRuntime = ensureDungeonPortalRuntime(scene)
   const originalStartFloor = scene.startFloor.bind(scene)
-  const originalUpdatePortal = scene.updatePortal.bind(scene)
   const originalGetProgress = scene.__infiniteDungeon.getProgress.bind(scene.__infiniteDungeon)
   let previousState = null
   let currentState = null
   let backtracked = false
   let backPortal = null
+  let restorePortalUpdatePolicy = null
 
   const visibleProgress = () => backtracked && previousState ? previousState.progress : originalGetProgress()
   scene.__infiniteDungeon.getProgress = visibleProgress
@@ -187,33 +192,41 @@ export function installDungeonBacktracking(scene, { onProgress = () => {}, playe
     return true
   }
 
-  scene.advanceFloor = function advanceFloorWithHistory(target = player) {
-    if (backtracked) {
+  const restoreFloorTransitionPolicy = floorRuntime.setTransitionPolicy({
+    beforeAdvance() {
+      if (backtracked) {
+        previousState = capture()
+        backtracked = false
+        restoreState(currentState, 'forward')
+        currentState = null
+        refreshBackPortal()
+        onProgress(visibleProgress())
+        return { handled: true, value: scene.floor }
+      }
+
       previousState = capture()
-      backtracked = false
-      restoreState(currentState, 'forward')
+      return { handled: false }
+    },
+    afterAdvance({ handled }) {
+      if (handled) return
       currentState = null
       refreshBackPortal()
-      onProgress(visibleProgress())
-      return
-    }
+    },
+  })
 
-    previousState = capture()
-    originalAdvanceFloor(target)
-    currentState = null
-    refreshBackPortal()
-  }
-
-  scene.updatePortal = function updatePortalWithDwell(time, target = player) {
-    const portal = scene.portal
-    if (!portal || !target || time < portal.unlockAt) return
-    const inside = Math.hypot(portal.x - target.state.x, portal.y - target.state.y) <= FORWARD_PORTAL_TRIGGER_RADIUS
-    portal.dwell = portalDwellState(portal.dwell, { inside, now: time })
-    updateCountdown(scene, portal, portal.dwell, target, '#70ff9f')
-    if (!portal.dwell.complete) return
-    destroyCountdown(portal)
-    scene.advanceFloor(target)
-  }
+  restorePortalUpdatePolicy = portalRuntime.setUpdatePolicy({
+    beforeUpdate({ time, player: target, portal, hasUpdateOwner }) {
+      if (hasUpdateOwner) return { handled: false }
+      if (!portal || !target || time < portal.unlockAt) return { handled: true, value: null }
+      const inside = Math.hypot(portal.x - target.state.x, portal.y - target.state.y) <= FORWARD_PORTAL_TRIGGER_RADIUS
+      portal.dwell = portalDwellState(portal.dwell, { inside, now: time })
+      updateCountdown(scene, portal, portal.dwell, target, '#70ff9f')
+      if (!portal.dwell.complete) return { handled: true, value: portal.dwell }
+      destroyCountdown(portal)
+      scene.advanceFloor(target)
+      return { handled: true, value: null }
+    },
+  })
 
   const updateBackPortal = () => {
     if (!backPortal || backtracked) return
@@ -238,8 +251,9 @@ export function installDungeonBacktracking(scene, { onProgress = () => {}, playe
     removeBackPortal()
     destroyCountdown(scene.portal)
     scene.events?.off?.('update', updateBackPortal)
-    scene.advanceFloor = originalAdvanceFloor
-    scene.updatePortal = originalUpdatePortal
+    restorePortalUpdatePolicy?.()
+    restorePortalUpdatePolicy = null
+    restoreFloorTransitionPolicy()
     scene.__infiniteDungeon.getProgress = originalGetProgress
   })
 

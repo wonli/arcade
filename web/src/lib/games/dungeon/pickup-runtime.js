@@ -1,6 +1,7 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
 import { lootMotion } from './combat-feel.js'
 import { pickupHealthPotion, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
+import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-runtime.js'
 import { currentWeapon as currentPlayerWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
@@ -194,11 +195,9 @@ export function installPickupInteraction(scene, {
   if (scene.__pickupInteractionInstalled) return scene.__dungeonPickupRuntime ?? null
   scene.__pickupInteractionInstalled = true
 
-  const originalSpawnDrop = scene.spawnDrop.bind(scene)
-  const originalUpdateDrops = scene.updateDrops.bind(scene)
-  const originalDestroyDrop = scene.destroyDrop?.bind(scene)
-  const originalClearDrops = scene.clearDrops.bind(scene)
-  const originalEmitStats = scene.emitStats.bind(scene)
+  installDungeonLootSceneBridge(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  const originalEmitStats = typeof scene.emitStats === 'function' ? scene.emitStats.bind(scene) : () => {}
   const inventory = installPlayerInventoryRuntime(scene, player, {
     emitStats: () => { if (player === scene.localPlayer) originalEmitStats() },
   })
@@ -207,6 +206,8 @@ export function installPickupInteraction(scene, {
   let selectedFingerprint = null
   let localDropSequence = 0
   let pickupIntentHandler = null
+  let restored = false
+  let api = null
 
   const selectionKey = (drop) => {
     if (!drop) return null
@@ -247,43 +248,27 @@ export function installPickupInteraction(scene, {
     onSelection(next ? { current: currentWeapon(player), candidate: next.item } : null)
   }
 
-  const destroyOwnedDrop = (drop) => {
+  const removeOwner = (drop, coreRemove) => {
     if (!drop) return null
     if (selectedKey && selectionKey(drop) === selectedKey) publish(null)
     killDropTweens(scene, drop)
-    originalDestroyDrop?.(drop)
+    coreRemove?.(drop)
     return drop
   }
 
-  const removeOwnedDropById = (id) => {
-    const normalized = String(id ?? '').trim()
-    if (!normalized) return null
-    const drop = (scene.drops ?? []).find((candidate) => String(candidate?.id ?? '') === normalized) ?? null
-    if (!drop) return null
-    destroyOwnedDrop(drop)
-    scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
-    return drop
-  }
-
-  const clearOwnedDrops = () => {
+  const clearOwner = () => {
     publish(null)
-    for (const drop of [...(scene.drops ?? [])]) destroyOwnedDrop(drop)
+    for (const drop of [...(scene.drops ?? [])]) loot.remove(drop, { reason: 'clear' })
     scene.drops = []
+    return null
   }
 
-  scene.emitStats = function emitStatsWithInventory(now) {
-    originalEmitStats(now)
-  }
-
-  if (originalDestroyDrop) scene.destroyDrop = destroyOwnedDrop
-  scene.clearDrops = clearOwnedDrops
-
-  const spawnDropWithMotion = (x, y, item, { prepare = true } = {}) => {
-    const position = resolveDropPosition(scene, x, y, player)
-    const preparedItem = prepare ? prepareDropItem(scene, position.x, position.y, item, random) : item
-    const before = scene.drops?.length ?? 0
-    originalSpawnDrop(position.x, position.y, preparedItem)
-    const drop = scene.drops?.[before]
+  const spawnOwner = (request, coreSpawn) => {
+    const position = resolveDropPosition(scene, request.x, request.y, player)
+    const preparedItem = request.prepare
+      ? prepareDropItem(scene, position.x, position.y, request.item, random)
+      : request.item
+    const drop = coreSpawn({ ...request, x: position.x, y: position.y, item: preparedItem })
     if (!drop) return null
     syncGroundWeaponVisual(scene, drop, position)
     syncGroundWeaponLabel(drop, getLocale())
@@ -317,42 +302,19 @@ export function installPickupInteraction(scene, {
     return created
   }
 
-  scene.spawnDrop = function spawnPreparedDrop(x, y, item) { return spawnDropWithMotion(x, y, item) }
-  scene.load?.on?.('complete', reconcileVisuals)
-
-  const api = {
-    inventory,
-    spawnExact(x, y, item) { return spawnDropWithMotion(x, y, item, { prepare: false }) },
-    removeById: removeOwnedDropById,
-    clearAll: clearOwnedDrops,
-    reconcileVisuals,
-    useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
-    autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
-    setPickupIntentHandler(handler = null) {
-      const previous = pickupIntentHandler
-      pickupIntentHandler = typeof handler === 'function' ? handler : null
-      return previous
-    },
-    refreshLabels() {
-      for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
-    },
-    getHealthPotions: () => inventory?.getHealthPotions?.() ?? 0,
-  }
-  scene.__dungeonPickupRuntime = api
-
   const interceptPickup = (target, drop) => {
     if (typeof pickupIntentHandler !== 'function') return false
     return pickupIntentHandler(target, drop) === true
   }
 
-  const equipSelected = () => {
+  const equipSelected = (coreUpdate) => {
     const candidate = selectedDrop()
-    if (!candidate) return
+    if (!candidate) return null
     const distance = Math.hypot(candidate.x - player.state.x, candidate.y - player.state.y)
-    if (distance > 34) return
+    if (distance > 34) return null
     if (interceptPickup(player, candidate)) {
       publish(null)
-      return
+      return null
     }
     const previous = currentWeapon(player)
     const x = candidate.x
@@ -361,16 +323,17 @@ export function installPickupInteraction(scene, {
 
     publish(null)
     scene.drops = [candidate]
-    originalUpdateDrops(player)
+    coreUpdate(player)
     const equipped = scene.drops.length === 0
     scene.drops = equipped ? rest : [candidate, ...rest]
-    if (equipped && previous) spawnDropWithMotion(x, y, previous, { prepare: false })
+    if (equipped && previous) loot.spawnExact(x, y, previous)
+    return equipped
   }
 
-  key?.on?.('down', equipSelected)
+  const stepOwner = (target = player, coreUpdate, context = {}) => {
+    if (!target) return null
+    if (context?.confirmSelection) return equipSelected(coreUpdate)
 
-  scene.updateDrops = function updateDropsWithConfirmation(target = player) {
-    if (!target) return
     scene.drops = (scene.drops ?? []).filter(Boolean)
     const now = scene.time?.now ?? 0
     for (const drop of scene.drops) {
@@ -397,7 +360,7 @@ export function installPickupInteraction(scene, {
       if (potion && nearby) {
         const result = pickupHealthPotion(target.state)
         Object.assign(target.state, result.state)
-        scene.destroyDrop?.(drop)
+        loot.remove(drop, { player: target, reason: 'automatic' })
         if (result.stored) scene.__dungeonInventoryStats?.(target.state.healthPotions)
         else scene.updateHealthBar?.(target.bar, target.state.x, target.state.y - 42, target.state.hp, target.state.maxHp)
         scene.pickupBurst?.(drop.x, drop.y, drop.item, result.healed)
@@ -408,27 +371,62 @@ export function installPickupInteraction(scene, {
     }
 
     scene.drops = remainingAutomatic
-    originalUpdateDrops(target)
+    coreUpdate(target)
     scene.drops = [...confirmDrops, ...deferredAutomatic, ...(scene.drops ?? []).filter(Boolean)]
     if (target === player) publish(nearestConfirmableDrop(target.state, confirmDrops, 34))
+    return null
   }
+
+  const restoreSpawnOwner = loot.setSpawnOwner(spawnOwner)
+  const restoreRemoveOwner = loot.setRemoveOwner(removeOwner)
+  const restoreClearOwner = loot.setClearOwner(clearOwner)
+  const restoreStepOwner = loot.setStepOwner(stepOwner)
+
+  const confirmSelected = () => loot.step(player, { confirmSelection: true })
+  key?.on?.('down', confirmSelected)
+  scene.load?.on?.('complete', reconcileVisuals)
 
   const autoPotionUpdate = () => inventory?.autoUseHealthPotion?.()
   scene.events?.on?.('update', autoPotionUpdate)
 
-  scene.events?.once?.('shutdown', () => {
-    key?.off?.('down', equipSelected)
+  const restore = () => {
+    if (restored) return
+    restored = true
+    key?.off?.('down', confirmSelected)
     scene.events?.off?.('update', autoPotionUpdate)
     scene.load?.off?.('complete', reconcileVisuals)
     publish(null)
     pickupIntentHandler = null
     scene.__dungeonDropNavGrid = null
     scene.__pickupInteractionInstalled = false
-    if (originalDestroyDrop) scene.destroyDrop = originalDestroyDrop
-    scene.clearDrops = originalClearDrops
+    restoreStepOwner()
+    restoreClearOwner()
+    restoreRemoveOwner()
+    restoreSpawnOwner()
     inventory?.restore?.()
     if (scene.__dungeonPickupRuntime === api) scene.__dungeonPickupRuntime = null
-  })
+  }
 
+  api = {
+    inventory,
+    spawnExact(x, y, item) { return loot.spawnExact(x, y, item) },
+    removeById(id) { return loot.removeById(id) },
+    clearAll() { return loot.clear() },
+    reconcileVisuals,
+    useHealthPotion: () => inventory?.useHealthPotion?.() ?? false,
+    autoUseHealthPotion: () => inventory?.autoUseHealthPotion?.() ?? false,
+    setPickupIntentHandler(handler = null) {
+      const previous = pickupIntentHandler
+      pickupIntentHandler = typeof handler === 'function' ? handler : null
+      return previous
+    },
+    refreshLabels() {
+      for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
+    },
+    getHealthPotions: () => inventory?.getHealthPotions?.() ?? 0,
+    restore,
+  }
+  scene.__dungeonPickupRuntime = api
+  scene.events?.once?.('shutdown', restore)
   return api
 }

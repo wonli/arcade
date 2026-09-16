@@ -83,6 +83,11 @@ function sceneFixture(enemyOptions = {}) {
       this.enemies.push(enemy)
       return enemy
     },
+    damageEnemy(enemy, damage) {
+      if (!enemy || enemy.hp <= 0) return null
+      enemy.hp = Math.max(0, enemy.hp - damage)
+      return enemy.hp
+    },
     spawnDrop(x, y, item) {
       const drop = { x, y, item: structuredClone(item), visual: visual('drop') }
       this.drops.push(drop)
@@ -139,6 +144,99 @@ test('host world snapshot never republishes defeated enemies during delayed clea
   const state = runtime.publishState()
 
   assert.deepEqual(state.enemies, [])
+})
+
+test('world runtime owns damage authority without replacing Scene damageEnemy', () => {
+  const scene = sceneFixture()
+  const originalDamageEnemy = scene.damageEnemy
+  const runtime = createDungeonWorldRuntime(scene, { runSeed: 'ABC123', isHost: true, publishFact() {} })
+
+  runtime.start()
+
+  assert.equal(scene.damageEnemy, originalDamageEnemy)
+})
+
+test('follower combat authority rejects local enemy mutation', () => {
+  const scene = sceneFixture({ hp: 30 })
+  const runtime = createDungeonWorldRuntime(scene, { runSeed: 'ABC123', isHost: false })
+  runtime.start()
+  const enemy = scene.enemies[0]
+
+  const result = scene.dungeon.combat.damageEnemy(
+    enemy,
+    8,
+    false,
+    0,
+    { direct: true, canProc: false, source: 'weapon' },
+    scene.localPlayer,
+  )
+
+  assert.equal(result, null)
+  assert.equal(enemy.hp, 30)
+})
+
+test('host combat damage publishes the canonical enemy hit fact', () => {
+  const scene = sceneFixture({ hp: 30 })
+  const facts = []
+  const runtime = createDungeonWorldRuntime(scene, {
+    runSeed: 'ABC123',
+    isHost: true,
+    publishFact(fact) { facts.push(fact) },
+  })
+  runtime.start()
+  const enemy = scene.enemies[0]
+
+  scene.dungeon.combat.damageEnemy(
+    enemy,
+    8,
+    true,
+    0,
+    { direct: true, canProc: false, source: 'weapon' },
+    scene.localPlayer,
+  )
+
+  assert.equal(enemy.hp, 22)
+  assert.deepEqual(facts.map((fact) => fact.type), ['enemy.hit'])
+  assert.equal(facts[0].entityId, 'enemy:ABC123:1:0')
+  assert.equal(facts[0].hp, 22)
+  assert.equal(facts[0].damage, 8)
+  assert.equal(facts[0].critical, true)
+})
+
+test('enemy death fact is published before drop side effects created inside damage transaction', () => {
+  const scene = sceneFixture({ hp: 6 })
+  scene.damageEnemy = function damageEnemyWithDrop(enemy, damage) {
+    if (!enemy || enemy.hp <= 0) return null
+    enemy.hp = Math.max(0, enemy.hp - damage)
+    if (enemy.hp <= 0) {
+      this.kills++
+      this.floorKills++
+      this.spawnDrop(enemy.x, enemy.y, { type: 'weapon.test', rarity: 'common', damage: 1 })
+    }
+    return enemy.hp
+  }
+  const facts = []
+  const runtime = createDungeonWorldRuntime(scene, {
+    runSeed: 'ABC123',
+    isHost: true,
+    publishFact(fact) { facts.push(fact) },
+  })
+  runtime.start()
+  const enemy = scene.enemies[0]
+
+  scene.dungeon.combat.damageEnemy(
+    enemy,
+    6,
+    false,
+    0,
+    { direct: true, canProc: false, source: 'weapon' },
+    scene.localPlayer,
+  )
+
+  assert.deepEqual(facts.map((fact) => fact.type), ['enemy.death', 'drop.spawn'])
+  assert.equal(facts[0].entityId, 'enemy:ABC123:1:0')
+  assert.equal(facts[0].kills, 1)
+  assert.equal(facts[1].entityId, 'drop:ABC123:1:0')
 })
 
 test('host floor transition is followed immediately by a canonical world snapshot', () => {

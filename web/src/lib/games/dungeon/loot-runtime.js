@@ -1,0 +1,241 @@
+function callable(value) {
+  return typeof value === 'function' ? value : null
+}
+
+function restoreSlot(slots, name, owner, previous) {
+  return () => {
+    if (slots[name] === owner) slots[name] = previous
+  }
+}
+
+export function ensureDungeonLootRuntime(scene) {
+  if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
+  if (scene.dungeon?.loot?.__dungeonLootRuntime === true) return scene.dungeon.loot
+
+  const previousLoot = scene.dungeon?.loot && typeof scene.dungeon.loot === 'object'
+    ? scene.dungeon.loot
+    : {}
+  const core = {
+    spawn: callable(scene.spawnDrop)?.bind(scene) ?? null,
+    remove: callable(scene.destroyDrop)?.bind(scene) ?? null,
+    clear: callable(scene.clearDrops)?.bind(scene) ?? null,
+    step: callable(scene.updateDrops)?.bind(scene) ?? null,
+  }
+  const slots = {
+    spawnPolicy: null,
+    spawnOwner: null,
+    removeOwner: null,
+    clearOwner: null,
+    stepOwner: null,
+    pickupOwner: callable(previousLoot.pickup),
+    openChestOwner: callable(previousLoot.openChest),
+    authority: null,
+  }
+  const stepPlayers = []
+  let clearDepth = 0
+
+  const coreSpawn = (request) => {
+    if (!core.spawn) return null
+    const before = Array.isArray(scene.drops) ? scene.drops.length : 0
+    const value = core.spawn(request.x, request.y, request.item)
+    if (value && typeof value === 'object') return value
+    if (!Array.isArray(scene.drops)) return null
+    return scene.drops[before] ?? scene.drops.at?.(-1) ?? null
+  }
+
+  const coreRemove = (drop) => core.remove?.(drop) ?? drop ?? null
+  const coreClear = () => core.clear?.() ?? null
+  const coreStep = (player) => core.step?.(player) ?? null
+
+  const api = {
+    __dungeonLootRuntime: true,
+
+    spawn(x, y, item) {
+      return spawn({ x, y, item, prepare: true, exact: false })
+    },
+
+    spawnExact(x, y, item) {
+      return spawn({ x, y, item, prepare: false, exact: true })
+    },
+
+    remove(drop, context = {}) {
+      if (!drop) return null
+      if (slots.authority?.mayRemove && slots.authority.mayRemove(drop, context) === false) return null
+      const value = slots.removeOwner
+        ? slots.removeOwner(drop, coreRemove, context)
+        : coreRemove(drop)
+      const clearing = clearDepth > 0
+      const player = context?.player ?? (clearing ? null : stepPlayers.at(-1) ?? null)
+      try {
+        slots.authority?.onRemoved?.({
+          drop,
+          value,
+          context,
+          player,
+          clearing,
+          stepping: stepPlayers.length > 0,
+        })
+      } catch {}
+      return value
+    },
+
+    removeById(id, context = {}) {
+      const normalized = String(id ?? '').trim()
+      if (!normalized) return null
+      const drop = (scene.drops ?? []).find((candidate) => String(candidate?.id ?? '') === normalized) ?? null
+      if (!drop) return null
+      const value = api.remove(drop, context)
+      if (value != null) scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
+      return value
+    },
+
+    clear() {
+      if (slots.authority?.mayClear && slots.authority.mayClear() === false) return null
+      clearDepth++
+      try {
+        const value = slots.clearOwner
+          ? slots.clearOwner(coreClear)
+          : coreClear()
+        try { slots.authority?.onCleared?.({ value }) } catch {}
+        return value
+      } finally {
+        clearDepth--
+      }
+    },
+
+    step(player = scene.localPlayer, context = {}) {
+      stepPlayers.push(player)
+      try {
+        return slots.stepOwner
+          ? slots.stepOwner(player, coreStep, context)
+          : coreStep(player)
+      } finally {
+        stepPlayers.pop()
+      }
+    },
+
+    pickup(player, dropId) {
+      return slots.pickupOwner?.(player, dropId) ?? null
+    },
+
+    openChest(player, chestId) {
+      return slots.openChestOwner?.(player, chestId) ?? null
+    },
+
+    hasPickupOwner() {
+      return typeof slots.pickupOwner === 'function'
+    },
+
+    hasOpenChestOwner() {
+      return typeof slots.openChestOwner === 'function'
+    },
+
+    setSpawnPolicy(owner = null) {
+      const previous = slots.spawnPolicy
+      slots.spawnPolicy = callable(owner)
+      return restoreSlot(slots, 'spawnPolicy', slots.spawnPolicy, previous)
+    },
+
+    setSpawnOwner(owner = null) {
+      const previous = slots.spawnOwner
+      slots.spawnOwner = callable(owner)
+      return restoreSlot(slots, 'spawnOwner', slots.spawnOwner, previous)
+    },
+
+    setRemoveOwner(owner = null) {
+      const previous = slots.removeOwner
+      slots.removeOwner = callable(owner)
+      return restoreSlot(slots, 'removeOwner', slots.removeOwner, previous)
+    },
+
+    setClearOwner(owner = null) {
+      const previous = slots.clearOwner
+      slots.clearOwner = callable(owner)
+      return restoreSlot(slots, 'clearOwner', slots.clearOwner, previous)
+    },
+
+    setStepOwner(owner = null) {
+      const previous = slots.stepOwner
+      slots.stepOwner = callable(owner)
+      return restoreSlot(slots, 'stepOwner', slots.stepOwner, previous)
+    },
+
+    setPickupOwner(owner = null) {
+      const previous = slots.pickupOwner
+      slots.pickupOwner = callable(owner)
+      return restoreSlot(slots, 'pickupOwner', slots.pickupOwner, previous)
+    },
+
+    setOpenChestOwner(owner = null) {
+      const previous = slots.openChestOwner
+      slots.openChestOwner = callable(owner)
+      return restoreSlot(slots, 'openChestOwner', slots.openChestOwner, previous)
+    },
+
+    setAuthority(owner = null) {
+      const previous = slots.authority
+      slots.authority = owner && typeof owner === 'object' ? owner : null
+      return restoreSlot(slots, 'authority', slots.authority, previous)
+    },
+  }
+
+  function spawn(request) {
+    let nextRequest = request
+    if (request.prepare !== false && slots.spawnPolicy) {
+      const prepared = slots.spawnPolicy(request)
+      if (prepared && typeof prepared === 'object') nextRequest = prepared
+    }
+    if (slots.authority?.maySpawn && slots.authority.maySpawn(nextRequest) === false) return null
+    const drop = slots.spawnOwner
+      ? slots.spawnOwner(nextRequest, coreSpawn)
+      : coreSpawn(nextRequest)
+    if (!drop) return null
+    try {
+      slots.authority?.onSpawned?.({
+        request: nextRequest,
+        drop,
+        exact: nextRequest.exact === true,
+      })
+    } catch {}
+    return drop
+  }
+
+  scene.dungeon ??= {}
+  scene.dungeon.loot = api
+  return api
+}
+
+export function installDungeonLootSceneBridge(scene) {
+  if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
+  if (scene.__dungeonLootSceneBridge) return scene.__dungeonLootSceneBridge
+
+  const loot = ensureDungeonLootRuntime(scene)
+  const bridge = {
+    loot,
+    spawnDrop(x, y, item) {
+      return loot.spawn(x, y, item)
+    },
+    destroyDrop(drop) {
+      return loot.remove(drop)
+    },
+    clearDrops() {
+      return loot.clear()
+    },
+    updateDrops(player = scene.localPlayer) {
+      return loot.step(player)
+    },
+  }
+
+  scene.spawnDrop = bridge.spawnDrop
+  scene.destroyDrop = bridge.destroyDrop
+  scene.clearDrops = bridge.clearDrops
+  scene.updateDrops = bridge.updateDrops
+  scene.__dungeonLootSceneBridge = bridge
+  return bridge
+}
+
+export function dungeonLoot(scene) {
+  return scene?.dungeon?.loot?.__dungeonLootRuntime === true
+    ? scene.dungeon.loot
+    : null
+}

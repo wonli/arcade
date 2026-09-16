@@ -3,6 +3,9 @@ import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
+import { ensureDungeonLootRuntime } from './loot-runtime.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { growPlayerLegendaryForRoom } from './legendary-growth.js'
 import { currentWeapon } from './player-loadout.js'
@@ -140,9 +143,16 @@ export function installInfiniteDungeon(scene, {
   scene.floor = progress.floor
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
+  installDungeonFloorSceneBridge(scene)
+  const floorRuntime = ensureDungeonFloorRuntime(scene)
+  installDungeonPortalSceneBridge(scene)
+  const portalRuntime = ensureDungeonPortalRuntime(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  const restoreLootSpawnPolicy = loot.setSpawnPolicy((request) => ({
+    ...request,
+    item: promoteEquipment(request.item, progress.floor, fortuneActive, random),
+  }))
 
-  const originalOpenPortal = scene.openPortal.bind(scene)
-  const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
 
   const snapshot = () => progressSnapshot(progress, fortunePending, fortuneActive)
@@ -192,13 +202,7 @@ export function installInfiniteDungeon(scene, {
     if (result?.created) onEvent({ type: 'portal', floor: progress.floor, chapter: progress.chapter })
     return result?.portal ?? null
   }
-
-  scene.openPortal = openInfinitePortal
-
-  scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
-    const next = promoteEquipment(item, progress.floor, fortuneActive, random)
-    originalSpawnDrop(x, y, next)
-  }
+  const restorePortalOpenOwner = portalRuntime.setOpenOwner(() => openInfinitePortal())
 
   const spawnRestRoom = () => {
     const { x, y } = roomAnchor(scene.__roomGeometry, 'rest')
@@ -229,7 +233,7 @@ export function installInfiniteDungeon(scene, {
       onEvent({ type: 'restchoice', choice, floor: progress.floor, chapter: progress.chapter })
       for (const text of choiceTexts) text.destroy()
       title.setText(label('restComplete'))
-      openInfinitePortal()
+      scene.openPortal(player)
     }
 
     const showChoices = () => {
@@ -332,30 +336,37 @@ export function installInfiniteDungeon(scene, {
     playClearFeedback(role)
     scene.showBanner(label('floorClear'), role === 'boss' ? '#ffb55c' : role === 'elite' ? '#c984ff' : '#c1ff56', 34)
     onEvent({ type: 'floorclear', floor: progress.floor, chapter: progress.chapter, roomRole: role })
-    scene.time.delayedCall(650, () => openInfinitePortal())
+    scene.time.delayedCall(650, () => scene.openPortal(player))
   }
 
-  scene.advanceFloor = function advanceInfiniteFloor(target = player) {
-    if (target.dead) return
+  const advanceInfiniteFloor = (target = player) => {
+    if (target.dead) return null
     fortuneActive = false
     scene.destroyPortal()
     progress = advanceProgress(progress, random)
     scene.floor = progress.floor
     target.lastContactAt = scene.time.now
     startInfiniteFloor(false)
+    return scene.floor
   }
+  const restoreFloorAdvanceOwner = floorRuntime.setAdvanceOwner((target = player) => advanceInfiniteFloor(target))
 
   publish()
 
   scene.events?.once?.('shutdown', () => {
+    restoreFloorAdvanceOwner()
+    restorePortalOpenOwner()
+    restoreLootSpawnPolicy()
     destroyRest()
     enemyPresentation?.clearAll()
-    scene.openPortal = originalOpenPortal
   })
 
   return {
     getProgress: snapshot,
     destroy() {
+      restoreFloorAdvanceOwner()
+      restorePortalOpenOwner()
+      restoreLootSpawnPolicy()
       destroyRest()
       enemyPresentation?.clearAll()
     },
