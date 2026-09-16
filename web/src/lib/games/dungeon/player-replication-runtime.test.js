@@ -69,6 +69,21 @@ test('serializeLocal excludes Phaser and runtime presentation objects', () => {
   assert.equal('runtime' in snapshot, false)
 })
 
+test('serializePlayers captures every canonical PlayerEntity without presentation objects', () => {
+  const { scene, localPlayer } = sceneFixture('host')
+  const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'host' })
+  const guest = replication.applyRemote('guest', { id: 'guest', state: state(180) })
+  guest.runtime.transient = { phaser: true }
+
+  const snapshots = replication.serializePlayers()
+
+  assert.deepEqual(Object.keys(snapshots).sort(), ['guest', 'host'])
+  assert.equal(snapshots.host.state.x, 10)
+  assert.equal(snapshots.guest.state.x, 180)
+  assert.equal('runtime' in snapshots.host, false)
+  assert.equal('runtime' in snapshots.guest, false)
+})
+
 test('checkpoint player reconciliation applies local state and despawns remotes absent from canonical state', () => {
   const { scene, localPlayer } = sceneFixture('guest')
   let weaponSyncs = 0
