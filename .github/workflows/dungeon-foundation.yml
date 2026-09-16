@@ -34,6 +34,7 @@ jobs:
           node --test \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/gameplay-capabilities.test.js \
+            src/lib/games/dungeon/loot-runtime.test.js \
             src/lib/games/dungeon/player-intent-runtime.test.js \
             src/lib/games/dungeon/player-command-runtime.test.js \
             src/lib/games/dungeon/player-replication-runtime.test.js \
