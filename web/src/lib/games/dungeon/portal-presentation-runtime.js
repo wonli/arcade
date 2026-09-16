@@ -7,6 +7,7 @@ function syncPortal(portal) {
   portal.glow?.setPosition?.(portal.x, portal.y)
   portal.ring?.setPosition?.(portal.x, portal.y)
   portal.core?.setPosition?.(portal.x, portal.y)
+  portal.countdownLabel?.setPosition?.(portal.x, portal.y - 58)
   return portal
 }
 
@@ -26,7 +27,9 @@ export function installPortalPresentationRuntime(scene) {
   const remove = () => {
     const portal = scene.portal
     if (!portal) return null
-    for (const object of [portal.glow, portal.ring, portal.core]) killTween(scene, object)
+    for (const object of [portal.glow, portal.ring, portal.core, portal.countdownLabel]) killTween(scene, object)
+    portal.countdownLabel?.destroy?.()
+    portal.countdownLabel = null
 
     if (originalDestroyPortal) originalDestroyPortal()
     else {
@@ -47,6 +50,7 @@ export function installPortalPresentationRuntime(scene) {
       portal.x = Number(x) || 0
       portal.y = Number(y) || 0
       portal.unlockAt = Number.isFinite(Number(unlockAt)) ? Number(unlockAt) : (scene.time?.now ?? 0)
+      portal.countdownLabel ??= null
       return syncPortal(portal)
     }
 
@@ -56,7 +60,7 @@ export function installPortalPresentationRuntime(scene) {
     scene.tweens?.add?.({ targets: glow, scale: 1.3, alpha: 0.18, duration: 850, yoyo: true, repeat: -1 })
     scene.tweens?.add?.({ targets: ring, scale: 1.12, alpha: 0.62, duration: 620, yoyo: true, repeat: -1 })
     scene.tweens?.add?.({ targets: core, alpha: 0.72, duration: 420, yoyo: true, repeat: -1 })
-    scene.portal = { id: id ? String(id) : null, x, y, glow, ring, core, unlockAt }
+    scene.portal = { id: id ? String(id) : null, x, y, glow, ring, core, unlockAt, countdownLabel: null }
     return scene.portal
   }
 
@@ -70,6 +74,7 @@ export function installPortalPresentationRuntime(scene) {
         current.x = Number(x) || 0
         current.y = Number(y) || 0
         if (Number.isFinite(Number(unlockAt))) current.unlockAt = Number(unlockAt)
+        current.countdownLabel ??= null
         syncPortal(current)
         return { portal: current, created: false }
       }
