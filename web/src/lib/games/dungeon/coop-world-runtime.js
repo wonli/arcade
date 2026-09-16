@@ -21,8 +21,9 @@ export function nearestLivingDungeonPlayer(scene, point) {
   return nearest
 }
 
-export function installCoopWorldSimulation(scene) {
+export function installCoopWorldSimulation(scene, { localPlayer = scene?.localPlayer } = {}) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
+  if (!localPlayer) throw new TypeError('Dungeon local player is required')
   if (scene.__dungeonCoopWorldSimulation) return scene.__dungeonCoopWorldSimulation
 
   const originalUpdateEnemies = typeof scene.updateEnemies === 'function' ? scene.updateEnemies : null
@@ -54,7 +55,7 @@ export function installCoopWorldSimulation(scene) {
   }
 
   const continueWorldWhileLocalDown = (time, delta) => {
-    if (scene.runComplete || !scene.localPlayer?.dead) return
+    if (scene.runComplete || !localPlayer.dead) return
     const normalizedTime = Number(time)
     if (Number.isFinite(normalizedTime) && normalizedTime === lastEnemyStepTime) return
     const dt = Math.min(Math.max(0, Number(delta) || 0), 40) / 1000
