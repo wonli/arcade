@@ -37,6 +37,10 @@ jobs:
             src/lib/games/dungeon/player-lifecycle-runtime.test.js \
             src/lib/games/dungeon/coop-lifecycle-ownership-contract.test.js \
             src/lib/games/dungeon/network-lifecycle-clock.test.js \
+            src/lib/games/dungeon/portal-runtime.test.js \
+            src/lib/games/dungeon/coop-portal-ownership-contract.test.js \
+            src/lib/games/dungeon/coop-portal-clock.test.js \
+            src/lib/games/dungeon/coop-portal-runtime.test.js \
             src/lib/games/dungeon/loot-runtime.test.js \
             src/lib/games/dungeon/infinite-loot-policy-contract.test.js \
             src/lib/games/dungeon/loot-world-ownership-contract.test.js \
