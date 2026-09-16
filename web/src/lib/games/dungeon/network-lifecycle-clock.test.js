@@ -56,12 +56,19 @@ function sceneFixture() {
 
 function socketFixture() {
   return {
-    async request() { return { ok: true } },
+    async request(action) {
+      if (action === 'session.state.get') return { state: null }
+      return { ok: true }
+    },
     subscribe() { return () => {} },
   }
 }
 
-test('revive countdown advances on injected monotonic time even when Phaser scene time is frozen', () => {
+function nextTurn() {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
+test('revive countdown advances on injected monotonic time even when Phaser scene time is frozen', async () => {
   const scene = sceneFixture()
   let logicalNow = 1000
   let intervalCallback = null
@@ -77,6 +84,9 @@ test('revive countdown advances on injected monotonic time even when Phaser scen
   })
 
   runtime.start()
+  await nextTurn()
+  await nextTurn()
+
   scene.hitPlayer(999, scene.localPlayer)
   assert.equal(scene.localPlayer.dead, true)
   assert.equal(scene.time.now, 1000)

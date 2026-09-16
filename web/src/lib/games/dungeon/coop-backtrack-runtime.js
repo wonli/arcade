@@ -1,14 +1,12 @@
 import { portalDwellState } from './portal-dwell.js'
-import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 
-const PORTAL_TRIGGER_RADIUS = 38
+const BACK_PORTAL_TRIGGER_RADIUS = 34
 const COUNTDOWN_OFFSET_Y = 58
-
 const COUNTDOWN_STYLE = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
   fontSize: '28px',
   fontStyle: 'bold',
-  color: '#70ff9f',
+  color: '#67a8ff',
   stroke: '#08090b',
   strokeThickness: 6,
 }
@@ -22,61 +20,47 @@ function playerIds(players = []) {
   return [...new Set(players.map((player) => String(player?.id ?? '').trim()).filter(Boolean))].sort()
 }
 
-function destroyLegacyPortalCountdown(portal) {
-  portal?.countdownLabel?.destroy?.()
-  if (portal) portal.countdownLabel = null
-}
-
-export function installCoopPortalRuntime(scene, {
-  localPlayer,
+export function installCoopBacktrackRuntime(scene, {
   isAuthority = () => false,
   publishFact = () => {},
+  onTransition = () => {},
   now = null,
 } = {}) {
-  if (!scene || !localPlayer) throw new TypeError('Dungeon scene and local player are required')
-  if (scene.__dungeonCoopPortal) return scene.__dungeonCoopPortal
-  if (now != null && typeof now !== 'function') throw new TypeError('Dungeon portal clock must be a function')
+  const backtrack = scene?.__dungeonBacktracking
+  if (!scene || !backtrack?.setUpdateOwner) return null
+  if (scene.__dungeonCoopBacktrack) return scene.__dungeonCoopBacktrack
+  if (now != null && typeof now !== 'function') throw new TypeError('Dungeon backtrack clock must be a function')
 
-  installDungeonPortalSceneBridge(scene)
-  const portalRuntime = ensureDungeonPortalRuntime(scene)
-  let restoreUpdateOwner = null
   let dwell = { enteredAt: null, seconds: null, complete: false }
+  let activePortalId = null
   let lastPublished = null
   let transitionCommitted = false
-  let activePortalId = scene.portal?.id == null ? null : String(scene.portal.id)
   let activeCountdown = { playerIds: [], seconds: null }
   const countdownLabels = new Map()
-  if (scene.portal && scene.portal.countdownLabel == null) scene.portal.countdownLabel = null
 
-  const dwellClock = (time) => {
-    const value = Number(now ? now() : time)
+  const dwellClock = () => {
+    const value = Number(now ? now() : scene.time?.now)
     return Number.isFinite(value) ? value : 0
   }
 
   const destroyPlayerCountdown = (id) => {
     const entry = countdownLabels.get(String(id))
     entry?.label?.destroy?.()
-    if (entry?.player?.portalCountdownLabel === entry?.label) entry.player.portalCountdownLabel = null
+    if (entry?.player?.backtrackCountdownLabel === entry?.label) entry.player.backtrackCountdownLabel = null
     countdownLabels.delete(String(id))
   }
 
   const clearCountdownPresentation = () => {
     for (const id of [...countdownLabels.keys()]) destroyPlayerCountdown(id)
-    destroyLegacyPortalCountdown(scene.portal)
   }
 
   const renderCountdown = (ids, seconds) => {
     const normalizedIds = [...new Set((ids ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))].sort()
     const activeIds = new Set(seconds ? normalizedIds : [])
-
     for (const id of [...countdownLabels.keys()]) {
       if (!activeIds.has(id) || !scene.players?.has?.(id)) destroyPlayerCountdown(id)
     }
-
-    if (!seconds) {
-      destroyLegacyPortalCountdown(scene.portal)
-      return
-    }
+    if (!seconds) return
 
     for (const id of normalizedIds) {
       const player = scene.players?.get?.(id)
@@ -92,34 +76,28 @@ export function installCoopPortalRuntime(scene, {
         if (!label) continue
         entry = { player, label }
         countdownLabels.set(id, entry)
-        player.portalCountdownLabel = label
+        player.backtrackCountdownLabel = label
       }
       entry.player = player
-      player.portalCountdownLabel = entry.label
+      player.backtrackCountdownLabel = entry.label
       entry.label?.setText?.(String(seconds))
       entry.label?.setPosition?.(
         Number(player.state.x) || 0,
         (Number(player.state.y) || 0) - COUNTDOWN_OFFSET_Y,
       )
     }
-    destroyLegacyPortalCountdown(scene.portal)
   }
 
   const setActiveCountdown = (ids = [], seconds = null) => {
     activeCountdown = {
-      playerIds: seconds ? [...new Set(ids.map((id) => String(id ?? '').trim()).filter(Boolean))].sort() : [],
+      playerIds: seconds ? playerIds(ids.map((id) => ({ id }))) : [],
       seconds: seconds ? Number(seconds) : null,
     }
     renderCountdown(activeCountdown.playerIds, activeCountdown.seconds)
   }
 
-  const syncCountdownPresentation = () => {
-    renderCountdown(activeCountdown.playerIds, activeCountdown.seconds)
-  }
-
   const syncPortalIdentity = (portal) => {
-    if (!portal) return
-    const nextId = portal.id == null ? null : String(portal.id)
+    const nextId = portal?.id == null ? null : String(portal.id)
     if (nextId === activePortalId) return
     clearCountdownPresentation()
     activeCountdown = { playerIds: [], seconds: null }
@@ -129,32 +107,13 @@ export function installCoopPortalRuntime(scene, {
     transitionCommitted = false
   }
 
-  const clear = ({ publish = false } = {}) => {
-    const portal = scene.portal
-    const wasActive = dwell.enteredAt != null || activeCountdown.seconds != null || countdownLabels.size > 0 || Boolean(portal?.countdownLabel)
-    clearCountdownPresentation()
-    activeCountdown = { playerIds: [], seconds: null }
-    dwell = { enteredAt: null, seconds: null, complete: false }
-    transitionCommitted = false
-    if (publish && wasActive) {
-      lastPublished = 'inactive'
-      publishFact({
-        type: 'portal.dwell',
-        entityId: String(portal?.id ?? ''),
-        active: false,
-        seconds: null,
-        playerIds: [],
-      })
-    }
-  }
-
   const publishDwell = (portal, next, participants = []) => {
     const ids = next.enteredAt != null && !next.complete ? playerIds(participants) : []
     const key = next.enteredAt == null ? 'inactive' : `${next.seconds}:${Boolean(next.complete)}:${ids.join(',')}`
     if (key === lastPublished) return
     lastPublished = key
     publishFact({
-      type: 'portal.dwell',
+      type: 'backtrack.dwell',
       entityId: String(portal?.id ?? ''),
       active: next.enteredAt != null && !next.complete,
       seconds: next.complete ? null : next.seconds,
@@ -163,27 +122,44 @@ export function installCoopPortalRuntime(scene, {
     })
   }
 
-  const updateCoopPortal = (time) => {
-    const portal = scene.portal
-    if (!portal || scene.runComplete || Number(time) < Number(portal.unlockAt ?? 0)) {
-      if (portal) clear({ publish: isAuthority() })
-      else clearCountdownPresentation()
+  const clear = ({ publish = false, portal = backtrack.getPortal?.() } = {}) => {
+    const wasActive = dwell.enteredAt != null || activeCountdown.seconds != null || countdownLabels.size > 0
+    clearCountdownPresentation()
+    activeCountdown = { playerIds: [], seconds: null }
+    dwell = { enteredAt: null, seconds: null, complete: false }
+    transitionCommitted = false
+    if (publish && wasActive) {
+      lastPublished = 'inactive'
+      publishFact({
+        type: 'backtrack.dwell',
+        entityId: String(portal?.id ?? activePortalId ?? ''),
+        active: false,
+        seconds: null,
+        playerIds: [],
+      })
+    }
+  }
+
+  const update = ({ portal, available, unlocked, retreat }) => {
+    if (!portal) {
+      clearCountdownPresentation()
       return null
     }
     syncPortalIdentity(portal)
+
     if (!isAuthority()) {
-      syncCountdownPresentation()
+      renderCountdown(activeCountdown.playerIds, activeCountdown.seconds)
       return null
     }
 
     const allPlayers = [...(scene.players?.values?.() ?? [])]
     const living = livingPlayers(scene)
-    const readyParty = allPlayers.length >= 2 && living.length === allPlayers.length
+    const readyParty = available && unlocked && allPlayers.length >= 2 && living.length === allPlayers.length
     const allInside = readyParty && living.every((player) => (
-      Math.hypot(portal.x - player.state.x, portal.y - player.state.y) <= PORTAL_TRIGGER_RADIUS
+      Math.hypot(portal.x - player.state.x, portal.y - player.state.y) <= BACK_PORTAL_TRIGGER_RADIUS
     ))
     const wasActive = dwell.enteredAt != null
-    const next = portalDwellState(dwell, { inside: allInside, now: dwellClock(time) })
+    const next = portalDwellState(dwell, { inside: allInside, now: dwellClock() })
     dwell = next
 
     if (!allInside) {
@@ -197,22 +173,37 @@ export function installCoopPortalRuntime(scene, {
       publishDwell(portal, next, living)
       if (!transitionCommitted) {
         transitionCommitted = true
-        scene.advanceFloor?.(localPlayer)
+        const changed = retreat?.() === true
+        if (changed) {
+          const navigation = backtrack.snapshot?.() ?? null
+          publishFact({
+            type: 'backtrack.transition',
+            entityId: String(portal.id ?? ''),
+            navigation,
+          })
+          onTransition(navigation)
+        } else transitionCommitted = false
       }
       return null
     }
 
-    const participants = playerIds(living)
-    setActiveCountdown(participants, next.seconds)
+    setActiveCountdown(playerIds(living), next.seconds)
     publishDwell(portal, next, living)
     return next
   }
 
-  restoreUpdateOwner = portalRuntime.setUpdateOwner(updateCoopPortal)
+  const restoreUpdateOwner = backtrack.setUpdateOwner(update)
 
   const applyFact = (fact) => {
-    if (fact?.type !== 'portal.dwell') return null
-    const portal = scene.portal
+    if (!fact || typeof fact !== 'object') return null
+    if (fact.type === 'backtrack.transition') {
+      clear()
+      if (!fact.navigation) return null
+      backtrack.applyState?.(fact.navigation, { materialize: true })
+      return fact.navigation
+    }
+    if (fact.type !== 'backtrack.dwell') return null
+    const portal = backtrack.getPortal?.()
     if (!portal) return null
     syncPortalIdentity(portal)
     const factId = String(fact.entityId ?? '')
@@ -230,12 +221,11 @@ export function installCoopPortalRuntime(scene, {
   const restore = () => {
     clear()
     restoreUpdateOwner?.()
-    restoreUpdateOwner = null
-    if (scene.__dungeonCoopPortal === api) scene.__dungeonCoopPortal = null
+    if (scene.__dungeonCoopBacktrack === api) scene.__dungeonCoopBacktrack = null
   }
 
   api = { applyFact, clear, restore }
-  scene.__dungeonCoopPortal = api
+  scene.__dungeonCoopBacktrack = api
   scene.events?.once?.('shutdown', restore)
   scene.events?.once?.('destroy', restore)
   return api

@@ -11,6 +11,10 @@ function syncPortal(portal) {
   return portal
 }
 
+function hasCompleteVisuals(portal) {
+  return Boolean(portal?.glow && portal?.ring && portal?.core)
+}
+
 export function installPortalPresentationRuntime(scene) {
   if (!scene || typeof scene !== 'object') return null
   if (scene.__dungeonPortalPresentation) return scene.__dungeonPortalPresentation
@@ -66,14 +70,23 @@ export function installPortalPresentationRuntime(scene) {
 
   const ensure = ({ id = null, x = 0, y = 0, unlockAt = scene.time?.now ?? 0 } = {}) => {
     const normalizedId = id == null ? null : String(id)
+    const nextX = Number(x) || 0
+    const nextY = Number(y) || 0
+    const nextUnlockAt = Number.isFinite(Number(unlockAt)) ? Number(unlockAt) : (scene.time?.now ?? 0)
     const current = scene.portal
     if (current) {
       const currentId = current.id == null ? null : String(current.id)
       if (!normalizedId || !currentId || currentId === normalizedId) {
-        if (normalizedId) current.id = normalizedId
-        current.x = Number(x) || 0
-        current.y = Number(y) || 0
-        if (Number.isFinite(Number(unlockAt))) current.unlockAt = Number(unlockAt)
+        const resolvedId = normalizedId || currentId
+        if (scene.add?.circle && !hasCompleteVisuals(current)) {
+          remove()
+          const portal = create({ id: resolvedId, x: nextX, y: nextY, unlockAt: nextUnlockAt })
+          return { portal, created: Boolean(portal) }
+        }
+        if (resolvedId) current.id = resolvedId
+        current.x = nextX
+        current.y = nextY
+        current.unlockAt = nextUnlockAt
         current.countdownLabel ??= null
         syncPortal(current)
         return { portal: current, created: false }
@@ -81,7 +94,7 @@ export function installPortalPresentationRuntime(scene) {
       remove()
     }
 
-    const portal = create({ id: normalizedId, x: Number(x) || 0, y: Number(y) || 0, unlockAt })
+    const portal = create({ id: normalizedId, x: nextX, y: nextY, unlockAt: nextUnlockAt })
     return { portal, created: Boolean(portal) }
   }
 

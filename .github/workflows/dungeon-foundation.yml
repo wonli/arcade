@@ -3,8 +3,10 @@ name: Dungeon Foundation Contracts
 on:
   push:
     branches:
-      - refactor/dungeon-coop-foundation
+      - main
     paths:
+      - 'arcade/**'
+      - 'server/**'
       - 'web/src/lib/games/dungeon/**'
       - 'web/src/routes/room/[code]/dungeon/+page.svelte'
       - '.github/workflows/dungeon-foundation.yml'
@@ -22,6 +24,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Arcade server contracts
+        run: go test ./arcade ./server
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -47,6 +58,8 @@ jobs:
             src/lib/games/dungeon/coop-portal-ownership-contract.test.js \
             src/lib/games/dungeon/coop-portal-clock.test.js \
             src/lib/games/dungeon/coop-portal-runtime.test.js \
+            src/lib/games/dungeon/backtrack-coop-ownership-contract.test.js \
+            src/lib/games/dungeon/coop-backtrack-runtime.test.js \
             src/lib/games/dungeon/infinite-portal-ownership-contract.test.js \
             src/lib/games/dungeon/world-portal-ownership-contract.test.js \
             src/lib/games/dungeon/loot-runtime.test.js \
@@ -54,7 +67,10 @@ jobs:
             src/lib/games/dungeon/loot-world-ownership-contract.test.js \
             src/lib/games/dungeon/pickup-loot-ownership-contract.test.js \
             src/lib/games/dungeon/pickup-runtime.test.js \
+            src/lib/games/dungeon/weapon-visual-refresh-regression.test.js \
+            src/lib/games/dungeon/weapon-visual-equipped-refresh-regression.test.js \
             src/lib/games/dungeon/world-runtime.test.js \
+            src/lib/games/dungeon/hydration-presentation-regression.test.js \
             src/lib/games/dungeon/player-intent-runtime.test.js \
             src/lib/games/dungeon/player-command-runtime.test.js \
             src/lib/games/dungeon/player-command-clock.test.js \
@@ -66,4 +82,5 @@ jobs:
             src/lib/games/dungeon/network-foundation-contract.test.js \
             src/lib/games/dungeon/network-session-authority.test.js \
             src/lib/games/dungeon/network-reconnect-regression.test.js \
+            src/lib/games/dungeon/coop-session-command-regression.test.js \
             src/lib/games/dungeon/network-runtime.test.js

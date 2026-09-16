@@ -161,7 +161,12 @@ export function createWeaponVisual(scene, item, x, y, { selected = false, presen
   const presentation = resolveWeaponPresentation(presentationConfig ?? DEFAULT_WEAPON_PRESENTATION, item, 'down')
   const textureAvailable = Boolean(scene.textures?.exists?.(profile.textureKey))
   let visual = null
-  if (textureAvailable && scene.add?.image) {
+  // Pure procedural weapons must ignore the legacy sword catalog fallback even
+  // when that texture is cached. Named weapons may still use their archetype's
+  // procedural shape while their dedicated PNG is loading, then upgrade later.
+  if (profile.procedural && scene.add?.container) {
+    visual = createProceduralWeapon(scene, profile.archetype, x, y)
+  } else if (textureAvailable && scene.add?.image) {
     visual = scene.add.image(x, y, profile.textureKey)
     visual?.setOrigin?.(presentation.grip.x, presentation.grip.y)
   } else if (PROCEDURAL_ARCHETYPES.has(profile.archetype) && scene.add?.container) {
@@ -281,6 +286,9 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
   if (scene.load?.once && scene.load?.start) {
     scene.load.once('complete', () => {
       ready = true
+      visual?.destroy?.()
+      visual = null
+      currentKey = null
       sync()
     })
     scene.load.start()

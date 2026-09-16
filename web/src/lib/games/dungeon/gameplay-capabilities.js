@@ -13,17 +13,13 @@ export function ensureDungeonCapabilities(scene) {
   const dungeon = objectOwner(scene.dungeon, 'scene.dungeon')
   scene.dungeon = dungeon
   dungeon.combat = ensureDungeonCombatRuntime(scene)
-
-  const hadLoot = dungeon.loot && typeof dungeon.loot === 'object' ? dungeon.loot : null
-  const hadPickup = typeof hadLoot?.pickup === 'function'
-  const hadOpenChest = typeof hadLoot?.openChest === 'function'
   dungeon.loot = ensureDungeonLootRuntime(scene)
 
-  if (!hadPickup && typeof scene.__dungeonPickupRuntime?.pickupById === 'function') {
+  if (!dungeon.loot.hasPickupOwner?.() && typeof scene.__dungeonPickupRuntime?.pickupById === 'function') {
     dungeon.loot.setPickupOwner((player, dropId) => scene.__dungeonPickupRuntime?.pickupById?.(player, dropId))
   }
 
-  if (!hadOpenChest && typeof scene.__dungeonSpatial?.openChestById === 'function') {
+  if (!dungeon.loot.hasOpenChestOwner?.() && typeof scene.__dungeonSpatial?.openChestById === 'function') {
     dungeon.loot.setOpenChestOwner((player, chestId) => scene.__dungeonSpatial?.openChestById?.(player, chestId))
   }
 
