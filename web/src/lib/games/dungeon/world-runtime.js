@@ -2,6 +2,7 @@ import { applyPickup } from './combat.js'
 import { ensureDungeonCombatRuntime } from './combat-runtime.js'
 import { installCoopPortalRuntime } from './coop-portal-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
+import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
 import { pickupHealthPotion } from './inventory.js'
 import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-runtime.js'
 import { currentWeapon } from './player-loadout.js'
@@ -66,6 +67,8 @@ export function createDungeonWorldRuntime(scene, {
 
   const seed = normalizeRunSeed(runSeed)
   const combat = ensureDungeonCombatRuntime(scene)
+  installDungeonFloorSceneBridge(scene)
+  const floor = ensureDungeonFloorRuntime(scene)
   installDungeonLootSceneBridge(scene)
   const loot = ensureDungeonLootRuntime(scene)
   installDungeonPortalSceneBridge(scene)
@@ -74,7 +77,6 @@ export function createDungeonWorldRuntime(scene, {
   const portalPresentation = installPortalPresentationRuntime(scene)
   const originals = {
     spawnEnemy: typeof scene.spawnEnemy === 'function' ? scene.spawnEnemy.bind(scene) : null,
-    advanceFloor: typeof scene.advanceFloor === 'function' ? scene.advanceFloor.bind(scene) : null,
   }
   const dropSequences = new Map()
   let started = false
@@ -82,6 +84,7 @@ export function createDungeonWorldRuntime(scene, {
   let lastFactSequence = -1
   let coopPortalRuntime = null
   let restoreCombatAuthority = null
+  let restoreFloorAuthority = null
   let restoreLootAuthority = null
   let restoreLootPickupOwner = null
   let restorePortalAuthority = null
@@ -272,8 +275,9 @@ export function createDungeonWorldRuntime(scene, {
 
   const applyFloorTransition = (fact) => {
     const targetFloor = normalizeFloor(fact.toFloor)
-    if (targetFloor <= normalizeFloor(scene.floor)) return scene.floor
-    if (originals.advanceFloor && targetFloor === normalizeFloor(scene.floor) + 1) originals.advanceFloor(scene.localPlayer)
+    const currentFloor = normalizeFloor(scene.floor)
+    if (targetFloor <= currentFloor) return scene.floor
+    if (targetFloor === currentFloor + 1) floor.advance(scene.localPlayer, { source: 'replicated-fact' })
     else {
       portalPresentation?.remove()
       scene.floor = targetFloor
@@ -302,8 +306,8 @@ export function createDungeonWorldRuntime(scene, {
   const applyWorldState = (fact) => {
     const targetFloor = normalizeFloor(fact.floor)
     const currentFloor = normalizeFloor(scene.floor)
-    if (targetFloor > currentFloor && originals.advanceFloor) {
-      while (normalizeFloor(scene.floor) < targetFloor) originals.advanceFloor(scene.localPlayer)
+    if (targetFloor > currentFloor) {
+      while (normalizeFloor(scene.floor) < targetFloor) floor.advance(scene.localPlayer, { source: 'world-state' })
     } else if (targetFloor !== currentFloor) {
       portalPresentation?.remove()
       scene.floor = targetFloor
@@ -421,6 +425,18 @@ export function createDungeonWorldRuntime(scene, {
       onDamageApplied: publishDamageFact,
     })
 
+    restoreFloorAuthority = floor.setAuthority({
+      mayAdvance: () => isHost || applyingFact,
+      onAdvanced({ fromFloor, toFloor }) {
+        if (isHost && !applyingFact) {
+          emitFact({ type: 'floor.transition', fromFloor, toFloor })
+          publishState()
+        }
+        assignExistingEnemyIds()
+        reconcileDrops({ announce: false })
+      },
+    })
+
     restoreLootAuthority = loot.setAuthority({
       maySpawn: () => isHost || applyingFact,
       onSpawned({ request, drop }) {
@@ -472,22 +488,6 @@ export function createDungeonWorldRuntime(scene, {
       }
     }
 
-    if (originals.advanceFloor) {
-      scene.advanceFloor = function authoritativeAdvanceFloor(player = scene.localPlayer) {
-        if (!isHost && !applyingFact) return null
-        const fromFloor = normalizeFloor(scene.floor)
-        const value = originals.advanceFloor(player)
-        const toFloor = normalizeFloor(scene.floor)
-        if (isHost && !applyingFact && toFloor !== fromFloor) {
-          emitFact({ type: 'floor.transition', fromFloor, toFloor })
-          publishState()
-        }
-        assignExistingEnemyIds()
-        reconcileDrops({ announce: false })
-        return value
-      }
-    }
-
     coopPortalRuntime = installCoopPortalRuntime(scene, {
       localPlayer: scene.localPlayer,
       isAuthority: () => isHost,
@@ -507,10 +507,11 @@ export function createDungeonWorldRuntime(scene, {
     restoreLootPickupOwner = null
     restoreLootAuthority?.()
     restoreLootAuthority = null
+    restoreFloorAuthority?.()
+    restoreFloorAuthority = null
     restoreCombatAuthority?.()
     restoreCombatAuthority = null
     if (originals.spawnEnemy) scene.spawnEnemy = originals.spawnEnemy
-    if (originals.advanceFloor) scene.advanceFloor = originals.advanceFloor
     started = false
   }
 
