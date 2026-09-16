@@ -56,6 +56,47 @@ test('remote snapshot trusts relay identity and updates an existing remote in pl
   assert.equal(first.moving, true)
 })
 
+test('presence reconciliation moves an existing remote without accepting durable gameplay state', () => {
+  const { scene, localPlayer } = sceneFixture('host')
+  const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'host' })
+  const guest = replication.applyRemote('guest', {
+    id: 'guest',
+    state: { ...state(100), hp: 90, equipment: { weapon: { id: 'authority-blade' } } },
+    facing: 'left',
+    lastAttackAt: 200,
+    skillCooldowns: { primary: 400 },
+  })
+
+  guest.state.hp = 45
+  guest.lastAttackAt = 5000
+  guest.runtime.skills.cooldowns.primary = 8000
+
+  const applied = replication.applyRemotePresence('guest', {
+    id: 'spoofed',
+    state: { ...state(180), y: 220, hp: 100, equipment: { weapon: { id: 'stale-blade' } } },
+    facing: 'right',
+    moving: true,
+    attacking: true,
+    dead: true,
+    lastAttackAt: 999999,
+    skillCooldowns: { primary: 999999 },
+  })
+
+  assert.equal(applied, guest)
+  assert.equal(guest.state.x, 180)
+  assert.equal(guest.state.y, 220)
+  assert.equal(guest.actor.x, 180)
+  assert.equal(guest.actor.y, 220)
+  assert.equal(guest.facing, 'right')
+  assert.equal(guest.moving, true)
+  assert.equal(guest.attacking, true)
+  assert.equal(guest.state.hp, 45)
+  assert.equal(guest.state.equipment.weapon.id, 'authority-blade')
+  assert.equal(guest.lastAttackAt, 5000)
+  assert.equal(guest.runtime.skills.cooldowns.primary, 8000)
+  assert.equal(guest.dead, false)
+})
+
 test('serializeLocal excludes Phaser and runtime presentation objects', () => {
   const { scene, localPlayer } = sceneFixture('guest')
   localPlayer.actor.phaser = true
