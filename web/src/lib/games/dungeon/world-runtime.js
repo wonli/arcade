@@ -1,5 +1,6 @@
 import { applyPickup } from './combat.js'
 import { ensureDungeonCombatRuntime } from './combat-runtime.js'
+import { installCoopBacktrackRuntime } from './coop-backtrack-runtime.js'
 import { installCoopPortalRuntime } from './coop-portal-runtime.js'
 import { ensureDungeonEnemyRuntime, installDungeonEnemySceneBridge } from './enemy-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
@@ -84,6 +85,7 @@ export function createDungeonWorldRuntime(scene, {
   let applyingFact = false
   let lastFactSequence = -1
   let coopPortalRuntime = null
+  let coopBacktrackRuntime = null
   let restoreCombatAuthority = null
   let restoreEnemyObserver = null
   let restoreFloorAuthority = null
@@ -379,8 +381,12 @@ export function createDungeonWorldRuntime(scene, {
       if (fact.type === 'drop.pickup') return applyDropPickup(fact)
       if (fact.type === 'portal.open') return applyPortalOpen(fact)
       if (fact.type === 'portal.dwell') return coopPortalRuntime?.applyFact(fact) ?? null
+      if (fact.type === 'backtrack.dwell' || fact.type === 'backtrack.transition') {
+        return coopBacktrackRuntime?.applyFact(fact) ?? null
+      }
       if (fact.type === 'floor.transition') {
         coopPortalRuntime?.clear()
+        coopBacktrackRuntime?.clear()
         return applyFloorTransition(fact)
       }
       return null
@@ -485,7 +491,7 @@ export function createDungeonWorldRuntime(scene, {
     restorePortalAuthority = portal.setAuthority({
       mayOpen: () => isHost || applyingFact,
       onOpened({ portal: opened }) {
-        if (!opened || applyingFact || !isHost) return
+        if (!opened || applyingFact || !isHost || scene.__dungeonBacktracking?.isRestoring?.()) return
         opened.id ??= stableWorldEntityId(seed, scene.floor, 'portal', 0)
         emitFact({ type: 'portal.open', entityId: opened.id, x: opened.x, y: opened.y })
       },
@@ -497,11 +503,19 @@ export function createDungeonWorldRuntime(scene, {
       publishFact: emitFact,
       now,
     })
+    coopBacktrackRuntime = installCoopBacktrackRuntime(scene, {
+      isAuthority: () => isHost,
+      publishFact: emitFact,
+      onTransition: () => publishState(),
+      now,
+    })
     return api
   }
 
   function stop() {
     if (!started) return
+    coopBacktrackRuntime?.restore?.()
+    coopBacktrackRuntime = null
     coopPortalRuntime?.restore?.()
     coopPortalRuntime = null
     restorePortalAuthority?.()
