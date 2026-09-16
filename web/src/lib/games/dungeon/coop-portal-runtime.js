@@ -2,34 +2,29 @@ import { portalDwellState } from './portal-dwell.js'
 import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 
 const PORTAL_TRIGGER_RADIUS = 38
+const COUNTDOWN_OFFSET_Y = 58
+
+const COUNTDOWN_STYLE = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  fontSize: '28px',
+  fontStyle: 'bold',
+  color: '#70ff9f',
+  stroke: '#08090b',
+  strokeThickness: 6,
+}
 
 function livingPlayers(scene) {
   return [...(scene?.players?.values?.() ?? [])]
     .filter((player) => player && !player.dead && Number(player.state?.hp ?? 0) > 0)
 }
 
-function destroyCountdown(portal) {
-  portal?.countdownLabel?.destroy?.()
-  if (portal) portal.countdownLabel = null
+function playerIds(players = []) {
+  return [...new Set(players.map((player) => String(player?.id ?? '').trim()).filter(Boolean))].sort()
 }
 
-function renderCountdown(scene, portal, seconds) {
-  if (!portal || !seconds) {
-    destroyCountdown(portal)
-    return
-  }
-  if (!portal.countdownLabel) {
-    portal.countdownLabel = scene.add?.text?.(portal.x, portal.y - 58, String(seconds), {
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: '28px',
-      fontStyle: 'bold',
-      color: '#70ff9f',
-      stroke: '#08090b',
-      strokeThickness: 6,
-    })?.setOrigin?.(0.5)?.setDepth?.(75) ?? null
-  }
-  portal.countdownLabel?.setText?.(String(seconds))
-  portal.countdownLabel?.setPosition?.(portal.x, portal.y - 58)
+function destroyLegacyPortalCountdown(portal) {
+  portal?.countdownLabel?.destroy?.()
+  if (portal) portal.countdownLabel = null
 }
 
 export function installCoopPortalRuntime(scene, {
@@ -49,6 +44,8 @@ export function installCoopPortalRuntime(scene, {
   let lastPublished = null
   let transitionCommitted = false
   let activePortalId = scene.portal?.id == null ? null : String(scene.portal.id)
+  let activeCountdown = { playerIds: [], seconds: null }
+  const countdownLabels = new Map()
   if (scene.portal && scene.portal.countdownLabel == null) scene.portal.countdownLabel = null
 
   const dwellClock = (time) => {
@@ -56,11 +53,76 @@ export function installCoopPortalRuntime(scene, {
     return Number.isFinite(value) ? value : 0
   }
 
+  const destroyPlayerCountdown = (id) => {
+    const entry = countdownLabels.get(String(id))
+    entry?.label?.destroy?.()
+    if (entry?.player?.portalCountdownLabel === entry?.label) entry.player.portalCountdownLabel = null
+    countdownLabels.delete(String(id))
+  }
+
+  const clearCountdownPresentation = () => {
+    for (const id of [...countdownLabels.keys()]) destroyPlayerCountdown(id)
+    destroyLegacyPortalCountdown(scene.portal)
+  }
+
+  const renderCountdown = (ids, seconds) => {
+    const normalizedIds = [...new Set((ids ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))].sort()
+    const activeIds = new Set(seconds ? normalizedIds : [])
+
+    for (const id of [...countdownLabels.keys()]) {
+      if (!activeIds.has(id) || !scene.players?.has?.(id)) destroyPlayerCountdown(id)
+    }
+
+    if (!seconds) {
+      destroyLegacyPortalCountdown(scene.portal)
+      return
+    }
+
+    for (const id of normalizedIds) {
+      const player = scene.players?.get?.(id)
+      if (!player?.state) continue
+      let entry = countdownLabels.get(id)
+      if (!entry?.label) {
+        const label = scene.add?.text?.(
+          Number(player.state.x) || 0,
+          (Number(player.state.y) || 0) - COUNTDOWN_OFFSET_Y,
+          String(seconds),
+          COUNTDOWN_STYLE,
+        )?.setOrigin?.(0.5)?.setDepth?.(75) ?? null
+        if (!label) continue
+        entry = { player, label }
+        countdownLabels.set(id, entry)
+        player.portalCountdownLabel = label
+      }
+      entry.player = player
+      player.portalCountdownLabel = entry.label
+      entry.label?.setText?.(String(seconds))
+      entry.label?.setPosition?.(
+        Number(player.state.x) || 0,
+        (Number(player.state.y) || 0) - COUNTDOWN_OFFSET_Y,
+      )
+    }
+    destroyLegacyPortalCountdown(scene.portal)
+  }
+
+  const setActiveCountdown = (ids = [], seconds = null) => {
+    activeCountdown = {
+      playerIds: seconds ? [...new Set(ids.map((id) => String(id ?? '').trim()).filter(Boolean))].sort() : [],
+      seconds: seconds ? Number(seconds) : null,
+    }
+    renderCountdown(activeCountdown.playerIds, activeCountdown.seconds)
+  }
+
+  const syncCountdownPresentation = () => {
+    renderCountdown(activeCountdown.playerIds, activeCountdown.seconds)
+  }
+
   const syncPortalIdentity = (portal) => {
     if (!portal) return
     const nextId = portal.id == null ? null : String(portal.id)
     if (nextId === activePortalId) return
-    destroyCountdown(portal)
+    clearCountdownPresentation()
+    activeCountdown = { playerIds: [], seconds: null }
     activePortalId = nextId
     dwell = { enteredAt: null, seconds: null, complete: false }
     lastPublished = null
@@ -69,8 +131,9 @@ export function installCoopPortalRuntime(scene, {
 
   const clear = ({ publish = false } = {}) => {
     const portal = scene.portal
-    const wasActive = dwell.enteredAt != null || Boolean(portal?.countdownLabel)
-    destroyCountdown(portal)
+    const wasActive = dwell.enteredAt != null || activeCountdown.seconds != null || countdownLabels.size > 0 || Boolean(portal?.countdownLabel)
+    clearCountdownPresentation()
+    activeCountdown = { playerIds: [], seconds: null }
     dwell = { enteredAt: null, seconds: null, complete: false }
     transitionCommitted = false
     if (publish && wasActive) {
@@ -80,12 +143,14 @@ export function installCoopPortalRuntime(scene, {
         entityId: String(portal?.id ?? ''),
         active: false,
         seconds: null,
+        playerIds: [],
       })
     }
   }
 
-  const publishDwell = (portal, next) => {
-    const key = next.enteredAt == null ? 'inactive' : `${next.seconds}:${Boolean(next.complete)}`
+  const publishDwell = (portal, next, participants = []) => {
+    const ids = next.enteredAt != null && !next.complete ? playerIds(participants) : []
+    const key = next.enteredAt == null ? 'inactive' : `${next.seconds}:${Boolean(next.complete)}:${ids.join(',')}`
     if (key === lastPublished) return
     lastPublished = key
     publishFact({
@@ -94,6 +159,7 @@ export function installCoopPortalRuntime(scene, {
       active: next.enteredAt != null && !next.complete,
       seconds: next.complete ? null : next.seconds,
       complete: Boolean(next.complete),
+      playerIds: ids,
     })
   }
 
@@ -101,10 +167,14 @@ export function installCoopPortalRuntime(scene, {
     const portal = scene.portal
     if (!portal || scene.runComplete || Number(time) < Number(portal.unlockAt ?? 0)) {
       if (portal) clear({ publish: isAuthority() })
+      else clearCountdownPresentation()
       return null
     }
     syncPortalIdentity(portal)
-    if (!isAuthority()) return null
+    if (!isAuthority()) {
+      syncCountdownPresentation()
+      return null
+    }
 
     const allPlayers = [...(scene.players?.values?.() ?? [])]
     const living = livingPlayers(scene)
@@ -117,14 +187,14 @@ export function installCoopPortalRuntime(scene, {
     dwell = next
 
     if (!allInside) {
-      destroyCountdown(portal)
-      if (wasActive) publishDwell(portal, next)
+      setActiveCountdown([], null)
+      if (wasActive) publishDwell(portal, next, [])
       return null
     }
 
     if (next.complete) {
-      destroyCountdown(portal)
-      publishDwell(portal, next)
+      setActiveCountdown([], null)
+      publishDwell(portal, next, living)
       if (!transitionCommitted) {
         transitionCommitted = true
         scene.advanceFloor?.(localPlayer)
@@ -132,8 +202,9 @@ export function installCoopPortalRuntime(scene, {
       return null
     }
 
-    renderCountdown(scene, portal, next.seconds)
-    publishDwell(portal, next)
+    const participants = playerIds(living)
+    setActiveCountdown(participants, next.seconds)
+    publishDwell(portal, next, living)
     return next
   }
 
@@ -148,10 +219,10 @@ export function installCoopPortalRuntime(scene, {
     const portalId = String(portal.id ?? '')
     if (factId && portalId && factId !== portalId) return null
     if (!fact.active || !fact.seconds) {
-      destroyCountdown(portal)
+      setActiveCountdown([], null)
       return fact
     }
-    renderCountdown(scene, portal, Number(fact.seconds))
+    setActiveCountdown(Array.isArray(fact.playerIds) ? fact.playerIds : [], Number(fact.seconds))
     return fact
   }
 
