@@ -131,11 +131,13 @@ export function createDungeonNetworkRuntime({
   snapshotInterval = 50,
   onFact = () => {},
   onError = () => {},
+  now = () => globalThis.performance?.now?.() ?? Date.now(),
   setIntervalImpl = globalThis.setInterval,
   clearIntervalImpl = globalThis.clearInterval,
 } = {}) {
   if (!socket?.request || !socket?.subscribe) throw new TypeError('Dungeon socket is required')
   if (!scene?.localPlayer || !(scene.players instanceof Map)) throw new TypeError('Dungeon scene with players is required')
+  if (typeof now !== 'function') throw new TypeError('Dungeon network clock is required')
 
   const normalizedRoomId = String(roomId ?? '').trim().toUpperCase()
   const normalizedLocalId = String(localPlayerId ?? scene.localPlayer.id ?? '').trim()
@@ -155,7 +157,7 @@ export function createDungeonNetworkRuntime({
   const topic = `room:${normalizedRoomId}`
   const initialHost = normalizedLocalId === normalizedHostId
   let authorityState = createInitialAuthority(normalizedHostId)
-  const sessionRuntime = createDungeonSessionRuntime()
+  const sessionRuntime = createDungeonSessionRuntime({ now })
   const syncRuntime = createSessionSyncRuntime({ authority: initialHost })
   const replicationRuntime = createPlayerReplicationRuntime({
     scene,
@@ -182,7 +184,7 @@ export function createDungeonNetworkRuntime({
 
   const isAuthority = () => authorityState.authorityId === normalizedLocalId
   const lifecycleClock = () => {
-    const value = Number(scene.time?.now)
+    const value = Number(now())
     return Number.isFinite(value) ? value : 0
   }
 
@@ -208,13 +210,13 @@ export function createDungeonNetworkRuntime({
 
   function tickLifecycle() {
     const runtime = ensureLifecycleRuntime()
-    const now = lifecycleClock()
+    const current = lifecycleClock()
     if (lastLifecycleTickAt == null) {
-      lastLifecycleTickAt = now
+      lastLifecycleTickAt = current
       return runtime.snapshot()
     }
-    const elapsed = Math.max(0, now - lastLifecycleTickAt)
-    lastLifecycleTickAt = now
+    const elapsed = Math.max(0, current - lastLifecycleTickAt)
+    lastLifecycleTickAt = current
     if (elapsed > 0) runtime.tick(elapsed)
     return runtime.snapshot()
   }
@@ -355,10 +357,10 @@ export function createDungeonNetworkRuntime({
       if (player !== localPlayer || isAuthority()) return false
       const dropId = String(drop?.id ?? '').trim()
       if (!dropId) return true
-      const now = Number(scene.time?.now) || 0
+      const current = lifecycleClock()
       const retryAt = pickupIntentRetryAt.get(dropId) ?? -Infinity
-      if (now >= retryAt) {
-        pickupIntentRetryAt.set(dropId, now + 250)
+      if (current >= retryAt) {
+        pickupIntentRetryAt.set(dropId, current + 250)
         void sendCommand({ type: 'pickup', dropId })
       }
       return true
