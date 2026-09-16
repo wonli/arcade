@@ -20,6 +20,15 @@ function syncLocalPlayerPresentation(scene, player) {
   scene.emitStats?.()
 }
 
+function trustedRemoteSnapshot(playerId, snapshot) {
+  const id = String(playerId ?? '').trim()
+  if (!id || !snapshot || typeof snapshot !== 'object') return null
+  const trusted = { ...snapshot, id }
+  delete trusted.syncCheckpoint
+  delete trusted.syncWorld
+  return trusted
+}
+
 export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId = localPlayer?.id } = {}) {
   if (!scene || !(scene.players instanceof Map)) throw new TypeError('Dungeon scene with players is required')
   if (!localPlayer) throw new TypeError('Local player is required')
@@ -38,17 +47,32 @@ export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayer
   }
 
   function applyRemote(playerId, snapshot) {
-    const id = String(playerId ?? '').trim()
-    if (!id || id === normalizedLocalId || !snapshot || typeof snapshot !== 'object') return null
+    const trustedSnapshot = trustedRemoteSnapshot(playerId, snapshot)
+    if (!trustedSnapshot || trustedSnapshot.id === normalizedLocalId) return null
 
-    const trustedSnapshot = { ...snapshot, id }
-    delete trustedSnapshot.syncCheckpoint
-    delete trustedSnapshot.syncWorld
-
-    const existing = scene.players.get(id)
+    const existing = scene.players.get(trustedSnapshot.id)
     if (!existing) return spawnRemotePlayer(scene, trustedSnapshot)
 
     applyPlayerSnapshot(existing, trustedSnapshot)
+    syncRemotePlayerPresentation(scene, existing)
+    return existing
+  }
+
+  function applyRemotePresence(playerId, snapshot) {
+    const trustedSnapshot = trustedRemoteSnapshot(playerId, snapshot)
+    if (!trustedSnapshot || trustedSnapshot.id === normalizedLocalId) return null
+
+    const existing = scene.players.get(trustedSnapshot.id)
+    if (!existing) return null
+
+    const x = Number(trustedSnapshot.state?.x)
+    const y = Number(trustedSnapshot.state?.y)
+    if (Number.isFinite(x)) existing.state.x = x
+    if (Number.isFinite(y)) existing.state.y = y
+    if (trustedSnapshot.facing != null) existing.facing = trustedSnapshot.facing
+    if ('moving' in trustedSnapshot) existing.moving = Boolean(trustedSnapshot.moving)
+    if ('attacking' in trustedSnapshot) existing.attacking = Boolean(trustedSnapshot.attacking)
+
     syncRemotePlayerPresentation(scene, existing)
     return existing
   }
@@ -85,6 +109,7 @@ export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayer
     serializeLocal,
     serializePlayers,
     applyRemote,
+    applyRemotePresence,
     reconcileCheckpointPlayers,
     despawnAllRemotes,
   }
