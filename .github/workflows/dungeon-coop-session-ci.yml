@@ -35,6 +35,7 @@ jobs:
             src/lib/games/dungeon/coop-lifecycle.test.js
             src/lib/games/dungeon/remote-player-runtime.test.js
             src/lib/games/dungeon/player-command-runtime.test.js
+            src/lib/games/dungeon/chest-runtime.test.js
           )
           existing=()
           for test in "${tests[@]}"; do
