@@ -1,0 +1,37 @@
+name: Dungeon Foundation Contracts
+
+on:
+  push:
+    branches:
+      - refactor/dungeon-coop-foundation
+    paths:
+      - 'web/src/lib/games/dungeon/**'
+      - '.github/workflows/dungeon-foundation.yml'
+      - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
+      - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run focused Dungeon foundation contracts
+        working-directory: web
+        run: |
+          node --test \
+            src/lib/games/dungeon/network-foundation-contract.test.js \
+            src/lib/games/dungeon/network-session-authority.test.js \
+            src/lib/games/dungeon/network-reconnect-regression.test.js \
+            src/lib/games/dungeon/network-runtime.test.js
