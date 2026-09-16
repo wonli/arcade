@@ -52,14 +52,16 @@ function sceneFixture(localId) {
   return scene
 }
 
-function socketFixture() {
+function socketFixture({ sessionStates = [] } = {}) {
   const calls = []
   const listeners = new Map()
+  const states = [...sessionStates]
   return {
     calls,
     listeners,
     async request(action, params) {
       calls.push({ action, params })
+      if (action === 'session.state.get') return { state: states.length ? states.shift() : null }
       return { ok: true }
     },
     subscribe(topic, listener) {
@@ -99,6 +101,16 @@ function checkpoint({ authorityId = 'host', epoch = 1, sequence = 4, floor = 4, 
   })
 }
 
+function storedState(value = checkpoint()) {
+  return {
+    authorityId: value.authority.authorityId,
+    authorityEpoch: value.authority.epoch,
+    revision: value.authority.sequence,
+    schemaVersion: value.version,
+    payload: value,
+  }
+}
+
 test('room host initializes epoch-one authority but runtime exposes mutable authority state', () => {
   const runtime = createDungeonNetworkRuntime({
     socket: socketFixture(), scene: sceneFixture('host'), roomId: 'ABC123', localPlayerId: 'host', hostId: 'host',
@@ -124,11 +136,13 @@ test('authority facts carry epoch authority id and monotonically increasing sequ
   ])
 })
 
-test('fresh follower requests durable checkpoint instead of only world state', async () => {
-  const socket = socketFixture()
+test('fresh follower hydrates durable checkpoint from server session state', async () => {
+  const scene = sceneFixture('guest')
+  const canonical = checkpoint({ floor: 7, sequence: 6 })
+  const socket = socketFixture({ sessionStates: [storedState(canonical)] })
   const runtime = createDungeonNetworkRuntime({
     socket,
-    scene: sceneFixture('guest'),
+    scene,
     roomId: 'ABC123',
     localPlayerId: 'guest',
     hostId: 'host',
@@ -138,43 +152,40 @@ test('fresh follower requests durable checkpoint instead of only world state', a
 
   runtime.start()
   await nextTurn()
+  await nextTurn()
 
-  const bootstrap = socket.calls.find((call) => call.action === 'dungeon.snapshot')?.params.snapshot
-  assert.equal(bootstrap?.syncCheckpoint, true)
-  assert.equal('syncWorld' in bootstrap, false)
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
+  assert.equal(runtime.checkpoint()?.world?.floor, 7)
+  assert.equal(scene.floor, 7)
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.syncCheckpoint === true), false)
   runtime.stop()
 })
 
-test('current authority answers checkpoint sync request with session checkpoint', async () => {
-  const socket = socketFixture()
+test('fresh authority persists initial checkpoint to server session state', async () => {
+  const scene = sceneFixture('host')
+  const socket = socketFixture({ sessionStates: [null] })
   const runtime = createDungeonNetworkRuntime({
     socket,
-    scene: sceneFixture('host'),
+    scene,
     roomId: 'ABC123',
     localPlayerId: 'host',
     hostId: 'host',
     setIntervalImpl: () => 7,
     clearIntervalImpl: () => {},
   })
+
   runtime.start()
   await nextTurn()
-  socket.calls.length = 0
-
-  runtime.handleMessage(roomMessage({
-    type: 'dungeon.snapshot',
-    playerId: 'guest',
-    snapshot: { id: 'guest', state: state(200), syncCheckpoint: true },
-  }))
-  await nextTurn()
   await nextTurn()
 
+  const put = socket.calls.find((call) => call.action === 'session.state.put')
   const fact = socket.calls
     .filter((call) => call.action === 'dungeon.fact')
     .map((call) => call.params.fact)
     .find((candidate) => candidate?.type === 'session.checkpoint')
-  assert.equal(fact?.type, 'session.checkpoint')
+  assert.equal(put?.params?.payload?.world?.floor, 4)
   assert.equal(fact?.checkpoint?.world?.floor, 4)
-  assert.equal(fact?.checkpoint?.players?.guest?.state?.x, 200)
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.syncCheckpoint === true), false)
   runtime.stop()
 })
 
@@ -305,9 +316,9 @@ test('live follower takeover rebinds world runtime as authority', async () => {
   runtime.stop()
 })
 
-test('live former host rebinds world runtime as follower after newer checkpoint', () => {
+test('live former host rebinds world runtime as follower after newer checkpoint', async () => {
   const runtime = createDungeonNetworkRuntime({
-    socket: socketFixture(),
+    socket: socketFixture({ sessionStates: [null] }),
     scene: sceneFixture('host'),
     roomId: 'ABC123',
     localPlayerId: 'host',
@@ -316,6 +327,8 @@ test('live former host rebinds world runtime as follower after newer checkpoint'
     clearIntervalImpl: () => {},
   })
   runtime.start()
+  await nextTurn()
+  await nextTurn()
   assert.equal(runtime.world()?.isHost, true)
 
   runtime.handleMessage(roomMessage({
@@ -329,8 +342,8 @@ test('live former host rebinds world runtime as follower after newer checkpoint'
   runtime.stop()
 })
 
-test('follower chest interaction is delegated as an open_chest command', async () => {
-  const socket = socketFixture()
+test('follower chest interaction is delegated as an open_chest command after server hydration', async () => {
+  const socket = socketFixture({ sessionStates: [storedState(checkpoint())] })
   const scene = sceneFixture('guest')
   let chestIntent = null
   scene.__dungeonSpatial = {
@@ -343,6 +356,8 @@ test('follower chest interaction is delegated as an open_chest command', async (
     clearIntervalImpl: () => {},
   })
   runtime.start()
+  await nextTurn()
+  await nextTurn()
   socket.calls.length = 0
 
   const delegated = chestIntent?.(scene.localPlayer, { id: 'floor-4:chest-0' })
@@ -355,7 +370,7 @@ test('follower chest interaction is delegated as an open_chest command', async (
 })
 
 test('authority death and three-second revive are checkpointed by the network lifecycle owner', async () => {
-  const socket = socketFixture()
+  const socket = socketFixture({ sessionStates: [null] })
   const scene = sceneFixture('host')
   let gameOvers = 0
   let intervalCallback = null
@@ -373,6 +388,8 @@ test('authority death and three-second revive are checkpointed by the network li
     clearIntervalImpl: () => {},
   })
   runtime.start()
+  await nextTurn()
+  await nextTurn()
   socket.calls.length = 0
 
   scene.hitPlayer(999, scene.localPlayer)
