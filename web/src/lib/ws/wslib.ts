@@ -212,8 +212,12 @@ class Ws {
         });
       }
 
-      // 如果既没有单个回调也没有多个回调，抛出错误
+      // room pub/sub 消息可能在页面 teardown 取消监听后晚到一个包。
+      // 这是正常的订阅竞态，不应该让全局 websocket onmessage 抛错。
       if (!handler && (!multiHandlers || multiHandlers.length === 0)) {
+        if (receive.action?.startsWith('room:')) {
+          return;
+        }
         throw new Error('未定义消息回调函数(' + receive.action + ')');
       }
     };
@@ -321,7 +325,6 @@ class Ws {
           return
         }
 
-        //保存还未连接成功时的请求保存到队列
         this.queueMap[a] = true
         this.config.queue.unshift(standMsg)
       } else {
