@@ -17,6 +17,7 @@ const ENEMY_STATE_FIELDS = [
   'phaseThreshold', 'chargeCooldown', 'shockwaveCooldown', 'nextChargeAt', 'nextShockwaveAt',
   'chargingUntil', 'chargeVx', 'chargeVy', 'attackRange', 'preferredRange', 'projectileDamage',
   'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'contactDamage', 'tint', 'scale', 'barOffset',
+  'nextSpecialAt', 'dashUntil', 'specialLockedUntil', 'pendingSpecial',
 ]
 
 function normalizeFloor(floor) {
@@ -51,7 +52,7 @@ function serializeEnemyState(enemy) {
   const result = { id: String(enemy?.id ?? '') }
   for (const field of ENEMY_STATE_FIELDS) {
     const value = enemy?.[field]
-    if (value !== undefined) result[field] = value
+    if (value !== undefined) result[field] = field === 'pendingSpecial' ? structuredClone(value) : value
   }
   return result
 }
@@ -298,7 +299,9 @@ export function createDungeonWorldRuntime(scene, {
     const previous = { archetype: enemy.archetype, boss: Boolean(enemy.boss), elite: Boolean(enemy.elite) }
     enemy.id = id
     for (const field of ENEMY_STATE_FIELDS) {
-      if (snapshot?.[field] !== undefined) enemy[field] = snapshot[field]
+      if (snapshot?.[field] !== undefined) {
+        enemy[field] = field === 'pendingSpecial' ? structuredClone(snapshot[field]) : snapshot[field]
+      }
     }
     enemyPresentation?.reconcile(enemy, previous)
     return enemy
