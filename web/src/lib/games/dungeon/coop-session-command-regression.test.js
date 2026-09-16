@@ -149,7 +149,7 @@ test('open_chest binds spatial authority even when LootRuntime already exists', 
   assert.deepEqual(opened, { player: guest, chestId: 'floor-1:chest-0' })
 })
 
-test('refreshing host accepts follower-carried canonical checkpoint before keeping fresh floor one', () => {
+test('refreshing host recovers canonical checkpoint from a surviving peer before keeping fresh floor one', async () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
   const runtime = createDungeonNetworkRuntime({
@@ -163,7 +163,10 @@ test('refreshing host accepts follower-carried canonical checkpoint before keepi
   })
 
   runtime.start()
+  runtime.updatePeers([{ id: 'host' }, { id: 'guest' }])
+  await Promise.resolve()
   assert.equal(scene.floor, 1)
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.recoverCheckpoint === true), true)
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
