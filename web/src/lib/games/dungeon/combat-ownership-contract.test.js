@@ -22,17 +22,15 @@ test('world runtime installs combat authority without wrapping Scene damageEnemy
   assert.match(code, /onDamageApplied:\s*publishDamageFact/)
 })
 
-test('attack runtime keeps only thin Scene compatibility delegates for damage and procs', () => {
+test('attack runtime registers combat owners while stable Scene delegates live in CombatRuntime', () => {
   const code = source('attack-runtime.js')
 
+  assert.match(code, /installDungeonCombatSceneBridge\(scene\)/)
   assert.match(code, /combat\.setDamageResolver\(/)
   assert.match(code, /combat\.setProcOwner\(/)
-  assert.match(code, /const damageDelegate = \(\.\.\.args\) => combat\.damageEnemy\(\.\.\.args\)/)
-  assert.match(code, /const procDelegate = \(\.\.\.args\) => combat\.applyWeaponProcs\(\.\.\.args\)/)
-  assert.match(code, /scene\.damageEnemy = damageDelegate/)
-  assert.match(code, /scene\.applyWeaponProcs = procDelegate/)
-  assert.doesNotMatch(code, /scene\.damageEnemy = function/)
-  assert.doesNotMatch(code, /scene\.applyWeaponProcs = function/)
+  assert.doesNotMatch(code, /scene\.autoAttack\s*=/)
+  assert.doesNotMatch(code, /scene\.damageEnemy\s*=/)
+  assert.doesNotMatch(code, /scene\.applyWeaponProcs\s*=/)
 })
 
 test('attack compatibility bridge preserves weapon damage projection without replacing damageEnemy', () => {
@@ -41,4 +39,5 @@ test('attack compatibility bridge preserves weapon damage projection without rep
   assert.match(code, /attacker\.state\.damage = combat\.weaponDamageStat\(attacker, previousDamage\)/)
   assert.match(code, /combat\.beginWeaponAttack\(target, attacker\)/)
   assert.match(code, /finally \{\s*attacker\.state\.damage = previousDamage\s*\}/)
+  assert.doesNotMatch(code, /scene\.damageEnemy\s*=/)
 })
