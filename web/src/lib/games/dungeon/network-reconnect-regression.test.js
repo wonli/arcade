@@ -253,7 +253,8 @@ test('host portal countdown uses both live player positions and restarts from th
     snapshot: { id: 'guest', state: state(220, 100) },
   }))
   scene.updatePortal(1000)
-  assert.equal(scene.portal.countdownLabel, null)
+  assert.equal(scene.localPlayer.portalCountdownLabel ?? null, null)
+  assert.equal(scene.players.get('guest')?.portalCountdownLabel ?? null, null)
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
@@ -261,7 +262,8 @@ test('host portal countdown uses both live player positions and restarts from th
     snapshot: { id: 'guest', state: state(104, 100) },
   }))
   scene.updatePortal(1100)
-  assert.equal(scene.portal.countdownLabel?.text, '3')
+  assert.equal(scene.localPlayer.portalCountdownLabel?.text, '3')
+  assert.equal(scene.players.get('guest')?.portalCountdownLabel?.text, '3')
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
@@ -269,7 +271,8 @@ test('host portal countdown uses both live player positions and restarts from th
     snapshot: { id: 'guest', state: state(220, 100) },
   }))
   scene.updatePortal(1800)
-  assert.equal(scene.portal.countdownLabel, null)
+  assert.equal(scene.localPlayer.portalCountdownLabel ?? null, null)
+  assert.equal(scene.players.get('guest')?.portalCountdownLabel ?? null, null)
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.snapshot',
@@ -277,6 +280,7 @@ test('host portal countdown uses both live player positions and restarts from th
     snapshot: { id: 'guest', state: state(104, 100) },
   }))
   scene.updatePortal(1900)
-  assert.equal(scene.portal.countdownLabel?.text, '3')
+  assert.equal(scene.localPlayer.portalCountdownLabel?.text, '3')
+  assert.equal(scene.players.get('guest')?.portalCountdownLabel?.text, '3')
   runtime.stop()
 })
