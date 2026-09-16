@@ -228,6 +228,7 @@ export function createDungeonNetworkRuntime({
       publishFact: sendFact,
       sendCommand,
       onError: reportError,
+      now,
     })
   }
 
