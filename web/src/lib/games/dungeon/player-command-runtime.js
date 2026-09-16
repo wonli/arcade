@@ -30,7 +30,7 @@ function commandTime(scene, command) {
 function validateCommand(scene, command) {
   if (!command || typeof command !== 'object') return { error: 'command-required' }
   const type = String(command.type ?? '')
-  if (!['attack', 'skill', 'pickup'].includes(type)) return { error: 'unsupported-command' }
+  if (!['attack', 'skill', 'pickup', 'open_chest'].includes(type)) return { error: 'unsupported-command' }
 
   const resolved = resolvePlayer(scene, command)
   if (resolved.error) return resolved
@@ -43,9 +43,15 @@ function validateCommand(scene, command) {
     return { ...resolved, type, skillId }
   }
 
-  const dropId = String(command.dropId ?? '')
-  if (!dropId) return { error: 'drop-required' }
-  return { ...resolved, type, dropId }
+  if (type === 'pickup') {
+    const dropId = String(command.dropId ?? '')
+    if (!dropId) return { error: 'drop-required' }
+    return { ...resolved, type, dropId }
+  }
+
+  const chestId = String(command.chestId ?? '')
+  if (!chestId) return { error: 'chest-required' }
+  return { ...resolved, type, chestId }
 }
 
 export function executePlayerCommand(scene, command, { authoritative = true } = {}) {
@@ -91,6 +97,22 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
       playerId,
       result: value,
       ...(value?.cast ? {} : { reason: 'skill-not-cast' }),
+    })
+  }
+
+  if (type === 'open_chest') {
+    const openChest = scene.__dungeonSpatial?.openChestById
+    if (typeof openChest !== 'function') {
+      return result(command, { accepted: true, playerId, reason: 'chest-unavailable' })
+    }
+    const value = openChest(player, validated.chestId)
+    const applied = value === true || Boolean(value?.opened)
+    return result(command, {
+      accepted: true,
+      applied,
+      playerId,
+      result: value,
+      ...(applied ? {} : { reason: value?.reason ?? 'chest-rejected' }),
     })
   }
 
