@@ -111,18 +111,48 @@ test('spawn observer receives the durable drop after owner mutation', () => {
   assert.equal(observed[0].exact, false)
 })
 
-test('spawnExact bypasses preparation while preserving authority and stable identity hooks', () => {
+test('spawn policy transforms normal spawn before the presentation owner', () => {
   const { scene } = sceneFixture()
   const loot = ensureDungeonLootRuntime(scene)
+  const observed = []
+
+  loot.setSpawnPolicy((request) => ({
+    ...request,
+    item: { ...request.item, rarity: 'epic', promoted: true },
+  }))
+  loot.setSpawnOwner((request, core) => {
+    observed.push(request)
+    return core(request)
+  })
+
+  const drop = loot.spawn(10, 20, { type: 'weapon.test', rarity: 'common' })
+
+  assert.equal(drop.item.rarity, 'epic')
+  assert.equal(drop.item.promoted, true)
+  assert.equal(observed[0].item.rarity, 'epic')
+})
+
+test('spawnExact bypasses spawn policy while preserving presentation and authority hooks', () => {
+  const { scene } = sceneFixture()
+  const loot = ensureDungeonLootRuntime(scene)
+  let policyCalls = 0
   const modes = []
+
+  loot.setSpawnPolicy((request) => {
+    policyCalls++
+    return { ...request, item: { ...request.item, rarity: 'epic' } }
+  })
   loot.setSpawnOwner((request, core) => {
     modes.push(request.prepare)
     return core(request)
   })
 
-  loot.spawn(1, 2, { type: 'weapon.a' })
-  loot.spawnExact(3, 4, { type: 'weapon.b' })
+  const normal = loot.spawn(1, 2, { type: 'weapon.a', rarity: 'common' })
+  const exact = loot.spawnExact(3, 4, { type: 'weapon.b', rarity: 'rare' })
 
+  assert.equal(policyCalls, 1)
+  assert.equal(normal.item.rarity, 'epic')
+  assert.equal(exact.item.rarity, 'rare')
   assert.deepEqual(modes, [true, false])
   assert.equal(scene.drops.length, 2)
 })
