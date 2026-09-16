@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/wonli/aqi/ws"
+	"github.com/wonli/arcade/game"
 )
 
 func (a *Actions) RegisterDungeon(router ws.IRouter) {
@@ -80,8 +81,8 @@ func (a *Actions) dungeonCommand(c *ws.Context) {
 	c.Send(ws.H{"ok": true})
 }
 
-func (a *Actions) dungeonFactRelayAllowed(roomID, playerID string) bool {
-	_, member := a.service.DungeonPeer(dungeonRoomID(roomID), strings.TrimSpace(playerID))
+func (a *Actions) dungeonFactRelayAllowed(roomID string, playerID game.PlayerID) bool {
+	_, member := a.service.DungeonPeer(dungeonRoomID(roomID), playerID)
 	return member
 }
 
