@@ -34,14 +34,24 @@ function sceneFixture(archetype = 'katana') {
       const combat = this.dungeon?.combat
       const damage = combat?.weaponDamageStat?.(player, player.state.damage) ?? player.state.damage
       combat?.beginWeaponAttack?.(target, player)
-      return combat?.damageEnemy?.(
+      if (combat?.damageEnemy) {
+        return combat.damageEnemy(
+          target,
+          damage,
+          false,
+          22,
+          { direct: true, canProc: true, source: 'weapon' },
+          player,
+        )
+      }
+      return this.damageEnemy(
         target,
         damage,
         false,
         22,
         { direct: true, canProc: true, source: 'weapon' },
         player,
-      ) ?? this.damageEnemy(target, damage, false, 22, { direct: true, canProc: true, source: 'weapon' }, player)
+      )
     },
     autoAttack() {},
     trySkill() {},
