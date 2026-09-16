@@ -3,8 +3,7 @@ name: Dungeon Foundation Contracts
 on:
   push:
     branches:
-      - refactor/dungeon-coop-foundation
-      - fix/dungeon-coop-hydration-presentation
+      - main
     paths:
       - 'arcade/**'
       - 'server/**'
