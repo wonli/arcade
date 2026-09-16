@@ -99,11 +99,11 @@ export function ensureDungeonLootRuntime(scene) {
       }
     },
 
-    step(player = scene.localPlayer) {
+    step(player = scene.localPlayer, context = {}) {
       stepPlayers.push(player)
       try {
         return slots.stepOwner
-          ? slots.stepOwner(player, coreStep)
+          ? slots.stepOwner(player, coreStep, context)
           : coreStep(player)
       } finally {
         stepPlayers.pop()
