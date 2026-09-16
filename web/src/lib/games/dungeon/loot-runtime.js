@@ -82,7 +82,10 @@ export function ensureDungeonLootRuntime(scene) {
       const normalized = String(id ?? '').trim()
       if (!normalized) return null
       const drop = (scene.drops ?? []).find((candidate) => String(candidate?.id ?? '') === normalized) ?? null
-      return drop ? api.remove(drop, context) : null
+      if (!drop) return null
+      const value = api.remove(drop, context)
+      if (value != null) scene.drops = (scene.drops ?? []).filter((candidate) => candidate !== drop)
+      return value
     },
 
     clear() {
