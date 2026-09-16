@@ -1,9 +1,14 @@
-import { attachLegacyTestPlayer } from './test/player-fixture.js'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+
 import { installDungeonBacktracking, safeRestorePosition } from './backtrack-runtime.js'
 import { prepareDropItem } from './pickup-runtime.js'
+import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 import { circleHitsSolid } from './spatial.js'
+import { attachLegacyTestPlayer } from './test/player-fixture.js'
+
+const backtrackSource = await readFile(new URL('./backtrack-runtime.js', import.meta.url), 'utf8')
 
 function visual() {
   return {
@@ -77,6 +82,35 @@ function makeScene() {
   }
   return { scene, getInternalFloor: () => internalFloor, update: () => updateHandler?.() }
 }
+
+test('backtracking composes with the stable portal bridge instead of replacing Scene updatePortal', () => {
+  const { scene } = makeScene()
+  attachLegacyTestPlayer(scene)
+  installDungeonPortalSceneBridge(scene)
+  const updatePortal = scene.updatePortal
+
+  installDungeonBacktracking(scene)
+
+  assert.equal(scene.updatePortal, updatePortal)
+  assert.doesNotMatch(backtrackSource, /scene\.updatePortal\s*=/)
+})
+
+test('backtracking forward dwell policy defers to an explicit portal update owner', () => {
+  const { scene } = makeScene()
+  installDungeonBacktracking(attachLegacyTestPlayer(scene))
+  const portal = ensureDungeonPortalRuntime(scene)
+  let ownerCalls = 0
+  portal.setUpdateOwner(() => {
+    ownerCalls++
+    return 'owned'
+  })
+
+  const result = scene.updatePortal(1000, scene.localPlayer)
+
+  assert.equal(result, 'owned')
+  assert.equal(ownerCalls, 1)
+  assert.equal(scene.portal.countdownLabel ?? null, null)
+})
 
 test('retreat restores previous cleared floor and its dropped equipment', () => {
   const { scene, getInternalFloor } = makeScene()
