@@ -54,6 +54,7 @@ jobs:
             src/lib/games/dungeon/world-runtime.test.js \
             src/lib/games/dungeon/player-intent-runtime.test.js \
             src/lib/games/dungeon/player-command-runtime.test.js \
+            src/lib/games/dungeon/player-command-clock.test.js \
             src/lib/games/dungeon/player-replication-runtime.test.js \
             src/lib/games/dungeon/coop-network-intent-wiring.test.js \
             src/lib/games/dungeon/network-foundation-contract.test.js \
