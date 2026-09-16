@@ -160,6 +160,7 @@
       },
     })
     networkRuntime.start()
+    networkRuntime.updatePeers(room?.players ?? [])
   }
 
   function subscribeRoomState() {
@@ -171,6 +172,7 @@
       if (!payload || payload.type) return
       room = payload
       ensureNetwork()
+      networkRuntime?.updatePeers(room?.players ?? [])
     })
   }
 
