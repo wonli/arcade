@@ -399,9 +399,12 @@ export function createDungeonNetworkRuntime({
         const checkpoint = storedCheckpoint(state)
         if (!checkpoint) throw new Error('Invalid Dungeon session state from server')
         const current = sessionRuntime.snapshot()
-        if (!current || sessionRuntime.applyCheckpoint(checkpoint)) {
+        const applied = sessionRuntime.applyCheckpoint(checkpoint)
+        if (applied) {
           authorityState = { ...checkpoint.authority }
           applyCheckpointPresentation(sessionRuntime.snapshot())
+        } else if (!current) {
+          throw new Error('Dungeon session checkpoint was rejected during initial hydration')
         } else {
           const currentAuthority = current.authority
           const candidateAuthority = checkpoint.authority
