@@ -15,7 +15,7 @@ export function serializePlayerSnapshot(player) {
   if (!player || typeof player !== 'object') throw new TypeError('Player is required')
   if (player.id == null || String(player.id).trim() === '') throw new TypeError('Player id is required')
 
-  return {
+  const snapshot = {
     id: String(player.id),
     state: clone(player.state),
     facing: player.facing ?? 'down',
@@ -26,6 +26,8 @@ export function serializePlayerSnapshot(player) {
     lastContactAt: Number(player.lastContactAt) || 0,
     skillCooldowns: numericCooldowns(player.runtime?.skills?.cooldowns),
   }
+  if (Number.isInteger(player.slot)) snapshot.slot = player.slot
+  return snapshot
 }
 
 export function applyPlayerSnapshot(player, snapshot) {
@@ -37,6 +39,7 @@ export function applyPlayerSnapshot(player, snapshot) {
     throw new Error(`Player snapshot id ${snapshotId || '<missing>'} does not match ${player.id}`)
   }
 
+  player.slot = Number.isInteger(snapshot.slot) ? snapshot.slot : player.slot ?? null
   player.state = clone(snapshot.state)
   player.facing = snapshot.facing ?? player.facing ?? 'down'
   player.moving = Boolean(snapshot.moving)

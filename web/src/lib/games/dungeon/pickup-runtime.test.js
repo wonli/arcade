@@ -102,6 +102,36 @@ test('auto potion consumes one stored potion at thirty percent health', () => {
   assert.equal(runtime.autoUseHealthPotion(), false)
 })
 
+test('nearby weapon comparison republishes when the same stable drop id is reconciled with new data', () => {
+  const scene = attachLegacyTestPlayer(runtimeScene())
+  const selections = []
+  installPickupInteraction(scene, { onSelection(next) { selections.push(next) } })
+  scene.drops = [{
+    id: 'drop:ABC123:1:0',
+    x: 0,
+    y: 0,
+    item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 20, affixes: [] },
+    visual: null,
+  }]
+
+  scene.updateDrops(scene.localPlayer)
+  scene.updateDrops(scene.localPlayer)
+  assert.equal(selections.length, 1)
+  assert.equal(selections[0]?.candidate?.damage, 20)
+
+  scene.drops = [{
+    id: 'drop:ABC123:1:0',
+    x: 0,
+    y: 0,
+    item: { type: 'weapon.dungeon_blade', rarity: 'epic', damage: 44, affixes: [{ id: 'power', value: 0.2 }] },
+    visual: null,
+  }]
+  scene.updateDrops(scene.localPlayer)
+
+  assert.equal(selections.length, 2)
+  assert.equal(selections[1]?.candidate?.damage, 44)
+})
+
 test('ground weapon uses the same rarity and archetype texture as equipped weapon', () => {
   const scene = runtimeScene()
   let oldVisual = null

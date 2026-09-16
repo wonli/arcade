@@ -1,9 +1,9 @@
 import { activeTrapAt } from './dungeon3-hazards.js'
 import { queueDungeon3Textures, renderDungeon3Terrain } from './dungeon3-renderer.js'
 import { placePlayerAtRoomSpawn, safeEnemySpawn } from './room-anchors.js'
-import { rollAffixes } from './affixes.js'
+import { chestEntityId, createDungeonChestRuntime } from './chest-runtime.js'
 import { chooseEnvironmentAssets } from './environment-assets.js'
-import { chestRewardProfile, nearestInteractable } from './interactables.js'
+import { nearestInteractable } from './interactables.js'
 import { buildNavGrid, findPath, nextWaypoint } from './pathfinding.js'
 import { circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry } from './spatial.js'
 
@@ -11,13 +11,6 @@ const PLAYER_RADIUS = 18
 const ENEMY_RADIUS = 15
 const PATH_REFRESH_MS = 520
 const CHEST_RANGE = 48
-
-const RARITY_DAMAGE = {
-  common: [2, 3],
-  uncommon: [4, 5],
-  rare: [6, 8],
-  epic: [9, 12],
-}
 
 function normalizedAssets(manifest = {}) {
   return Array.isArray(manifest.assets) ? manifest.assets : []
@@ -83,18 +76,6 @@ export function spatialSurfaceTint(kind) {
   if (kind === 'floor' || kind === 'water' || kind === 'bridge' || kind === 'stairs' || kind === 'door' || kind === 'statue' || kind === 'coffin' || kind === 'object' || kind === 'plate' || kind === 'plate-trap' || kind === 'spikes' || kind === 'arches') return null
   if (kind === 'boundary' || kind === 'wall') return 0x667488
   return 0xaeb5bd
-}
-
-function clamp01(value) { return Math.max(0, Math.min(0.999999, value)) }
-function rollRange([min, max], random) { return min + Math.floor(clamp01(random()) * (max - min + 1)) }
-
-function rollChestWeapon(profile, floor, random) {
-  const roll = clamp01(random())
-  let rarity = 'common'
-  if (roll < profile.epicChance) rarity = 'epic'
-  else if (roll < profile.epicChance + profile.rareChance) rarity = 'rare'
-  else if (roll < profile.epicChance + profile.rareChance + profile.uncommonChance) rarity = 'uncommon'
-  return { type: 'weapon.dungeon_blade', rarity, damage: rollRange(RARITY_DAMAGE[rarity], random), affixes: rollAffixes(floor, rarity, random) }
 }
 
 function track(scene, object) { return scene.trackArena?.(object) ?? object }
@@ -326,10 +307,12 @@ function renderFloor(scene, geometry) {
   if (geometry.grid) renderDungeon3Terrain(scene, geometry)
   else if (floorTexture) renderAuthoredFloorSkin(scene, geometry, floorTexture, spatialTextureFrame('floor', frames), floorSkin)
   else {
-    for (let y = tile; y < geometry.height - tile; y += tile) for (let x = tile; x < geometry.width - tile; x += tile) {
-      const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
-      background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
-      background.lineStyle(1, 0x3a312a, 0.55).strokeRect(x, y, tile, tile)
+    for (let y = tile; y < geometry.height - tile; y += tile) {
+      for (let x = tile; x < geometry.width - tile; x += tile) {
+        const shade = ((x / tile + y / tile) % 2 === 0) ? 0x2a241f : 0x25201c
+        background.fillStyle(shade, 1).fillRect(x, y, tile, tile)
+        background.lineStyle(1, 0x3a312a, 0.55).strokeRect(x, y, tile, tile)
+      }
     }
   }
 
@@ -378,7 +361,7 @@ function renderFloor(scene, geometry) {
   }
 }
 
-function renderChest(scene, anchor, index) {
+function renderChest(scene, anchor, index, floor) {
   const x = anchor.x, y = anchor.y
   const available = textureAvailability(scene)
   const frames = scene.__dungeonEnvironmentFrames ?? {}
@@ -393,7 +376,7 @@ function renderChest(scene, anchor, index) {
     lock = track(scene, scene.add.rectangle(x, y + 2, 7, 10, 0xffd86b, 1).setDepth(14))
   }
   scene.tweens.add({ targets: glow, alpha: 0.14, scale: 1.15, duration: 900, yoyo: true, repeat: -1 })
-  return { id: `chest-${index}`, x, y, opened: false, visuals: { shadow, sprite, base, lid, lock, glow }, prompt: null }
+  return { id: chestEntityId(floor, index), x, y, opened: false, visuals: { shadow, sprite, base, lid, lock, glow }, prompt: null }
 }
 
 function openChestVisual(scene, chest) {
@@ -480,6 +463,15 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
   const originalUpdateRangedEnemy = scene.updateRangedEnemy.bind(scene)
   const originalUpdateEnemyProjectiles = scene.updateEnemyProjectiles.bind(scene)
   const originalUpdateBoss = scene.updateBoss.bind(scene)
+  const chestRuntime = createDungeonChestRuntime(scene, {
+    getChests: () => chests,
+    getProgress,
+    onEvent,
+    random,
+    openVisual: openChestVisual,
+    hidePrompt: hideChestPrompt,
+    range: CHEST_RANGE,
+  })
 
   const refreshRoom = ({ geometry: fixedGeometry = null } = {}) => {
     const progress = getProgress() ?? {}
@@ -499,8 +491,9 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     }
     scene.__navGrid = scene.__navGrids.ground
     scene.spawnPoints = geometry.spawnPoints.map((entry) => [entry.x, entry.y])
-    if (progress.roomRole !== 'rest') chests = geometry.chests.slice(0, 1).map((anchor, index) => renderChest(scene, anchor, index))
+    if (progress.roomRole !== 'rest') chests = geometry.chests.slice(0, 1).map((anchor, index) => renderChest(scene, anchor, index, floor))
     scene.__roomChests = chests
+    chestRuntime.applyOpenedChestIds(scene.__dungeonOpenedChestIds ?? [])
     for (const enemy of scene.enemies ?? []) {
       enemy.hitRadius = enemy.boss ? 26 : ENEMY_RADIUS
       const collisionGeometry = collisionGeometryForEnemy(enemy, geometry)
@@ -620,18 +613,7 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
   }
   scene.events.on('update', updateInteraction)
 
-  const openNearestChest = () => {
-    const chest = nearestInteractable(player.state, chests, CHEST_RANGE)
-    if (!chest || chest.opened) return
-    openChestVisual(scene, chest); hideChestPrompt(chest)
-    const progress = getProgress() ?? {}
-    const profile = chestRewardProfile(progress.roomRole ?? 'combat', progress.chapter ?? 1, Boolean(progress.fortuneActive))
-    const floor = progress.floor ?? scene.floor ?? 1
-    onEvent({ type: 'chestopen', floor, chapter: progress.chapter ?? 1, roomRole: progress.roomRole ?? 'combat' })
-    scene.time.delayedCall(90, () => {
-      for (let index = 0; index < profile.dropCount; index++) scene.spawnDrop(chest.x + (index - (profile.dropCount - 1) / 2) * 28, chest.y + 18, rollChestWeapon(profile, floor, random))
-    })
-  }
+  const openNearestChest = () => chestRuntime.openNearest(player)
   chestKey.on('down', openNearestChest)
   refreshRoom()
 
@@ -639,6 +621,7 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     chestKey.off('down', openNearestChest)
     scene.events.off('update', updateInteraction)
     for (const chest of chests) hideChestPrompt(chest)
+    chestRuntime.restore()
     scene.drawArena = originalDrawArena
     scene.updatePlayer = originalUpdatePlayer
     scene.updateRangedEnemy = originalUpdateRangedEnemy
@@ -646,7 +629,16 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     scene.updateBoss = originalUpdateBoss
   })
 
-  const api = { refreshRoom, getGeometry: () => scene.__roomGeometry, getChests: () => [...chests] }
+  const api = {
+    refreshRoom,
+    getGeometry: () => scene.__roomGeometry,
+    getChests: () => [...chests],
+    openChestById: (target, chestId) => chestRuntime.openById(target, chestId),
+    applyOpenedChestIds: (ids) => chestRuntime.applyOpenedChestIds(ids),
+    openedChestIds: () => chestRuntime.openedChestIds(),
+    setChestIntentHandler: (handler = null) => chestRuntime.setIntentHandler(handler),
+    setChestOpenedHandler: (handler = null) => chestRuntime.setOpenedHandler(handler),
+  }
   scene.__dungeonSpatial = api
   loadEnvironmentTextures(scene).then((loaded) => { if (loaded && scene.__roomGeometry) refreshRoom({ geometry: scene.__roomGeometry }) })
   return api

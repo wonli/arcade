@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { advanceProgress, createChapterPlan, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
+import { advanceProgress, createChapterPlan, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt, setProgressionRunSeed } from './progression.js'
 
 function sequenceRandom(values) {
   let index = 0
@@ -25,6 +25,39 @@ test('chapter plans contain at most one rest floor and keep it away from the edg
       assert.notEqual(rest[0], 0)
       assert.notEqual(rest[0], plan.length - 2)
     }
+  }
+})
+
+test('pinned run seed makes chapter roles independent from each client random stream', () => {
+  try {
+    setProgressionRunSeed('ABC123')
+    const hostChapterOne = createChapterPlan(1, sequenceRandom([0.01, 0.02, 0.03]))
+    const hostChapterTwo = createChapterPlan(2, sequenceRandom([0.04, 0.05, 0.06]))
+
+    const guestChapterOne = createChapterPlan(1, sequenceRandom([0.99, 0.98, 0.97]))
+    const guestChapterTwo = createChapterPlan(2, sequenceRandom([0.96, 0.95, 0.94]))
+
+    assert.deepEqual(guestChapterOne, hostChapterOne)
+    assert.deepEqual(guestChapterTwo, hostChapterTwo)
+  } finally {
+    setProgressionRunSeed(null)
+  }
+})
+
+test('pinned run seed reconstructs the same current floor after refresh', () => {
+  function reachFloor(targetFloor, random) {
+    let progress = createRunProgress(random)
+    while (progress.floor < targetFloor) progress = advanceProgress(progress, random)
+    return progress
+  }
+
+  try {
+    setProgressionRunSeed('ROOM42')
+    const host = reachFloor(17, sequenceRandom([0.02, 0.41, 0.63, 0.81]))
+    const refreshedGuest = reachFloor(17, sequenceRandom([0.97, 0.73, 0.33, 0.11]))
+    assert.deepEqual(refreshedGuest, host)
+  } finally {
+    setProgressionRunSeed(null)
   }
 })
 

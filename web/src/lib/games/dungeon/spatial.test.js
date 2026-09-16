@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { ROOM_TEMPLATES, circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry, terrainAt } from './spatial.js'
+import { ROOM_TEMPLATES, circleHitsSolid, clipSegmentToSolids, movementWithCollision, roomGeometry, setProceduralRunSeed, terrainAt } from './spatial.js'
 
 const geometry = {
   width: 960,
@@ -56,4 +56,25 @@ test('bridge exemption covers only the deck, not an actor hanging over the side'
   assert.equal(circleHitsSolid({ x: 80, y: 80 }, 18, g), false)
   assert.equal(circleHitsSolid({ x: 80, y: 52 }, 18, g), true)
   assert.equal(circleHitsSolid({ x: 36, y: 80 }, 18, g), false)
+})
+
+test('procedural rooms use the pinned room code as their shared run seed', () => {
+  try {
+    setProceduralRunSeed('abc123')
+    const firstFloorA = roomGeometry(null, 1, () => 0.11)
+    const secondFloorA = roomGeometry(null, 2, () => 0.22)
+
+    setProceduralRunSeed('ABC123')
+    const firstFloorB = roomGeometry(null, 1, () => 0.77)
+    const secondFloorB = roomGeometry(null, 2, () => 0.88)
+
+    assert.deepEqual(firstFloorB, firstFloorA)
+    assert.deepEqual(secondFloorB, secondFloorA)
+
+    setProceduralRunSeed('OTHER1')
+    const otherRoom = roomGeometry(null, 1, () => 0.11)
+    assert.notDeepEqual(otherRoom, firstFloorA)
+  } finally {
+    setProceduralRunSeed(null)
+  }
 })

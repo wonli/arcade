@@ -130,6 +130,37 @@ test('pickup stays non-applied until the world exposes stable drop identity', ()
   assert.equal(result.reason, 'pickup-unavailable')
 })
 
+test('open_chest delegates to authority-owned stable chest identity', () => {
+  const { scene, p2 } = sceneFixture()
+  let call = null
+  scene.__dungeonSpatial = {
+    openChestById(player, chestId) {
+      call = { player, chestId }
+      return { opened: true, chestId }
+    },
+  }
+
+  const result = executePlayerCommand(scene, {
+    type: 'open_chest',
+    playerId: 'p2',
+    chestId: 'chest:7:0',
+  })
+
+  assert.equal(result.accepted, true)
+  assert.equal(result.applied, true)
+  assert.deepEqual(call, { player: p2, chestId: 'chest:7:0' })
+})
+
+test('open_chest rejects missing identity and remains non-applied without spatial authority', () => {
+  const { scene } = sceneFixture()
+
+  assert.equal(executePlayerCommand(scene, { type: 'open_chest', playerId: 'p2' }).reason, 'chest-required')
+  const result = executePlayerCommand(scene, { type: 'open_chest', playerId: 'p2', chestId: 'chest:7:0' })
+  assert.equal(result.accepted, true)
+  assert.equal(result.applied, false)
+  assert.equal(result.reason, 'chest-unavailable')
+})
+
 test('commands reject unknown, dead, or malformed players without mutation', () => {
   const { scene, p2 } = sceneFixture()
   let calls = 0
@@ -141,6 +172,7 @@ test('commands reject unknown, dead, or malformed players without mutation', () 
   p2.dead = false
   assert.equal(executePlayerCommand(scene, { type: 'skill', playerId: 'p2' }).reason, 'skill-required')
   assert.equal(executePlayerCommand(scene, { type: 'pickup', playerId: 'p2' }).reason, 'drop-required')
+  assert.equal(executePlayerCommand(scene, { type: 'open_chest', playerId: 'p2' }).reason, 'chest-required')
   assert.equal(executePlayerCommand(scene, { type: 'unknown', playerId: 'p2' }).reason, 'unsupported-command')
   assert.equal(calls, 0)
 })

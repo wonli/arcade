@@ -2,12 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { attachLocalPlayerEntity } from './player-entity.js'
-import { despawnRemotePlayer, spawnRemotePlayer } from './remote-player-runtime.js'
+import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
+import { applyPlayerSnapshot } from './player-snapshot.js'
 
-function snapshot(id = 'remote') {
+function weapon(type = 'weapon.sword', rarity = 'common') {
+  return { type, rarity, damage: 18, affixes: [] }
+}
+
+function snapshot(id = 'remote', equippedWeapon = null) {
   return {
     id,
-    state: { x: 320, y: 240, hp: 80, maxHp: 100, equipment: { weapon: null }, modifiers: {} },
+    state: { x: 320, y: 240, hp: 80, maxHp: 100, equipment: { weapon: equippedWeapon }, modifiers: {} },
     facing: 'left',
     moving: true,
     attacking: false,
@@ -22,7 +27,28 @@ function sceneFixture() {
   const actors = []
   const bars = []
   const syncs = []
+  const weaponVisuals = []
   const scene = {
+    textures: { exists() { return true } },
+    add: {
+      image(x, y, key) {
+        const visual = {
+          x, y, key,
+          destroyed: false,
+          visible: true,
+          setOrigin() { return this },
+          setScale() { return this },
+          setPosition(nextX, nextY) { this.x = nextX; this.y = nextY; return this },
+          setAngle(angle) { this.angle = angle; return this },
+          setFlipX(value) { this.flipX = value; return this },
+          setDepth(depth) { this.depth = depth; return this },
+          setVisible(value) { this.visible = value; return this },
+          destroy() { this.destroyed = true },
+        }
+        weaponVisuals.push(visual)
+        return visual
+      },
+    },
     makeActor(x, y, kind) {
       const actor = {
         x,
@@ -53,7 +79,7 @@ function sceneFixture() {
     id: 'local',
     state: { x: 100, y: 100, hp: 100, maxHp: 100 },
   })
-  return { scene, local, actors, bars, syncs }
+  return { scene, local, actors, bars, syncs, weaponVisuals }
 }
 
 test('spawning a remote player registers an independent entity and presentation', () => {
@@ -73,6 +99,95 @@ test('spawning a remote player registers an independent entity and presentation'
   assert.equal(syncs.at(-1).player, remote)
 })
 
+test('remote player replaces the fallback light ball with the loaded local sprite visual', () => {
+  const { scene, local } = sceneFixture()
+  let fallback = null
+  let copied = null
+
+  local.actor = {
+    texture: { key: 'dungeon-player-down-idle' },
+    frame: { name: 3 },
+    scaleX: 1.5,
+    scaleY: 1.5,
+  }
+  scene.makeActor = (x, y) => {
+    fallback = {
+      x,
+      y,
+      destroyed: false,
+      getData(key) { return key === 'usesTexture' ? false : undefined },
+      setDepth() { return this },
+      destroy() { this.destroyed = true },
+    }
+    return fallback
+  }
+  scene.add.sprite = (x, y, key, frame) => {
+    copied = {
+      x,
+      y,
+      key,
+      frame,
+      depth: 0,
+      scaleX: 1,
+      scaleY: 1,
+      data: {},
+      setScale(scaleX, scaleY) { this.scaleX = scaleX; this.scaleY = scaleY; return this },
+      setData(keyName, value) { this.data[keyName] = value; return this },
+      getData(keyName) { return this.data[keyName] },
+      setDepth(depth) { this.depth = depth; return this },
+      setPosition(nextX, nextY) { this.x = nextX; this.y = nextY; return this },
+      destroy() { this.destroyed = true },
+    }
+    return copied
+  }
+
+  const remote = spawnRemotePlayer(scene, snapshot())
+
+  assert.equal(fallback.destroyed, true)
+  assert.equal(remote.actor, copied)
+  assert.equal(remote.actor.key, 'dungeon-player-down-idle')
+  assert.equal(remote.actor.frame, 3)
+  assert.equal(remote.actor.scaleX, 1.5)
+  assert.equal(remote.actor.scaleY, 1.5)
+  assert.equal(remote.actor.getData('usesTexture'), true)
+})
+
+test('remote equipped weapon creates and follows a weapon presentation', () => {
+  const { scene, weaponVisuals } = sceneFixture()
+
+  const remote = spawnRemotePlayer(scene, snapshot('remote', weapon()))
+
+  assert.equal(weaponVisuals.length, 1)
+  assert.equal(remote.runtime.weaponVisuals?.visual?.(), weaponVisuals[0])
+  assert.equal(weaponVisuals[0].destroyed, false)
+  assert.notEqual(weaponVisuals[0].x, 320)
+})
+
+test('remote weapon change replaces the previous visual using the shared weapon art profile', () => {
+  const { scene, weaponVisuals } = sceneFixture()
+  const remote = spawnRemotePlayer(scene, snapshot('remote', weapon('weapon.sword', 'common')))
+  const first = weaponVisuals[0]
+
+  applyPlayerSnapshot(remote, snapshot('remote', weapon('weapon.sword', 'epic')))
+  syncRemotePlayerPresentation(scene, remote)
+
+  assert.equal(first.destroyed, true)
+  assert.equal(weaponVisuals.length, 2)
+  assert.equal(remote.runtime.weaponVisuals.visual(), weaponVisuals[1])
+})
+
+test('remote unequip removes its weapon presentation', () => {
+  const { scene, weaponVisuals } = sceneFixture()
+  const remote = spawnRemotePlayer(scene, snapshot('remote', weapon()))
+  const first = weaponVisuals[0]
+
+  applyPlayerSnapshot(remote, snapshot('remote', null))
+  syncRemotePlayerPresentation(scene, remote)
+
+  assert.equal(first.destroyed, true)
+  assert.equal(remote.runtime.weaponVisuals.visual(), null)
+})
+
 test('spawning rejects the local player id and duplicate remote ids', () => {
   const { scene } = sceneFixture()
 
@@ -83,11 +198,9 @@ test('spawning rejects the local player id and duplicate remote ids', () => {
 
 test('despawning a remote restores player runtimes and destroys presentation', () => {
   const { scene } = sceneFixture()
-  const remote = spawnRemotePlayer(scene, snapshot())
+  const remote = spawnRemotePlayer(scene, snapshot('remote', weapon()))
+  const weaponVisual = remote.runtime.weaponVisuals?.visual?.() ?? null
   let restored = 0
-  const sharedRuntime = { restore() { restored++ } }
-  remote.runtime.weaponVisuals = sharedRuntime
-  remote.runtime.weaponProjectiles = sharedRuntime
   remote.runtime.inventory = { restore() { restored++ } }
   const actor = remote.actor
   const bar = remote.bar
@@ -96,9 +209,10 @@ test('despawning a remote restores player runtimes and destroys presentation', (
 
   assert.equal(removed, remote)
   assert.equal(scene.players.has('remote'), false)
-  assert.equal(restored, 2)
+  assert.equal(restored, 1)
   assert.equal(actor.destroyed, true)
   assert.equal(bar.destroyed, true)
+  assert.equal(weaponVisual?.destroyed, true)
   assert.equal(remote.actor, null)
   assert.equal(remote.bar, null)
   assert.deepEqual(remote.runtime, {})

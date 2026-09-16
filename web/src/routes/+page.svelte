@@ -15,7 +15,7 @@
 
   function createRoom() {
     if (game === 'dungeon') {
-      goto('/dungeon')
+      goto(players === 1 ? '/dungeon' : '/room/new/dungeon')
       return
     }
     if (game === 'snake' || game === 'drawguess') {
@@ -32,7 +32,6 @@
   function joinRoom() {
     const code = roomCode.trim().toLowerCase()
     if (!code) return
-    if (game === 'dungeon') return
     goto(`/room/${code}/${game}`)
   }
 
@@ -51,11 +50,11 @@
     if (game === 'tetris') return players === 1 ? 'Solo practice. Just you and the stack.' : 'Your board. Their board. One survives.'
     if (game === 'snake') return '1–8 players. One arena. Host starts.'
     if (game === 'drawguess') return '2–8 players. Draw badly. Guess loudly.'
-    return 'WASD. Auto attacks. Loot everywhere. Go deeper.'
+    return players === 1 ? 'WASD. Auto attacks. Loot everywhere. Go deeper.' : 'Two heroes. One dungeon. Host decides the run history.'
   }
 
   function createLabel() {
-    if (game === 'dungeon') return 'Enter the Dungeon'
+    if (game === 'dungeon') return players === 1 ? 'Enter Solo Dungeon' : 'Create 2 player Dungeon'
     if (game === 'snake') return 'Create Snake Arena'
     if (game === 'drawguess') return 'Create Draw & Guess'
     if (game === 'gomoku') return 'Start 2 player Gomoku'
@@ -64,7 +63,9 @@
   }
 
   function helper() {
-    if (game === 'dungeon') return 'Solo run · WASD + Space · gear upgrades immediately.'
+    if (game === 'dungeon') return players === 1
+      ? 'Solo run · WASD + Space · gear upgrades immediately.'
+      : 'Create a room, share the code, and sync both PlayerEntities at 20Hz.'
     if (game === 'snake') return 'Create a lobby, invite up to 7 friends, then the host starts the arena.'
     if (game === 'drawguess') return 'Create a lobby, invite friends, then take turns drawing and guessing.'
     if (game === 'chess') return players === 1 ? 'You play White. Bot strength changes search depth and node budget.' : 'Create a room, share the invite, and play with server-authoritative rules.'
@@ -88,12 +89,12 @@
       <button class:active={game === 'tetris'} onclick={() => selectGame('tetris')}><span>03</span><strong>Tetris Battle</strong><small>Clear lines. Send garbage.</small></button>
       <button class:active={game === 'snake'} onclick={() => selectGame('snake')}><span>04</span><strong>Snake Arena</strong><small>1–8 players · Host starts</small></button>
       <button class:active={game === 'drawguess'} onclick={() => selectGame('drawguess')}><span>05</span><strong>Draw & Guess</strong><small>2–8 players · Host starts</small></button>
-      <button class:active={game === 'dungeon'} onclick={() => selectGame('dungeon')}><span>06</span><strong>Endless Dungeon</strong><small>Solo</small></button>
+      <button class:active={game === 'dungeon'} onclick={() => selectGame('dungeon')}><span>06</span><strong>Endless Dungeon</strong><small>Solo / 2 player</small></button>
     </div>
 
     <div class="home-game"><h1>{title()}</h1><p>{description()}</p></div>
 
-    {#if game === 'tetris' || game === 'chess'}
+    {#if game === 'tetris' || game === 'chess' || game === 'dungeon'}
       <div class="mode-picker" aria-label="Choose player mode">
         <button class:active={players === 1} onclick={() => (players = 1)}><strong>{game === 'chess' ? 'VS BOT' : '1 PLAYER'}</strong><small>Start instantly</small></button>
         <button class:active={players === 2} onclick={() => (players = 2)}><strong>2 PLAYERS</strong><small>{game === 'chess' ? 'Online room' : 'Invite a friend'}</small></button>
@@ -110,7 +111,7 @@
 
     <button class="create" onclick={createRoom}>{createLabel()}</button>
 
-    {#if game !== 'dungeon' && (game !== 'chess' || players === 2)}
+    {#if (game !== 'chess' || players === 2) && (game !== 'dungeon' || players === 2)}
       <div class="divider"><span>or join</span></div>
       <div class="join">
         <input bind:value={roomCode} maxlength="6" autocomplete="off" placeholder="ROOM CODE" aria-label="Room code" onkeydown={(event) => event.key === 'Enter' && joinRoom()} />
