@@ -1,4 +1,5 @@
 import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
+import { installCoopWorldSimulation } from './coop-world-runtime.js'
 import { getPlayerSkillReadyAt } from './player-entity.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
@@ -169,6 +170,7 @@ export function createDungeonNetworkRuntime({
   let factQueue = Promise.resolve(null)
   let worldRuntime = null
   let lifecycleRuntime = null
+  let coopWorldRuntime = null
   let lastLifecycleTickAt = null
   const pickupIntentRetryAt = new Map()
 
@@ -575,6 +577,7 @@ export function createDungeonNetworkRuntime({
     started = true
     createLocalPlayerLabel(scene, scene.localPlayer)
     ensureLifecycleRuntime()
+    coopWorldRuntime = installCoopWorldSimulation(scene)
     lastLifecycleTickAt = lifecycleClock()
     worldRuntime = createWorldRuntime()
     worldRuntime.start()
@@ -603,6 +606,8 @@ export function createDungeonNetworkRuntime({
     restoreChestMirrors()
     worldRuntime?.stop()
     worldRuntime = null
+    coopWorldRuntime?.restore?.()
+    coopWorldRuntime = null
     lifecycleRuntime?.restore?.()
     lifecycleRuntime = null
     lastLifecycleTickAt = null
@@ -636,6 +641,7 @@ export function createDungeonNetworkRuntime({
     stop,
     world: () => worldRuntime,
     lifecycle: () => lifecycleRuntime,
+    coopWorld: () => coopWorldRuntime,
   }
   return api
 }
