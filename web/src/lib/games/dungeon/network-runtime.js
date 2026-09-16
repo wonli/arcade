@@ -1,3 +1,4 @@
+import { captureCheckpointClockState } from './checkpoint-clock-state.js'
 import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { installCoopWorldSimulation } from './coop-world-runtime.js'
 import { executePlayerCommand } from './player-command-runtime.js'
@@ -13,7 +14,8 @@ const CHECKPOINT_ENEMY_FIELDS = [
   'id', 'x', 'y', 'hp', 'maxHp', 'speed', 'hitUntil', 'archetype', 'elite', 'boss', 'phase',
   'phaseThreshold', 'chargeCooldown', 'shockwaveCooldown', 'nextChargeAt', 'nextShockwaveAt',
   'chargingUntil', 'chargeVx', 'chargeVy', 'attackRange', 'preferredRange', 'projectileDamage',
-  'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'contactDamage', 'tint', 'scale', 'barOffset',
+  'projectileCooldown', 'projectileSpeed', 'nextProjectileAt', 'nextSpecialAt', 'dashUntil',
+  'specialLockedUntil', 'contactDamage', 'tint', 'scale', 'barOffset',
 ]
 
 function bindLocalPlayerId(scene, playerId) {
@@ -264,13 +266,17 @@ export function createDungeonNetworkRuntime({
       ...(previous?.openedChestIds ?? []),
       ...captureOpenedChestIds(scene),
     ])].sort()
+    const portable = captureCheckpointClockState({
+      world: captureWorldState(scene),
+      players: capturePlayers(),
+    }, lifecycleClock())
     return createSessionCheckpoint({
       roomId: normalizedRoomId,
       runSeed: normalizedRunSeed,
       authority: authorityState,
       status: previous?.status === 'complete' ? 'complete' : deriveSessionStatus(),
-      world: captureWorldState(scene),
-      players: capturePlayers(),
+      world: portable.world,
+      players: portable.players,
       lifecycle: captureLifecycle(),
       openedChestIds,
     })
