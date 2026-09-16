@@ -30,6 +30,8 @@ export function ensureDungeonLootRuntime(scene) {
     openChestOwner: callable(previousLoot.openChest),
     authority: null,
   }
+  const stepPlayers = []
+  let clearDepth = 0
 
   const coreSpawn = (request) => {
     if (!core.spawn) return null
@@ -55,36 +57,57 @@ export function ensureDungeonLootRuntime(scene) {
       return spawn({ x, y, item, prepare: false, exact: true })
     },
 
-    remove(drop) {
+    remove(drop, context = {}) {
       if (!drop) return null
-      if (slots.authority?.mayRemove && slots.authority.mayRemove(drop) === false) return null
+      if (slots.authority?.mayRemove && slots.authority.mayRemove(drop, context) === false) return null
       const value = slots.removeOwner
-        ? slots.removeOwner(drop, coreRemove)
+        ? slots.removeOwner(drop, coreRemove, context)
         : coreRemove(drop)
-      try { slots.authority?.onRemoved?.({ drop, value }) } catch {}
+      const clearing = clearDepth > 0
+      const player = context?.player ?? (clearing ? null : stepPlayers.at(-1) ?? null)
+      try {
+        slots.authority?.onRemoved?.({
+          drop,
+          value,
+          context,
+          player,
+          clearing,
+          stepping: stepPlayers.length > 0,
+        })
+      } catch {}
       return value
     },
 
-    removeById(id) {
+    removeById(id, context = {}) {
       const normalized = String(id ?? '').trim()
       if (!normalized) return null
       const drop = (scene.drops ?? []).find((candidate) => String(candidate?.id ?? '') === normalized) ?? null
-      return drop ? api.remove(drop) : null
+      return drop ? api.remove(drop, context) : null
     },
 
     clear() {
       if (slots.authority?.mayClear && slots.authority.mayClear() === false) return null
-      const value = slots.clearOwner
-        ? slots.clearOwner(coreClear)
-        : coreClear()
-      try { slots.authority?.onCleared?.({ value }) } catch {}
-      return value
+      clearDepth++
+      try {
+        const value = slots.clearOwner
+          ? slots.clearOwner(coreClear)
+          : coreClear()
+        try { slots.authority?.onCleared?.({ value }) } catch {}
+        return value
+      } finally {
+        clearDepth--
+      }
     },
 
     step(player = scene.localPlayer) {
-      return slots.stepOwner
-        ? slots.stepOwner(player, coreStep)
-        : coreStep(player)
+      stepPlayers.push(player)
+      try {
+        return slots.stepOwner
+          ? slots.stepOwner(player, coreStep)
+          : coreStep(player)
+      } finally {
+        stepPlayers.pop()
+      }
     },
 
     pickup(player, dropId) {
@@ -165,6 +188,35 @@ export function ensureDungeonLootRuntime(scene) {
   scene.dungeon ??= {}
   scene.dungeon.loot = api
   return api
+}
+
+export function installDungeonLootSceneBridge(scene) {
+  if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
+  if (scene.__dungeonLootSceneBridge) return scene.__dungeonLootSceneBridge
+
+  const loot = ensureDungeonLootRuntime(scene)
+  const bridge = {
+    loot,
+    spawnDrop(x, y, item) {
+      return loot.spawn(x, y, item)
+    },
+    destroyDrop(drop) {
+      return loot.remove(drop)
+    },
+    clearDrops() {
+      return loot.clear()
+    },
+    updateDrops(player = scene.localPlayer) {
+      return loot.step(player)
+    },
+  }
+
+  scene.spawnDrop = bridge.spawnDrop
+  scene.destroyDrop = bridge.destroyDrop
+  scene.clearDrops = bridge.clearDrops
+  scene.updateDrops = bridge.updateDrops
+  scene.__dungeonLootSceneBridge = bridge
+  return bridge
 }
 
 export function dungeonLoot(scene) {
