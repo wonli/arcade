@@ -43,7 +43,19 @@ export function installCoopPortalRuntime(scene, {
   let dwell = { enteredAt: null, seconds: null, complete: false }
   let lastPublished = null
   let transitionCommitted = false
+  let activePortalId = scene.portal?.id == null ? null : String(scene.portal.id)
   if (scene.portal && scene.portal.countdownLabel == null) scene.portal.countdownLabel = null
+
+  const syncPortalIdentity = (portal) => {
+    if (!portal) return
+    const nextId = portal.id == null ? null : String(portal.id)
+    if (nextId === activePortalId) return
+    destroyCountdown(portal)
+    activePortalId = nextId
+    dwell = { enteredAt: null, seconds: null, complete: false }
+    lastPublished = null
+    transitionCommitted = false
+  }
 
   const clear = ({ publish = false } = {}) => {
     const portal = scene.portal
@@ -81,6 +93,7 @@ export function installCoopPortalRuntime(scene, {
       if (portal) clear({ publish: isAuthority() })
       return
     }
+    syncPortalIdentity(portal)
     if (!isAuthority()) return
 
     const allPlayers = [...(scene.players?.values?.() ?? [])]
@@ -117,6 +130,7 @@ export function installCoopPortalRuntime(scene, {
     if (fact?.type !== 'portal.dwell') return null
     const portal = scene.portal
     if (!portal) return null
+    syncPortalIdentity(portal)
     const factId = String(fact.entityId ?? '')
     const portalId = String(portal.id ?? '')
     if (factId && portalId && factId !== portalId) return null
