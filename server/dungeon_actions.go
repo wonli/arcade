@@ -80,6 +80,11 @@ func (a *Actions) dungeonCommand(c *ws.Context) {
 	c.Send(ws.H{"ok": true})
 }
 
+func (a *Actions) dungeonFactRelayAllowed(roomID, playerID string) bool {
+	_, member := a.service.DungeonPeer(dungeonRoomID(roomID), strings.TrimSpace(playerID))
+	return member
+}
+
 func (a *Actions) dungeonFact(c *ws.Context) {
 	playerID, ok := currentPlayer(c)
 	if !ok {
@@ -92,13 +97,8 @@ func (a *Actions) dungeonFact(c *ws.Context) {
 		return
 	}
 	roomID := dungeonRoomID(req.RoomID)
-	isHost, member := a.service.DungeonPeer(roomID, playerID)
-	if !member {
+	if !a.dungeonFactRelayAllowed(roomID, playerID) {
 		c.SendCode(403, "dungeon room membership required")
-		return
-	}
-	if !isHost {
-		c.SendCode(403, "dungeon fact requires room host")
 		return
 	}
 	c.Pub(roomTopic(roomID), ws.H{
