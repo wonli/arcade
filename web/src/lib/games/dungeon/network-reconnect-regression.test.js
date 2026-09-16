@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import { ensureDungeonLootRuntime } from './loot-runtime.js'
 import { attachLocalPlayerEntity } from './player-entity.js'
 import { createDungeonNetworkRuntime } from './network-runtime.js'
 import { currentWeapon } from './player-loadout.js'
@@ -170,16 +171,16 @@ test('fresh follower stays snapshot-silent until checkpoint hydration then resto
   let groundReconciles = 0
 
   scene.localPlayer.runtime.weaponVisuals = { sync() { weaponSyncs++ } }
+  const loot = ensureDungeonLootRuntime(scene)
+  loot.setSpawnOwner((request) => {
+    const drop = { id: null, x: request.x, y: request.y, item: structuredClone(request.item), visual: null }
+    scene.drops.push(drop)
+    return drop
+  })
   scene.__dungeonPickupRuntime = {
     setPickupIntentHandler() { return null },
     set pickupById(value) { this._pickupById = value },
     get pickupById() { return this._pickupById },
-    clearAll() { scene.drops = [] },
-    spawnExact(x, y, item) {
-      const drop = { id: null, x, y, item: structuredClone(item), visual: null }
-      scene.drops.push(drop)
-      return drop
-    },
     reconcileVisuals() { groundReconciles++ },
   }
 
