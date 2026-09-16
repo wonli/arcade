@@ -167,7 +167,7 @@ test('network start never replaces gameplay Scene methods', () => {
   runtime.stop()
 })
 
-test('authority executes attack commands through the owned combat capability', () => {
+test('authority executes attack commands through the owned combat capability on authority time', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
   let legacyAttackCalls = 0
@@ -192,6 +192,7 @@ test('authority executes attack commands through the owned combat capability', (
     roomId: 'ABC123',
     localPlayerId: 'host',
     hostId: 'host',
+    now: () => 1500,
   })
 
   runtime.handleMessage(roomMessage({
@@ -202,7 +203,7 @@ test('authority executes attack commands through the owned combat capability', (
   runtime.handleMessage(roomMessage({
     type: 'dungeon.command',
     playerId: 'guest',
-    command: { type: 'attack', playerId: 'spoofed', time: 1500 },
+    command: { type: 'attack', playerId: 'spoofed', time: 999999 },
   }))
 
   assert.equal(legacyAttackCalls, 0)
