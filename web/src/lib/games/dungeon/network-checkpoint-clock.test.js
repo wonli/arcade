@@ -62,6 +62,9 @@ test('authority checkpoint capture contains portable gameplay durations rather t
     nextShockwaveAt: 15500,
     chargingUntil: 10600,
     nextProjectileAt: 11250,
+    nextSpecialAt: 11800,
+    dashUntil: 10400,
+    specialLockedUntil: 10750,
   })
 
   const runtime = createDungeonNetworkRuntime({
@@ -86,12 +89,22 @@ test('authority checkpoint capture contains portable gameplay durations rather t
   assert.deepEqual(player.skillCooldownRemainingMs, { primary: 3000 })
   assert.equal(player.state.hasteRemainingMs, 1200)
 
-  assert.equal('nextChargeAt' in enemy, false)
-  assert.equal('nextShockwaveAt' in enemy, false)
-  assert.equal('chargingUntil' in enemy, false)
-  assert.equal('nextProjectileAt' in enemy, false)
+  for (const field of [
+    'nextChargeAt',
+    'nextShockwaveAt',
+    'chargingUntil',
+    'nextProjectileAt',
+    'nextSpecialAt',
+    'dashUntil',
+    'specialLockedUntil',
+  ]) {
+    assert.equal(field in enemy, false)
+  }
   assert.equal(enemy.nextChargeRemainingMs, 4000)
   assert.equal(enemy.nextShockwaveRemainingMs, 5500)
   assert.equal(enemy.chargingRemainingMs, 600)
   assert.equal(enemy.nextProjectileRemainingMs, 1250)
+  assert.equal(enemy.nextSpecialRemainingMs, 1800)
+  assert.equal(enemy.dashRemainingMs, 400)
+  assert.equal(enemy.specialLockedRemainingMs, 750)
 })
