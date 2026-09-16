@@ -51,14 +51,16 @@ function sceneFixture(localId = 'host') {
   return scene
 }
 
-function socketFixture() {
+function socketFixture({ sessionStates = [] } = {}) {
   const calls = []
   const listeners = new Map()
+  const states = [...sessionStates]
   return {
     calls,
     listeners,
     async request(action, params) {
       calls.push({ action, params })
+      if (action === 'session.state.get') return { state: states.length ? states.shift() : null }
       return { ok: true }
     },
     subscribe(topic, listener) {
@@ -66,10 +68,6 @@ function socketFixture() {
       return () => listeners.delete(topic)
     },
   }
-}
-
-function roomMessage(payload) {
-  return { data: { topicId: 'room:ABC123', message: payload } }
 }
 
 function floorTwoCheckpoint() {
@@ -102,9 +100,23 @@ function floorTwoCheckpoint() {
   }
 }
 
-test('hydrating follower retries checkpoint sync until authority answers', async () => {
+function storedState(checkpoint = floorTwoCheckpoint()) {
+  return {
+    authorityId: checkpoint.authority.authorityId,
+    authorityEpoch: checkpoint.authority.epoch,
+    revision: checkpoint.authority.sequence,
+    schemaVersion: checkpoint.version,
+    payload: checkpoint,
+  }
+}
+
+async function nextTurn() {
+  await new Promise((resolve) => setImmediate(resolve))
+}
+
+test('hydrating follower retries server checkpoint without peer checkpoint snapshots', async () => {
   const scene = sceneFixture('guest')
-  const socket = socketFixture()
+  const socket = socketFixture({ sessionStates: [null, null] })
   let tick = null
   const runtime = createDungeonNetworkRuntime({
     socket,
@@ -117,13 +129,15 @@ test('hydrating follower retries checkpoint sync until authority answers', async
   })
 
   runtime.start()
-  await Promise.resolve()
-  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.syncCheckpoint === true).length, 1)
+  await nextTurn()
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
+  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.syncCheckpoint === true).length, 0)
 
   tick?.()
-  await Promise.resolve()
+  await nextTurn()
 
-  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.syncCheckpoint === true).length, 2)
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 2)
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.recoverCheckpoint === true), false)
   runtime.stop()
 })
 
@@ -149,39 +163,54 @@ test('open_chest binds spatial authority even when LootRuntime already exists', 
   assert.deepEqual(opened, { player: guest, chestId: 'floor-1:chest-0' })
 })
 
-test('refreshing host recovers canonical checkpoint from a surviving peer before keeping fresh floor one', async () => {
+test('refreshing host restores canonical checkpoint from server memory without peer recovery', async () => {
   const scene = sceneFixture('host')
-  const socket = socketFixture()
-  let tick = null
+  const socket = socketFixture({ sessionStates: [storedState()] })
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
     roomId: 'ABC123',
     localPlayerId: 'host',
     hostId: 'host',
-    setIntervalImpl(callback) { tick = callback; return 1 },
+    setIntervalImpl() { return 1 },
     clearIntervalImpl() {},
   })
 
   runtime.start()
   runtime.updatePeers([{ id: 'host' }, { id: 'guest' }])
-  await Promise.resolve()
-  tick?.()
-  await Promise.resolve()
-  assert.equal(scene.floor, 1)
-  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.recoverCheckpoint === true), true)
-
-  runtime.handleMessage(roomMessage({
-    type: 'dungeon.snapshot',
-    playerId: 'guest',
-    snapshot: {
-      id: 'guest',
-      state: state(180),
-      recoveryCheckpoint: floorTwoCheckpoint(),
-    },
-  }))
+  await nextTurn()
 
   assert.equal(scene.floor, 2)
   assert.equal(runtime.checkpoint()?.world?.floor, 2)
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
+  assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.recoverCheckpoint === true), false)
+  runtime.stop()
+})
+
+test('authority persists canonical checkpoint to server state transport', async () => {
+  const scene = sceneFixture('host')
+  const socket = socketFixture({ sessionStates: [null] })
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'host',
+    hostId: 'host',
+    setIntervalImpl() { return 1 },
+    clearIntervalImpl() {},
+  })
+
+  runtime.start()
+  await nextTurn()
+  await nextTurn()
+
+  const puts = socket.calls.filter((call) => call.action === 'session.state.put')
+  assert.equal(puts.length >= 1, true)
+  const latest = puts.at(-1).params
+  assert.equal(latest.roomId, 'ABC123')
+  assert.equal(latest.authorityEpoch, 1)
+  assert.equal(latest.schemaVersion, 1)
+  assert.equal(latest.revision >= 1, true)
+  assert.equal(latest.payload.roomId, 'ABC123')
   runtime.stop()
 })
