@@ -10,8 +10,10 @@ test('world runtime owns loot authority through LootRuntime instead of replacing
   assert.doesNotMatch(source, /scene\.destroyDrop\s*=\s*function/)
   assert.doesNotMatch(source, /scene\.clearDrops\s*=\s*function/)
   assert.doesNotMatch(source, /scene\.updateDrops\s*=\s*function/)
+  assert.doesNotMatch(source, /__dungeonPickupRuntime/)
 
   assert.match(source, /ensureDungeonLootRuntime\(scene\)/)
   assert.match(source, /loot\.setAuthority\(/)
   assert.match(source, /loot\.setPickupOwner\(/)
+  assert.match(source, /loot\.spawnExact\(/)
 })
