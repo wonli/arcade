@@ -166,12 +166,14 @@ test('open_chest binds spatial authority even when LootRuntime already exists', 
 test('refreshing host restores canonical checkpoint from server memory without peer recovery', async () => {
   const scene = sceneFixture('host')
   const socket = socketFixture({ sessionStates: [storedState()] })
+  const errors = []
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
     roomId: 'ABC123',
     localPlayerId: 'host',
     hostId: 'host',
+    onError(error) { errors.push(error) },
     setIntervalImpl() { return 1 },
     clearIntervalImpl() {},
   })
@@ -180,8 +182,9 @@ test('refreshing host restores canonical checkpoint from server memory without p
   runtime.updatePeers([{ id: 'host' }, { id: 'guest' }])
   await nextTurn()
 
-  assert.equal(scene.floor, 2)
-  assert.equal(runtime.checkpoint()?.world?.floor, 2)
+  assert.equal(errors.length, 0, errors.map((error) => error?.message ?? String(error)).join('; '))
+  assert.equal(runtime.checkpoint()?.world?.floor, 2, 'server checkpoint must enter SessionRuntime before presentation')
+  assert.equal(scene.floor, 2, 'server checkpoint presentation must materialize the stored floor')
   assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
   assert.equal(socket.calls.some((call) => call.action === 'dungeon.snapshot' && call.params.snapshot.recoverCheckpoint === true), false)
   runtime.stop()
