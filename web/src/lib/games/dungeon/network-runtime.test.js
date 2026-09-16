@@ -122,17 +122,24 @@ test('later remote snapshots update the existing player presentation', () => {
   assert.equal(guest.moving, true)
 })
 
-test('current authority executes guest semantic commands using the relay identity', () => {
+test('current authority executes guest semantic commands using relay identity and authority time', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()
   scene.autoAttack = (time, player) => { player.lastAttackAt = time }
-  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'host',
+    hostId: 'host',
+    now: () => 1500,
+  })
   runtime.handleMessage(roomMessage({ type: 'dungeon.snapshot', playerId: 'guest', snapshot: { id: 'guest', state: state(100) } }))
 
   runtime.handleMessage(roomMessage({
     type: 'dungeon.command',
     playerId: 'guest',
-    command: { type: 'attack', playerId: 'spoofed', time: 1500 },
+    command: { type: 'attack', playerId: 'spoofed', time: 999999 },
   }))
 
   assert.equal(scene.players.get('guest').lastAttackAt, 1500)
