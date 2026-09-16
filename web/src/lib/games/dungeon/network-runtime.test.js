@@ -47,14 +47,16 @@ function sceneFixture(localId = 'host') {
   return scene
 }
 
-function socketFixture() {
+function socketFixture({ sessionStates = [] } = {}) {
   const calls = []
   const listeners = new Map()
+  const states = [...sessionStates]
   return {
     calls,
     listeners,
     async request(action, params) {
       calls.push({ action, params })
+      if (action === 'session.state.get') return { state: states.length ? states.shift() : null }
       return { ok: true }
     },
     subscribe(action, listener) {
@@ -175,9 +177,9 @@ test('snapshot flush sends only the local serializable player state', async () =
   assert.equal('runtime' in socket.calls[0].params.snapshot, false)
 })
 
-test('fresh follower start explicitly requests canonical session checkpoint', async () => {
+test('fresh follower requests canonical session state from server without peer checkpoint snapshots', async () => {
   const scene = sceneFixture('guest')
-  const socket = socketFixture()
+  const socket = socketFixture({ sessionStates: [null] })
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
@@ -191,21 +193,17 @@ test('fresh follower start explicitly requests canonical session checkpoint', as
   runtime.start()
   await nextTurn()
 
-  const bootstrap = socket.calls.find((call) => call.action === 'dungeon.snapshot')
-  assert.equal(bootstrap?.params.snapshot.syncCheckpoint, true)
-  assert.equal('syncWorld' in bootstrap.params.snapshot, false)
-
-  socket.calls.length = 0
-  await runtime.flushSnapshot()
-  assert.equal(socket.calls[0].action, 'dungeon.snapshot')
-  assert.equal('syncCheckpoint' in socket.calls[0].params.snapshot, false)
+  assert.equal(socket.calls.filter((call) => call.action === 'session.state.get').length, 1)
+  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot').length, 0)
+  assert.equal(await runtime.flushSnapshot(), false)
+  assert.equal(socket.calls.filter((call) => call.action === 'dungeon.snapshot').length, 0)
   runtime.stop()
 })
 
-test('current authority answers reconnect sync request without accepting reconnect bootstrap state', async () => {
+test('fresh authority initializes missing server session state before publishing snapshots', async () => {
   const scene = sceneFixture('host')
   scene.floor = 4
-  const socket = socketFixture()
+  const socket = socketFixture({ sessionStates: [null] })
   const runtime = createDungeonNetworkRuntime({
     socket,
     scene,
@@ -215,30 +213,24 @@ test('current authority answers reconnect sync request without accepting reconne
     setIntervalImpl: () => 77,
     clearIntervalImpl: () => {},
   })
+
   runtime.start()
   await nextTurn()
-  socket.calls.length = 0
-
-  runtime.handleMessage(roomMessage({ type: 'dungeon.snapshot', playerId: 'guest', snapshot: { id: 'guest', state: state(100) } }))
-  assert.ok(scene.players.get('guest'))
-  assert.equal(socket.calls.some((call) => call.action === 'dungeon.fact'), false)
-
-  runtime.handleMessage(roomMessage({
-    type: 'dungeon.snapshot',
-    playerId: 'guest',
-    snapshot: { id: 'guest', state: state(120), syncCheckpoint: true },
-  }))
-  await nextTurn()
   await nextTurn()
 
+  const get = socket.calls.find((call) => call.action === 'session.state.get')
+  const put = socket.calls.find((call) => call.action === 'session.state.put')
   const fact = socket.calls
     .filter((call) => call.action === 'dungeon.fact')
     .map((call) => call.params.fact)
     .find((candidate) => candidate?.type === 'session.checkpoint')
+  const snapshot = socket.calls.find((call) => call.action === 'dungeon.snapshot')?.params.snapshot
+
+  assert.equal(get?.params.roomId, 'ABC123')
+  assert.equal(put?.params.payload.world.floor, 4)
   assert.equal(fact?.checkpoint?.world?.floor, 4)
-  assert.equal(fact?.checkpoint?.runSeed, 'ABC123')
-  assert.equal(fact?.checkpoint?.players?.guest?.state?.x, 100)
-  assert.equal(scene.players.get('guest').state.x, 100)
+  assert.equal('syncCheckpoint' in (snapshot ?? {}), false)
+  assert.equal('recoverCheckpoint' in (snapshot ?? {}), false)
   runtime.stop()
 })
 
