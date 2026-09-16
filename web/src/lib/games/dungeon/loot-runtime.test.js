@@ -127,6 +127,18 @@ test('spawnExact bypasses preparation while preserving authority and stable iden
   assert.equal(scene.drops.length, 2)
 })
 
+test('removeById owns collection removal even when core destroy only tears down presentation', () => {
+  const scene = {
+    drops: [{ id: 'drop:ABC123:1:0', destroyed: false }],
+    destroyDrop(drop) { drop.destroyed = true },
+  }
+  const loot = ensureDungeonLootRuntime(scene)
+  const removed = loot.removeById('drop:ABC123:1:0')
+
+  assert.equal(removed?.destroyed, true)
+  assert.deepEqual(scene.drops, [])
+})
+
 test('remove observer receives active step player and clear context', () => {
   const { scene } = sceneFixture()
   installDungeonLootSceneBridge(scene)
