@@ -19,6 +19,8 @@ function visual() {
 function makeScene() {
   let internalFloor = 1
   let updateHandler = null
+  let shutdownHandler = null
+  const createdTweens = []
   const geometries = {
     1: { width: 960, height: 600, spawn: { x: 100, y: 100 }, exit: { x: 800, y: 500 } },
     2: { width: 960, height: 600, spawn: { x: 120, y: 110 }, exit: { x: 810, y: 500 } },
@@ -41,11 +43,23 @@ function makeScene() {
       getProgress: () => ({ floor: internalFloor, chapter: 1, chapterFloor: internalFloor, chapterLength: 4, chapterPlan: ['combat', 'combat', 'combat', 'boss'], roomRole: 'combat', fortuneActive: false }),
     },
     add: { circle: () => visual(), text: () => visual() },
-    tweens: { add() {} },
+    tweens: {
+      add(config) {
+        const tween = {
+          config,
+          stopped: false,
+          removed: false,
+          stop() { this.stopped = true },
+          remove() { this.removed = true },
+        }
+        createdTweens.push(tween)
+        return tween
+      },
+    },
     events: {
       on(name, fn) { if (name === 'update') updateHandler = fn },
       off() {},
-      once() {},
+      once(name, fn) { if (name === 'shutdown') shutdownHandler = fn },
     },
     destroyPortal() { this.portal = null },
     clearEnemies() { this.enemies = [] },
@@ -71,7 +85,12 @@ function makeScene() {
     },
   }
   attachLegacyTestPlayer(scene)
-  return { scene, update: () => updateHandler?.() }
+  return {
+    scene,
+    createdTweens,
+    update: () => updateHandler?.(),
+    shutdown: () => shutdownHandler?.(),
+  }
 }
 
 test('co-op can own back-portal dwell without follower-local retreat', () => {
@@ -97,4 +116,20 @@ test('co-op can own back-portal dwell without follower-local retreat', () => {
 
   assert.equal(ownerCalls, 1)
   assert.equal(scene.floor, 2)
+})
+
+test('back portal releases its repeating tween during teardown', () => {
+  const { scene, createdTweens, shutdown } = makeScene()
+  installDungeonBacktracking(scene)
+
+  scene.advanceFloor()
+  assert.equal(createdTweens.length, 1)
+  assert.equal(createdTweens[0].config.repeat, -1)
+  assert.equal(createdTweens[0].stopped, false)
+  assert.equal(createdTweens[0].removed, false)
+
+  shutdown()
+
+  assert.equal(createdTweens[0].stopped, true)
+  assert.equal(createdTweens[0].removed, true)
 })
