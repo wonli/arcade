@@ -1,4 +1,8 @@
 import { advanceCoopLifecycle, createCoopLifecycle, downPlayer } from './coop-lifecycle.js'
+import {
+  ensureDungeonPlayerLifecycleRuntime,
+  installDungeonPlayerLifecycleSceneBridge,
+} from './player-lifecycle-runtime.js'
 import { safeEnemySpawn } from './room-anchors.js'
 
 function normalizeId(player) {
@@ -38,11 +42,13 @@ export function installCoopLifecycleRuntime(scene, {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
   if (scene.__dungeonCoopLifecycle) return scene.__dungeonCoopLifecycle
 
-  const originalGameOver = typeof scene.gameOver === 'function' ? scene.gameOver : null
-  const originalHitPlayer = typeof scene.hitPlayer === 'function' ? scene.hitPlayer : null
+  installDungeonPlayerLifecycleSceneBridge(scene)
+  const playerLifecycle = ensureDungeonPlayerLifecycleRuntime(scene)
   let lifecycle = createCoopLifecycle([...(scene.players?.keys?.() ?? [])])
   let partyWiped = false
   let wipePresented = false
+  let restoreGameOverOwner = null
+  let restoreHitOwner = null
 
   const ensureRoster = () => {
     for (const id of scene.players?.keys?.() ?? []) {
@@ -76,7 +82,7 @@ export function installCoopLifecycleRuntime(scene, {
   const presentWipe = (player = scene.localPlayer) => {
     if (wipePresented) return
     wipePresented = true
-    originalGameOver?.call(scene, player)
+    playerLifecycle.presentGameOver(player)
   }
 
   const down = (player) => {
@@ -97,20 +103,18 @@ export function installCoopLifecycleRuntime(scene, {
     return { lifecycle: structuredClone(lifecycle), partyWiped }
   }
 
-  const coopGameOver = function coopGameOver(player = scene.localPlayer) {
+  restoreGameOverOwner = playerLifecycle.setGameOverOwner((player = scene.localPlayer) => {
     if (!isAuthority()) return null
     return down(player)
-  }
-  scene.gameOver = coopGameOver
+  })
 
-  const coopHitPlayer = function coopHitPlayer(damage, player = scene.localPlayer) {
+  restoreHitOwner = playerLifecycle.setHitOwner((damage, player = scene.localPlayer, coreHitPlayer) => {
     const id = normalizeId(player)
     ensureRoster()
     if (id && Number(lifecycle[id]?.invulnerabilityRemainingMs) > 0) return null
     if (!isAuthority()) return null
-    return originalHitPlayer?.call(scene, damage, player)
-  }
-  if (originalHitPlayer) scene.hitPlayer = coopHitPlayer
+    return coreHitPlayer?.(damage, player) ?? null
+  })
 
   const api = {
     snapshot() {
@@ -153,8 +157,10 @@ export function installCoopLifecycleRuntime(scene, {
       return Number(lifecycle[id]?.invulnerabilityRemainingMs) > 0
     },
     restore() {
-      if (scene.gameOver === coopGameOver && originalGameOver) scene.gameOver = originalGameOver
-      if (scene.hitPlayer === coopHitPlayer && originalHitPlayer) scene.hitPlayer = originalHitPlayer
+      restoreHitOwner?.()
+      restoreHitOwner = null
+      restoreGameOverOwner?.()
+      restoreGameOverOwner = null
       if (scene.__dungeonCoopLifecycle === api) scene.__dungeonCoopLifecycle = null
     },
   }
