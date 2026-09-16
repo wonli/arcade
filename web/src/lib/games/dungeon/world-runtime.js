@@ -231,9 +231,11 @@ export function createDungeonWorldRuntime(scene, {
   const applyDropSpawn = (fact) => {
     let drop = findDrop(scene, fact.entityId)
     if (!drop) {
-      drop = scene.__dungeonPickupRuntime?.spawnExact?.(Number(fact.x) || 0, Number(fact.y) || 0, structuredClone(fact.item ?? {}))
-        ?? loot.spawnExact(Number(fact.x) || 0, Number(fact.y) || 0, structuredClone(fact.item ?? {}))
-        ?? null
+      drop = loot.spawnExact(
+        Number(fact.x) || 0,
+        Number(fact.y) || 0,
+        structuredClone(fact.item ?? {}),
+      ) ?? null
     }
     if (!drop) return null
     drop.id = String(fact.entityId)
