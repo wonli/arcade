@@ -3,6 +3,7 @@ import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { ensureDungeonFloorRuntime, installDungeonFloorSceneBridge } from './floor-runtime.js'
 import { ensureDungeonLootRuntime } from './loot-runtime.js'
 import { ensureDungeonPortalRuntime, installDungeonPortalSceneBridge } from './portal-runtime.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
@@ -142,6 +143,8 @@ export function installInfiniteDungeon(scene, {
   scene.floor = progress.floor
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
+  installDungeonFloorSceneBridge(scene)
+  const floorRuntime = ensureDungeonFloorRuntime(scene)
   installDungeonPortalSceneBridge(scene)
   const portalRuntime = ensureDungeonPortalRuntime(scene)
   const loot = ensureDungeonLootRuntime(scene)
@@ -336,19 +339,22 @@ export function installInfiniteDungeon(scene, {
     scene.time.delayedCall(650, () => scene.openPortal(player))
   }
 
-  scene.advanceFloor = function advanceInfiniteFloor(target = player) {
-    if (target.dead) return
+  const advanceInfiniteFloor = (target = player) => {
+    if (target.dead) return null
     fortuneActive = false
     scene.destroyPortal()
     progress = advanceProgress(progress, random)
     scene.floor = progress.floor
     target.lastContactAt = scene.time.now
     startInfiniteFloor(false)
+    return scene.floor
   }
+  const restoreFloorAdvanceOwner = floorRuntime.setAdvanceOwner((target = player) => advanceInfiniteFloor(target))
 
   publish()
 
   scene.events?.once?.('shutdown', () => {
+    restoreFloorAdvanceOwner()
     restorePortalOpenOwner()
     restoreLootSpawnPolicy()
     destroyRest()
@@ -358,6 +364,7 @@ export function installInfiniteDungeon(scene, {
   return {
     getProgress: snapshot,
     destroy() {
+      restoreFloorAdvanceOwner()
       restorePortalOpenOwner()
       restoreLootSpawnPolicy()
       destroyRest()
