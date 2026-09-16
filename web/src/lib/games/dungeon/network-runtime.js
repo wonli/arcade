@@ -494,8 +494,11 @@ export function createDungeonNetworkRuntime({
 
     if (payload.type === 'dungeon.snapshot') {
       if (isAuthority() && payload.snapshot?.syncCheckpoint === true) {
+        const player = scene.players.has(sourcePlayerId)
+          ? scene.players.get(sourcePlayerId)
+          : applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
         void publishCheckpoint()
-        return scene.players.get(sourcePlayerId) ?? null
+        return player ?? null
       }
       return applyRemoteSnapshot(sourcePlayerId, payload.snapshot)
     }
