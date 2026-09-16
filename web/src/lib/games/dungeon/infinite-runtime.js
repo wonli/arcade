@@ -3,6 +3,7 @@ import { deriveEquipment, rollAffixes } from './affixes.js'
 import { elitePresentation, roomClearFeedback } from './combat-feel.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { ensureDungeonLootRuntime } from './loot-runtime.js'
 import { advanceProgress, createRunProgress, difficultyProfile, playerProgressionProfile, roomRoleAt } from './progression.js'
 import { growPlayerLegendaryForRoom } from './legendary-growth.js'
 import { currentWeapon } from './player-loadout.js'
@@ -140,9 +141,13 @@ export function installInfiniteDungeon(scene, {
   scene.floor = progress.floor
   const enemyPresentation = installEnemyPresentationRuntime(scene)
   const portalPresentation = installPortalPresentationRuntime(scene)
+  const loot = ensureDungeonLootRuntime(scene)
+  const restoreLootSpawnPolicy = loot.setSpawnPolicy((request) => ({
+    ...request,
+    item: promoteEquipment(request.item, progress.floor, fortuneActive, random),
+  }))
 
   const originalOpenPortal = scene.openPortal.bind(scene)
-  const originalSpawnDrop = scene.spawnDrop.bind(scene)
   const originalClearDrops = scene.clearDrops.bind(scene)
 
   const snapshot = () => progressSnapshot(progress, fortunePending, fortuneActive)
@@ -194,11 +199,6 @@ export function installInfiniteDungeon(scene, {
   }
 
   scene.openPortal = openInfinitePortal
-
-  scene.spawnDrop = function spawnDropWithProgression(x, y, item) {
-    const next = promoteEquipment(item, progress.floor, fortuneActive, random)
-    originalSpawnDrop(x, y, next)
-  }
 
   const spawnRestRoom = () => {
     const { x, y } = roomAnchor(scene.__roomGeometry, 'rest')
@@ -348,6 +348,7 @@ export function installInfiniteDungeon(scene, {
   publish()
 
   scene.events?.once?.('shutdown', () => {
+    restoreLootSpawnPolicy()
     destroyRest()
     enemyPresentation?.clearAll()
     scene.openPortal = originalOpenPortal
@@ -356,6 +357,7 @@ export function installInfiniteDungeon(scene, {
   return {
     getProgress: snapshot,
     destroy() {
+      restoreLootSpawnPolicy()
       destroyRest()
       enemyPresentation?.clearAll()
     },
