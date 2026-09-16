@@ -74,6 +74,24 @@ test('authority advances exactly once after both players dwell for three seconds
   assert.equal(scene.portal?.countdownLabel ?? null, null)
 })
 
+test('a new portal starts a fresh party dwell after the previous floor transitioned', () => {
+  const { scene, p1, p2, advances } = fixture()
+  p2.state.x = 104
+  scene.updatePortal(1000)
+  scene.updatePortal(4000)
+  assert.equal(advances(), 1)
+
+  scene.portal = { id: 'portal:R:2:0', x: 300, y: 300, unlockAt: 0 }
+  p1.state.x = 300
+  p1.state.y = 300
+  p2.state.x = 304
+  p2.state.y = 300
+  scene.updatePortal(5000)
+  scene.updatePortal(8000)
+
+  assert.equal(advances(), 2)
+})
+
 test('follower never advances locally and only renders authority countdown facts', () => {
   const { scene, runtime, advances } = fixture({ authority: false })
   scene.updatePortal(1000)
