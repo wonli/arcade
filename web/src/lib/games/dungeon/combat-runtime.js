@@ -138,8 +138,10 @@ export function ensureDungeonCombatRuntime(scene) {
       }
 
       const beforeHp = Number(enemy.hp) || 0
-      damageDepth++
+      const outermost = damageDepth === 0
+      let event = null
       let completed = false
+      damageDepth++
       try {
         const result = slots.damageResolver
           ? slots.damageResolver(hit, coreDamage)
@@ -151,21 +153,21 @@ export function ensureDungeonCombatRuntime(scene) {
           try { slots.weaponPolicy?.onImpact?.({ ...hit, beforeHp, afterHp }) } catch {}
         }
 
-        const event = applied ? { ...hit, beforeHp, afterHp, result } : null
-        if (damageDepth > 1) {
-          if (event) deferredDamageEvents.push(event)
-        } else {
-          if (event) notifyDamageApplied(event)
-          flushDeferredDamageEvents()
-          flushAfterDamage()
-        }
+        event = applied ? { ...hit, beforeHp, afterHp, result } : null
+        if (!outermost && event) deferredDamageEvents.push(event)
         completed = true
         return result
       } finally {
         damageDepth--
-        if (damageDepth === 0 && !completed) {
-          deferredDamageEvents = []
-          afterDamageCallbacks = []
+        if (!completed) {
+          if (outermost) {
+            deferredDamageEvents = []
+            afterDamageCallbacks = []
+          }
+        } else if (outermost) {
+          if (event) notifyDamageApplied(event)
+          flushDeferredDamageEvents()
+          flushAfterDamage()
         }
       }
     },
