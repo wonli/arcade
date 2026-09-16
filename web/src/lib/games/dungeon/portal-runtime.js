@@ -8,6 +8,12 @@ function restoreSlot(slots, name, owner, previous) {
   }
 }
 
+function normalizeUpdatePolicy(policy) {
+  if (!policy || typeof policy !== 'object') return null
+  const beforeUpdate = callable(policy.beforeUpdate)
+  return beforeUpdate ? { beforeUpdate } : null
+}
+
 export function ensureDungeonPortalRuntime(scene) {
   if (!scene || typeof scene !== 'object') throw new TypeError('Dungeon scene is required')
   if (scene.dungeon?.portal?.__dungeonPortalRuntime === true) return scene.dungeon.portal
@@ -19,6 +25,7 @@ export function ensureDungeonPortalRuntime(scene) {
   const slots = {
     openOwner: null,
     updateOwner: null,
+    updatePolicy: null,
     authority: null,
   }
 
@@ -38,9 +45,16 @@ export function ensureDungeonPortalRuntime(scene) {
       return value
     },
 
-    update(time) {
-      if (slots.updateOwner) return slots.updateOwner(time, core.update)
-      return core.update?.(time) ?? null
+    update(time, player = scene.localPlayer) {
+      const policy = slots.updatePolicy?.beforeUpdate?.({
+        time,
+        player,
+        portal: scene.portal ?? null,
+        hasUpdateOwner: typeof slots.updateOwner === 'function',
+      }) ?? null
+      if (policy?.handled) return policy.value ?? null
+      if (slots.updateOwner) return slots.updateOwner(time, core.update, player)
+      return core.update?.(time, player) ?? null
     },
 
     setOpenOwner(owner = null) {
@@ -53,6 +67,12 @@ export function ensureDungeonPortalRuntime(scene) {
       const previous = slots.updateOwner
       slots.updateOwner = callable(owner)
       return restoreSlot(slots, 'updateOwner', slots.updateOwner, previous)
+    },
+
+    setUpdatePolicy(policy = null) {
+      const previous = slots.updatePolicy
+      slots.updatePolicy = normalizeUpdatePolicy(policy)
+      return restoreSlot(slots, 'updatePolicy', slots.updatePolicy, previous)
     },
 
     setAuthority(owner = null) {
@@ -77,8 +97,8 @@ export function installDungeonPortalSceneBridge(scene) {
     openPortal(player = scene.localPlayer) {
       return portal.open(player)
     },
-    updatePortal(time) {
-      return portal.update(time)
+    updatePortal(time, player = scene.localPlayer) {
+      return portal.update(time, player)
     },
   }
 
