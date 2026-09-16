@@ -381,6 +381,7 @@ export function installPickupInteraction(scene, {
   const restoreRemoveOwner = loot.setRemoveOwner(removeOwner)
   const restoreClearOwner = loot.setClearOwner(clearOwner)
   const restoreStepOwner = loot.setStepOwner(stepOwner)
+  const restorePresentationOwner = loot.setPresentationOwner(reconcileVisuals)
 
   const confirmSelected = () => loot.step(player, { confirmSelection: true })
   key?.on?.('down', confirmSelected)
@@ -399,6 +400,7 @@ export function installPickupInteraction(scene, {
     pickupIntentHandler = null
     scene.__dungeonDropNavGrid = null
     scene.__pickupInteractionInstalled = false
+    restorePresentationOwner()
     restoreStepOwner()
     restoreClearOwner()
     restoreRemoveOwner()
