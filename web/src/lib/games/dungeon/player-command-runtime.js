@@ -1,3 +1,4 @@
+import { ensureDungeonCapabilities } from './gameplay-capabilities.js'
 import { castPlayerSkill } from './player-skill-runtime.js'
 
 function result(command, overrides = {}) {
@@ -68,12 +69,13 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
   }
 
   if (type === 'attack') {
-    if (typeof scene.autoAttack !== 'function') {
+    const attack = ensureDungeonCapabilities(scene).combat?.attack
+    if (typeof attack !== 'function') {
       return result(command, { accepted: true, playerId, reason: 'attack-unavailable' })
     }
 
     const beforeAttackAt = player.lastAttackAt
-    const value = scene.autoAttack(commandTime(scene, command), player)
+    const value = attack(player, commandTime(scene, command))
     const applied = player.lastAttackAt !== beforeAttackAt
     return result(command, {
       accepted: true,
@@ -100,8 +102,10 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
+  const loot = ensureDungeonCapabilities(scene).loot
+
   if (type === 'open_chest') {
-    const openChest = scene.__dungeonSpatial?.openChestById
+    const openChest = loot?.openChest
     if (typeof openChest !== 'function') {
       return result(command, { accepted: true, playerId, reason: 'chest-unavailable' })
     }
@@ -116,7 +120,7 @@ export function executePlayerCommand(scene, command, { authoritative = true } = 
     })
   }
 
-  const pickup = scene.__dungeonPickupRuntime?.pickupById
+  const pickup = loot?.pickup
   if (typeof pickup !== 'function') {
     return result(command, { accepted: true, playerId, reason: 'pickup-unavailable' })
   }
