@@ -35,6 +35,12 @@ function wireCommand(command = {}) {
   return next
 }
 
+function peerIds(players = []) {
+  return [...new Set((Array.isArray(players) ? players : [])
+    .map((player) => String(player?.id ?? player?.playerId ?? player ?? '').trim())
+    .filter(Boolean))].sort()
+}
+
 function createLocalPlayerLabel(scene, player) {
   if (!scene.add?.text || player.label) return player.label ?? null
   const slot = Number.isInteger(player.slot) ? player.slot + 1 : '?'
@@ -486,6 +492,17 @@ export function createDungeonNetworkRuntime({
     return returned
   }
 
+  function updatePeers(players = []) {
+    const ids = peerIds(players)
+    if (!ids.includes(normalizedLocalId)) return null
+    if (ids.includes(authorityState.authorityId)) return null
+    if (isAuthority()) return null
+    if (!sessionRuntime.snapshot()) return null
+    const elected = ids[0] ?? ''
+    if (elected !== normalizedLocalId) return null
+    return takeAuthority()
+  }
+
   function start() {
     if (started) return api
     started = true
@@ -531,6 +548,7 @@ export function createDungeonNetworkRuntime({
     checkpoint: () => sessionRuntime.snapshot(),
     captureCheckpoint,
     takeAuthority,
+    updatePeers,
     flushSnapshot,
     sendCommand,
     sendFact,
