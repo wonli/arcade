@@ -253,6 +253,7 @@ export function createDungeonWorldRuntime(scene, {
     drop.y = Number(fact.y) || 0
     drop.item = structuredClone(fact.item ?? drop.item ?? {})
     drop.visual?.setPosition?.(drop.x, drop.y)
+    scene.__dungeonPickupRuntime?.reconcileVisuals?.()
     return drop
   }
 
