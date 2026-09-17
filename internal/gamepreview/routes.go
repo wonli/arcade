@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,7 @@ const maxUploadRequestBytes = maxImageBytes + 64<<10
 type responseMetadata struct {
 	Game       string          `json:"game"`
 	ImageURL   string          `json:"imageUrl"`
-	CapturedAt any             `json:"capturedAt"`
+	CapturedAt time.Time       `json:"capturedAt"`
 	RoomID     string          `json:"roomId,omitempty"`
 	Players    int             `json:"players,omitempty"`
 	Summary    json.RawMessage `json:"summary,omitempty"`
@@ -37,6 +38,7 @@ func previewResponse(meta Metadata) responseMetadata {
 
 func RegisterRoutes(engine *gin.Engine, store *Store) {
 	engine.GET("/api/game-previews/:game", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		game, err := normalizeGame(c.Param("game"))
 		if err != nil { c.JSON(http.StatusNotFound, gin.H{"error": "game preview not found"}); return }
 		meta, err := store.Load(game)
@@ -60,6 +62,7 @@ func RegisterRoutes(engine *gin.Engine, store *Store) {
 	})
 
 	engine.POST("/api/game-previews/:game", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		game, err := normalizeGame(c.Param("game"))
 		if err != nil { c.JSON(http.StatusNotFound, gin.H{"error": "unknown game"}); return }
 		if !store.ValidateToken(c.GetHeader("X-Arcade-Preview-Token")) {
