@@ -1,5 +1,6 @@
-import { createSnapshotRecorder, encodeCompactRecording, decodeRecording, createCanvasReplayPlayer } from '../../replay/snapshot.js'
-import { clearScene, drawFrame } from '../../replay/canvas.js'
+import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
+import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
+import DrawReplaySurface from './DrawReplaySurface.svelte'
 
 export const replay = Object.freeze({
   id: 'drawguess',
@@ -10,7 +11,11 @@ export const replay = Object.freeze({
   encode: encodeCompactRecording,
   decode: decodeRecording,
   createPlayer(target, recording, options = {}) {
-    return createCanvasReplayPlayer(target, recording, drawState, options)
+    return createSvelteReplayPlayer(target, recording, DrawReplaySurface, {
+      width: 960,
+      height: 600,
+      ...options,
+    })
   },
 })
 
@@ -41,33 +46,6 @@ function compactStrokes(strokes) {
     })
   }
   return result.reverse()
-}
-
-function drawState(canvas, state = {}) {
-  const ctx = clearScene(canvas)
-  const width = Math.min(1080, canvas.width - 110)
-  const height = Math.min(580, canvas.height - 100)
-  const x = Math.round((canvas.width - width) / 2)
-  const y = Math.round((canvas.height - height) / 2)
-  drawFrame(ctx, x, y, width, height)
-  ctx.fillStyle = '#f7f4ed'
-  ctx.fillRect(x + 2, y + 2, width - 4, height - 4)
-
-  for (const stroke of state.strokes ?? []) {
-    const points = stroke.points ?? []
-    if (points.length < 2) continue
-    ctx.save()
-    ctx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over'
-    ctx.strokeStyle = stroke.color || '#111111'
-    ctx.lineWidth = Math.max(2, stroke.width * width / 800)
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.beginPath()
-    ctx.moveTo(x + points[0].x * width, y + points[0].y * height)
-    for (let index = 1; index < points.length; index += 1) ctx.lineTo(x + points[index].x * width, y + points[index].y * height)
-    ctx.stroke()
-    ctx.restore()
-  }
 }
 
 function round(value) { return Math.round(Math.min(1, Math.max(0, Number(value) || 0)) * 10_000) / 10_000 }
