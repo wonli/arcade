@@ -2,14 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const fallbackUrl = new URL('../../static/assets/preview-fallback.svg', import.meta.url)
+const fallbackUrl = new URL('../../static/assets/banner.png', import.meta.url)
 
-test('preview fallback is an animated svg hero asset', async () => {
-  const source = await readFile(fallbackUrl, 'utf8')
+test('preview fallback uses the committed banner png', async () => {
+  const source = await readFile(fallbackUrl)
 
-  assert.match(source, /<svg\b/)
-  assert.match(source, /viewBox="0 0 1600 900"/)
-  assert.match(source, /<animateTransform\b|<animate\b/)
-  assert.match(source, /prefers-reduced-motion/)
-  assert.match(source, /#c1ff56/i)
+  assert.ok(source.length > 8)
+  assert.deepEqual([...source.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
 })
