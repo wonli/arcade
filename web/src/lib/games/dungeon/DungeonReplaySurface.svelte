@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
+  import { installDungeonSpatial } from './spatial-runtime.js'
   import { loadPhaser } from './phaser.js'
 
   let { frameStore } = $props()
@@ -8,7 +9,9 @@
   let mount
   let game = null
   let scene = null
+  let spatialRuntime = null
   let replayEnemies = []
+  let replayProgress = { floor: 1, room: 1, roomRole: 'combat' }
   let ready = $state(false)
 
   $effect(() => {
@@ -40,7 +43,8 @@
     const nextFloor = Math.max(1, Number(floor) || 1)
     if (scene.floor === nextFloor && ready) return
     scene.floor = nextFloor
-    scene.drawArena?.()
+    if (spatialRuntime?.refreshRoom) spatialRuntime.refreshRoom()
+    else scene.drawArena?.()
   }
 
   function enemyType(enemy = {}) {
@@ -81,7 +85,12 @@
 
   function applyFrame(frame = {}) {
     if (!scene) return
-    rebuildArena(frame.progress?.floor)
+    replayProgress = {
+      floor: Math.max(1, Number(frame.progress?.floor) || 1),
+      room: Math.max(1, Number(frame.progress?.room) || 1),
+      roomRole: frame.progress?.roomRole ?? 'combat',
+    }
+    rebuildArena(replayProgress.floor)
 
     const width = 960
     const height = 600
@@ -133,10 +142,24 @@
         if (attempts++ < 90) requestAnimationFrame(attach)
         return
       }
-      scene.scene?.pause?.()
+
+      const firstFrame = $frameStore
+      replayProgress = {
+        floor: Math.max(1, Number(firstFrame?.progress?.floor) || 1),
+        room: Math.max(1, Number(firstFrame?.progress?.room) || 1),
+        roomRole: firstFrame?.progress?.roomRole ?? 'combat',
+      }
+
       clearLiveArtifacts()
+      spatialRuntime = installDungeonSpatial(scene, {
+        player: scene.localPlayer,
+        getProgress: () => replayProgress,
+        onEvent: () => {},
+        label: (key) => key,
+      })
+      scene.scene?.pause?.()
       ready = true
-      applyFrame($frameStore)
+      applyFrame(firstFrame)
     }
     requestAnimationFrame(attach)
   }
@@ -148,6 +171,7 @@
       game?.destroy?.(true)
       game = null
       scene = null
+      spatialRuntime = null
     }
   })
 </script>
