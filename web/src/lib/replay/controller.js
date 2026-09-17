@@ -169,7 +169,7 @@ export function createReplayController({
     finish,
     destroy,
     uploadNow: () => uploadCurrent(),
-    record: (value, at) => recorder?.record?.(value, at),
+    record: (...args) => recorder?.record?.(...args),
     subscribe(listener) { listeners.add(listener); listener(state); return () => listeners.delete(listener) },
     getState: () => state,
   }
