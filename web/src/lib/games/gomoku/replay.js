@@ -1,6 +1,5 @@
 import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
 import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
-import GomokuReplaySurface from './GomokuReplaySurface.svelte'
 
 export const replay = Object.freeze({
   id: 'gomoku',
@@ -10,7 +9,8 @@ export const replay = Object.freeze({
   },
   encode: encodeCompactRecording,
   decode: decodeRecording,
-  createPlayer(target, recording, options = {}) {
+  async createPlayer(target, recording, options = {}) {
+    const { default: GomokuReplaySurface } = await import('./GomokuReplaySurface.svelte')
     return createSvelteReplayPlayer(target, recording, GomokuReplaySurface, {
       width: 828,
       height: 828,
