@@ -1,41 +1,63 @@
 <script>
-  import { fetchPreview } from '$lib/preview/client.js'
-  import { previewSummaryKeys } from '$lib/preview/presentation.js'
+  import { fetchReplay } from '$lib/replay/client.js'
+  import { getReplayAdapter } from '$lib/replay/registry.js'
 
   let { game, locale = 'en', t = (key) => key } = $props()
 
   let metadata = $state(null)
   let loadedGame = $state('')
   let loading = $state(false)
-  let imageFailed = $state(false)
+  let replayActive = $state(false)
+  let replayTarget = $state(null)
+  let player = null
   let loadToken = 0
 
-  const summaryRows = $derived(previewSummaryKeys(metadata?.summary ?? {}))
-  const capturedTime = $derived(formatCapturedTime(metadata?.capturedAt))
-  const hasLivePreview = $derived(!!metadata?.imageUrl && !imageFailed)
-  const previewSrc = $derived(hasLivePreview ? metadata.imageUrl : '/assets/banner.png')
+  const capturedTime = $derived(formatCapturedTime(metadata?.recordedAt))
 
   $effect(() => {
-    if (!game || game === loadedGame) return
-    loadedGame = game
-    void load(game)
+    const nextGame = game
+    const target = replayTarget
+    if (!nextGame || !target) return
+    void load(nextGame, target)
+    return () => {
+      loadToken += 1
+      destroyPlayer()
+    }
   })
 
-  async function load(nextGame) {
+  async function load(nextGame, target) {
     const token = ++loadToken
+    loadedGame = nextGame
     loading = true
-    imageFailed = false
+    replayActive = false
     metadata = null
+    destroyPlayer()
+    target.replaceChildren()
+
     try {
-      const next = await fetchPreview(nextGame)
-      if (token !== loadToken || nextGame !== game) return
-      metadata = next
+      const result = await fetchReplay(nextGame)
+      if (token !== loadToken || nextGame !== game || target !== replayTarget) return
+      if (!result) return
+      const adapter = getReplayAdapter(nextGame)
+      if (!adapter || adapter.version !== result.metadata?.version) throw new Error('unsupported replay version')
+      const recording = adapter.decode(result.bytes)
+      player = adapter.createPlayer(target, recording)
+      metadata = result.metadata
+      replayActive = true
     } catch {
       if (token !== loadToken || nextGame !== game) return
+      replayActive = false
       metadata = null
+      destroyPlayer()
+      target.replaceChildren()
     } finally {
       if (token === loadToken) loading = false
     }
+  }
+
+  function destroyPlayer() {
+    try { player?.destroy?.() } catch {}
+    player = null
   }
 
   function formatCapturedTime(value) {
@@ -51,14 +73,15 @@
 </script>
 
 <section class="preview-hero" data-game={game} aria-label={t('home.preview')}>
-  <img class:fallback={!hasLivePreview} src={previewSrc} alt="" onerror={() => (imageFailed = true)} />
+  <img class="fallback" class:hidden={replayActive} src="/assets/banner.png" alt="" />
+  <div class="replay-stage" class:active={replayActive} bind:this={replayTarget}></div>
 
   <div class="edge-fade" aria-hidden="true"></div>
   <div class="bottom-fade" aria-hidden="true"></div>
 
   <div class="preview-status">
-    <span class:live={hasLivePreview}></span>
-    {hasLivePreview ? t('home.preview') : (loading ? '…' : t('home.previewUnavailable'))}
+    <span class:live={replayActive}></span>
+    {replayActive ? t('home.preview') : (loading ? '…' : t('home.previewUnavailable'))}
   </div>
 
   <div class="overlay">
@@ -67,7 +90,7 @@
       <h2>{t(`game.${game}.name`)}</h2>
       <div class="facts">
         {#if metadata?.players}<span>{t('home.playersCount',{count:metadata.players})}</span>{/if}
-        {#each summaryRows as row}<span>{t(row[0],row[1])}</span>{/each}
+        {#if replayActive}<span>REPLAY · {Math.max(1, Math.round((metadata?.durationMs ?? 0) / 1000))}S</span>{/if}
       </div>
     </div>
     <div class="time">
@@ -78,8 +101,12 @@
 
 <style>
   .preview-hero{position:relative;width:100%;height:100%;min-height:0;overflow:hidden;background:#000;isolation:isolate}
-  .preview-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;transform:scale(1.02);filter:saturate(.9) contrast(1.06)}
-  .preview-hero img.fallback{object-position:center 48%;filter:saturate(.9) contrast(1.08) brightness(.9)}
+  .fallback,.replay-stage{position:absolute;inset:0;width:100%;height:100%}
+  .fallback{object-fit:cover;object-position:center 48%;transform:scale(1.02);filter:saturate(.9) contrast(1.08) brightness(.9);opacity:1;transition:opacity .25s ease}
+  .fallback.hidden{opacity:0}
+  .replay-stage{z-index:1;opacity:0;transition:opacity .25s ease;background:#0b0d10}
+  .replay-stage.active{opacity:1}
+  .replay-stage :global(canvas){width:100%!important;height:100%!important;display:block}
   .edge-fade{position:absolute;z-index:2;inset:0;pointer-events:none;background:
     linear-gradient(90deg,#0b0d10 0%,rgba(11,13,16,.88) 3%,rgba(11,13,16,.28) 11%,transparent 24%,transparent 76%,rgba(11,13,16,.3) 89%,rgba(11,13,16,.9) 97%,#0b0d10 100%),
     linear-gradient(180deg,#0b0d10 0%,rgba(11,13,16,.45) 7%,transparent 22%,transparent 72%,rgba(11,13,16,.55) 92%,#0b0d10 100%)}
