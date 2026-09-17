@@ -101,15 +101,15 @@
         <div class="section-label">{t('home.setup')}</div>
 
         <div class="setup-controls">
-          {#if game === 'tetris' || game === 'chess' || game === 'dungeon'}
+          {#if game === 'gomoku' || game === 'tetris' || game === 'chess' || game === 'dungeon'}
             <div class="mode-picker" aria-label="Player mode">
-              <button class:active={players === 1} onclick={() => (players = 1)}><strong>{game === 'chess' ? t('home.players.bot') : t('home.players.one')}</strong><small>{t('home.startInstantly')}</small></button>
+              <button class:active={players === 1} onclick={() => (players = 1)}><strong>{game === 'chess' || game === 'gomoku' ? t('home.players.bot') : t('home.players.one')}</strong><small>{t('home.startInstantly')}</small></button>
               <button class:active={players === 2} onclick={() => (players = 2)}><strong>{t('home.players.two')}</strong><small>{game === 'chess' ? t('home.onlineRoom') : t('home.inviteFriend')}</small></button>
             </div>
           {:else}
             <div class="mode-summary">
               <strong>{game === 'snake' ? '1–8' : game === 'drawguess' ? '2–8' : '2'} {locale === 'zh-CN' ? '人' : 'PLAYERS'}</strong>
-              <span>{game === 'gomoku' ? t('home.inviteFriend') : t('home.onlineRoom')}</span>
+              <span>{t('home.onlineRoom')}</span>
             </div>
           {/if}
 
@@ -125,7 +125,7 @@
         <LauncherHelp metadata={launcherMetadata} {t} />
 
         <div class="setup-actions">
-          {#if (game !== 'chess' || players === 2) && (game !== 'dungeon' || players === 2)}
+          {#if (game !== 'gomoku' || players === 2) && (game !== 'chess' || players === 2) && (game !== 'dungeon' || players === 2)}
             <div class="join-block">
               <div class="divider"><span>{t('home.orJoin')}</span></div>
               <div class="join">
