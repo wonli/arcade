@@ -1,5 +1,6 @@
-import { createSnapshotRecorder, encodeCompactRecording, decodeRecording, createCanvasReplayPlayer } from '../../replay/snapshot.js'
-import { clearScene, drawFrame, REPLAY_PALETTE } from '../../replay/canvas.js'
+import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
+import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
+import DungeonReplaySurface from './DungeonReplaySurface.svelte'
 
 const DUNGEON_WIDTH = 960
 const DUNGEON_HEIGHT = 600
@@ -13,7 +14,11 @@ export const replay = Object.freeze({
   encode: encodeCompactRecording,
   decode: decodeRecording,
   createPlayer(target, recording, options = {}) {
-    return createCanvasReplayPlayer(target, recording, drawState, options)
+    return createSvelteReplayPlayer(target, recording, DungeonReplaySurface, {
+      width: DUNGEON_WIDTH,
+      height: DUNGEON_HEIGHT,
+      ...options,
+    })
   },
 })
 
@@ -33,7 +38,12 @@ export function createDungeonReplaySnapshot({ scene, stats = {}, progress = {}, 
     enemies: (scene?.enemies ?? []).map((enemy) => ({
       x: normalizeX(enemy?.x),
       y: normalizeY(enemy?.y),
-      kind: enemy?.boss ? 'boss' : enemy?.elite ? 'elite' : (enemy?.archetype ?? 'enemy'),
+      kind: enemy?.boss ? 'boss' : enemy?.elite ? 'elite' : (enemy?.archetype ?? 'skeleton'),
+      archetype: enemy?.archetype ?? 'skeleton',
+      elite: !!enemy?.elite,
+      boss: !!enemy?.boss,
+      hp: Number(enemy?.hp ?? 0),
+      maxHp: Math.max(1, Number(enemy?.maxHp ?? enemy?.hp ?? 1)),
       alive: Number(enemy?.hp ?? 0) > 0,
     })),
     stats: {
@@ -58,6 +68,11 @@ function sanitizeState(state = {}) {
       x: round(enemy.x),
       y: round(enemy.y),
       kind: String(enemy.kind ?? 'enemy').slice(0, 20),
+      archetype: String(enemy.archetype ?? enemy.kind ?? 'skeleton').slice(0, 20),
+      elite: !!enemy.elite,
+      boss: !!enemy.boss,
+      hp: Math.max(0, int(enemy.hp)),
+      maxHp: Math.max(1, int(enemy.maxHp) || 1),
       alive: enemy.alive !== false,
     })),
     stats: {
@@ -71,40 +86,6 @@ function sanitizeState(state = {}) {
       roomRole: String(state.progress?.roomRole ?? 'combat').slice(0, 20),
     },
   }
-}
-
-function drawState(canvas, state = {}) {
-  const ctx = clearScene(canvas)
-  const width = Math.min(1080, canvas.width - 120)
-  const height = Math.min(590, canvas.height - 90)
-  const x = Math.round((canvas.width - width) / 2)
-  const y = Math.round((canvas.height - height) / 2)
-  drawFrame(ctx, x, y, width, height)
-
-  ctx.fillStyle = '#15191d'
-  for (let column = 0; column < 12; column += 1) {
-    for (let row = 0; row < 7; row += 1) {
-      if ((column + row) % 2) ctx.fillRect(x + column * width / 12, y + row * height / 7, width / 12, height / 7)
-    }
-  }
-
-  const sx = (value) => x + Math.min(1, Math.max(0, value)) * width
-  const sy = (value) => y + Math.min(1, Math.max(0, value)) * height
-  for (const enemy of state.enemies ?? []) {
-    ctx.globalAlpha = enemy.alive === false ? .25 : 1
-    ctx.fillStyle = enemy.kind === 'boss' ? '#ff5d5d' : enemy.kind === 'elite' ? '#ffcf5a' : '#f4f0e8'
-    ctx.beginPath(); ctx.arc(sx(enemy.x), sy(enemy.y), enemy.kind === 'boss' ? 18 : 11, 0, Math.PI * 2); ctx.fill()
-  }
-  ctx.globalAlpha = 1
-  ctx.fillStyle = REPLAY_PALETTE.accent
-  ctx.beginPath(); ctx.arc(sx(state.player?.x ?? .5), sy(state.player?.y ?? .5), 13, 0, Math.PI * 2); ctx.fill()
-  ctx.strokeStyle = '#0b0d10'; ctx.lineWidth = 3; ctx.stroke()
-
-  const hpRatio = Math.min(1, Math.max(0, (state.stats?.hp ?? 0) / Math.max(1, state.stats?.maxHp ?? 1)))
-  ctx.fillStyle = '#252b32'; ctx.fillRect(x + 20, y + 20, 220, 10)
-  ctx.fillStyle = '#c1ff56'; ctx.fillRect(x + 20, y + 20, 220 * hpRatio, 10)
-  ctx.fillStyle = '#69727d'; ctx.font = '800 12px ui-monospace, monospace'
-  ctx.fillText(`FLOOR ${state.progress?.floor ?? 1}  ·  ROOM ${state.progress?.room ?? 1}  ·  KILLS ${state.stats?.kills ?? 0}`, x + 20, y + 52)
 }
 
 function int(value) { return Math.round(Number(value) || 0) }
