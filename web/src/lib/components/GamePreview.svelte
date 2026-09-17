@@ -41,7 +41,12 @@
       const adapter = getReplayAdapter(nextGame)
       if (!adapter || adapter.version !== result.metadata?.version) throw new Error('unsupported replay version')
       const recording = adapter.decode(result.bytes)
-      player = adapter.createPlayer(target, recording)
+      const nextPlayer = await adapter.createPlayer(target, recording)
+      if (token !== loadToken || nextGame !== game || target !== replayTarget) {
+        try { nextPlayer?.destroy?.() } catch {}
+        return
+      }
+      player = nextPlayer
       metadata = result.metadata
       replayActive = true
     } catch {
