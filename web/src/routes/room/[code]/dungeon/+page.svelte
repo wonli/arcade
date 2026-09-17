@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
+  import { setAppLocale, subscribeLocale } from '$lib/locale.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
@@ -40,6 +41,7 @@
   let networkRuntime = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
+  let unsubscribeLocale = () => {}
   let connection = 'connecting'
   let ready = false
   let panelOpen = false
@@ -77,12 +79,15 @@
     return t({ connecting: 'connectionConnecting', live: 'connectionLive', offline: 'connectionOffline' }[connection] ?? 'connectionOffline')
   }
 
-  function setLocale(next) {
+  function applyLocale(next) {
     locale = normalizeDungeonLocale(next)
-    localStorage.setItem('arcade.locale', locale)
     scene?.__comparisonCard?.refresh?.()
     pickupRuntime?.refreshLabels?.()
     hudRuntime?.update()
+  }
+
+  function setLocale(next) {
+    setAppLocale(normalizeDungeonLocale(next))
   }
 
   function toggleLocale() {
@@ -127,7 +132,6 @@
     resources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
     return resources
   }
-
   function onEvent(event) {
     if (!event?.type) return
     if (event.type === 'floorstart') eventText = t('floorStart', { floor: event.floor })
@@ -325,8 +329,7 @@
   }
 
   onMount(() => {
-    const saved = localStorage.getItem('arcade.locale')
-    locale = normalizeDungeonLocale(saved || navigator.language)
+    unsubscribeLocale = subscribeLocale(applyLocale)
     unsubscribeConnection = socket.onConnection((state) => { connection = state })
     bootstrap().catch((cause) => {
       console.error(cause)
@@ -341,6 +344,7 @@
       networkRuntime = null
       unsubscribeRoom()
       unsubscribeConnection()
+      unsubscribeLocale()
       touchInput?.stopMove()
       scene?.__comparisonCard?.destroy?.()
       if (scene) scene.__comparisonCard = null
