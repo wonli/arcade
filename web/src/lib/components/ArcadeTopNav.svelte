@@ -1,10 +1,13 @@
 <script>
   import { onMount } from 'svelte'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
+  import { subscribeReplayStatus } from '$lib/replay/status.js'
 
   let { game = '', room = '' } = $props()
   let locale = $state('en')
+  let replayStatus = $state({ phase: 'idle', game: '', error: '' })
   let unsubscribeLocale = () => {}
+  let unsubscribeReplay = () => {}
 
   const labels = {
     gomoku: { en: 'GOMOKU', 'zh-CN': '五子棋' },
@@ -17,10 +20,15 @@
 
   const gameLabel = $derived(labels[game]?.[locale] ?? labels[game]?.en ?? '')
   const roomLabel = $derived(room && room !== 'new' ? room.toLowerCase() : '')
+  const replayLabel = $derived(replayStatus.phase === 'recording' ? 'REC' : replayStatus.phase === 'uploading' ? 'UPLOADING' : replayStatus.phase === 'saved' ? 'SAVED' : replayStatus.phase === 'error' ? 'REPLAY ERROR' : '')
 
   onMount(() => {
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
-    return () => unsubscribeLocale()
+    unsubscribeReplay = subscribeReplayStatus((next) => (replayStatus = next))
+    return () => {
+      unsubscribeLocale()
+      unsubscribeReplay()
+    }
   })
 </script>
 
@@ -37,10 +45,15 @@
     </div>
   {/if}
 
-  <div class="language-switch" aria-label="Language">
-    <button class:active={locale === 'en'} aria-pressed={locale === 'en'} onclick={() => setAppLocale('en')}>EN</button>
-    <span>/</span>
-    <button class:active={locale === 'zh-CN'} aria-pressed={locale === 'zh-CN'} onclick={() => setAppLocale('zh-CN')}>中文</button>
+  <div class="right-tools">
+    {#if replayLabel}
+      <span class="replay-status" class:error={replayStatus.phase === 'error'} class:active={replayStatus.phase === 'recording'}>{replayStatus.phase === 'recording' ? '● ' : ''}{replayLabel}</span>
+    {/if}
+    <div class="language-switch" aria-label="Language">
+      <button class:active={locale === 'en'} aria-pressed={locale === 'en'} onclick={() => setAppLocale('en')}>EN</button>
+      <span>/</span>
+      <button class:active={locale === 'zh-CN'} aria-pressed={locale === 'zh-CN'} onclick={() => setAppLocale('zh-CN')}>中文</button>
+    </div>
   </div>
 </nav>
 
@@ -50,8 +63,11 @@
   .brand-mark{display:grid;place-items:center;width:24px;height:24px;flex:0 0 auto;background:#c1ff56;color:#0b0d10;font-size:11px;letter-spacing:0}
   .context{grid-column:2;justify-self:center;display:flex;align-items:center;gap:7px;max-width:min(460px,42vw);min-width:0;color:#727b85;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;white-space:nowrap;text-transform:uppercase;pointer-events:none}
   .context span{overflow:hidden;text-overflow:ellipsis}.context i{color:#3f4650;font-style:normal}.context strong{color:#f4f0e8;font:inherit}
-  .language-switch{grid-column:3;justify-self:end;flex:0 0 auto;display:flex;align-items:center;gap:4px;color:#3f4650;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+  .right-tools{grid-column:3;justify-self:end;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:10px;white-space:nowrap}
+  .replay-status{overflow:hidden;text-overflow:ellipsis;color:#8b949e;font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.11em}.replay-status.active{color:#c1ff56}.replay-status.error{color:#ff7b72}
+  .language-switch{flex:0 0 auto;display:flex;align-items:center;gap:4px;color:#3f4650;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
   .language-switch button{height:28px;padding:0 6px;border:0;background:transparent;color:#737b85;font:inherit;cursor:pointer}.language-switch button.active{color:#c1ff56}
-  @media(max-width:640px){.arcade-top-nav{height:40px;grid-template-columns:minmax(0,1fr) auto;padding:0 10px;column-gap:8px}.brand{grid-column:1;font-size:9px;gap:7px}.brand-mark{width:22px;height:22px}.context{display:none}.language-switch{grid-column:2;justify-self:end}.language-switch button{height:26px;padding:0 5px}}
+  @media(max-width:640px){.arcade-top-nav{height:40px;grid-template-columns:minmax(0,1fr) auto;padding:0 10px;column-gap:8px}.brand{grid-column:1;font-size:9px;gap:7px}.brand-mark{width:22px;height:22px}.context{display:none}.right-tools{grid-column:2;justify-self:end;gap:6px}.replay-status{max-width:68px;font-size:7px}.language-switch button{height:26px;padding:0 5px}}
+  @media(max-width:420px){.replay-status{display:none}}
   @media(max-width:360px){.brand-copy{display:none}}
 </style>
