@@ -19,3 +19,13 @@ test('home game copy changes when selected game changes', () => {
   assert.equal(tetris.title, 'Tetris Battle')
   assert.match(tetris.description, /board/i)
 })
+
+test('gomoku start copy distinguishes bot and two-player modes', () => {
+  const t = createTranslator('en')
+
+  const bot = gameCopy({ game: 'gomoku', players: 1, chessDifficulty: 'medium', locale: 'en' }, t)
+  const online = gameCopy({ game: 'gomoku', players: 2, chessDifficulty: 'medium', locale: 'en' }, t)
+
+  assert.equal(bot.createLabel, 'Play vs Bot')
+  assert.equal(online.createLabel, 'Start 2 player Gomoku')
+})
