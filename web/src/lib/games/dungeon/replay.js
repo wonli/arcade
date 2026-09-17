@@ -1,6 +1,9 @@
 import { createSnapshotRecorder, encodeCompactRecording, decodeRecording, createCanvasReplayPlayer } from '../../replay/snapshot.js'
 import { clearScene, drawFrame, REPLAY_PALETTE } from '../../replay/canvas.js'
 
+const DUNGEON_WIDTH = 960
+const DUNGEON_HEIGHT = 600
+
 export const replay = Object.freeze({
   id: 'dungeon',
   version: 1,
@@ -13,6 +16,38 @@ export const replay = Object.freeze({
     return createCanvasReplayPlayer(target, recording, drawState, options)
   },
 })
+
+export function createDungeonReplaySnapshot({ scene, stats = {}, progress = {}, width = DUNGEON_WIDTH, height = DUNGEON_HEIGHT } = {}) {
+  const playerState = scene?.localPlayer?.state
+  if (!playerState) return null
+  const normalizedWidth = Math.max(1, Number(width) || DUNGEON_WIDTH)
+  const normalizedHeight = Math.max(1, Number(height) || DUNGEON_HEIGHT)
+  const normalizeX = (value) => clamp01(Number(value ?? 0) / normalizedWidth)
+  const normalizeY = (value) => clamp01(Number(value ?? 0) / normalizedHeight)
+
+  return {
+    player: {
+      x: normalizeX(playerState.x),
+      y: normalizeY(playerState.y),
+    },
+    enemies: (scene?.enemies ?? []).map((enemy) => ({
+      x: normalizeX(enemy?.x),
+      y: normalizeY(enemy?.y),
+      kind: enemy?.boss ? 'boss' : enemy?.elite ? 'elite' : (enemy?.archetype ?? 'enemy'),
+      alive: Number(enemy?.hp ?? 0) > 0,
+    })),
+    stats: {
+      hp: stats?.hp ?? playerState.hp ?? 0,
+      maxHp: stats?.maxHp ?? playerState.maxHp ?? 100,
+      kills: stats?.kills ?? scene?.kills ?? 0,
+    },
+    progress: {
+      floor: progress?.floor ?? scene?.floor ?? 1,
+      room: progress?.room ?? 1,
+      roomRole: progress?.roomRole ?? 'combat',
+    },
+  }
+}
 
 function sanitizeState(state = {}) {
   const player = state.player ? { x: round(state.player.x), y: round(state.player.y) } : null
@@ -78,3 +113,4 @@ function round(value) {
   if (number > 1 || number < 0) return Math.round(number * 100) / 100
   return Math.round(number * 10_000) / 10_000
 }
+function clamp01(value) { return Math.min(1, Math.max(0, Number(value) || 0)) }
