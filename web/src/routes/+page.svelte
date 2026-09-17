@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import GamePreview from '$lib/components/GamePreview.svelte'
+  import { gameCopy, difficultyLabel } from '$lib/home/game-copy.js'
   import { createTranslator } from '$lib/i18n.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
 
@@ -13,6 +14,7 @@
   let unsubscribeLocale = () => {}
 
   $: t = createTranslator(locale)
+  $: copy = gameCopy({ game, players, chessDifficulty, locale }, t)
 
   const games = [
     { id: 'gomoku', number: '01' },
@@ -51,37 +53,7 @@
     goto(`/room/${code}/${game}`)
   }
 
-  function title() { return t(`game.${game}.name`) }
   function shortLabel(id) { return t(`game.${id}.short`) }
-
-  function description() {
-    if (game === 'gomoku' || game === 'snake' || game === 'drawguess') return t(`game.${game}.description`)
-    if (game === 'chess') return t(players === 1 ? 'game.chess.descriptionBot' : 'game.chess.descriptionOnline', { difficulty: difficultyLabel(chessDifficulty) })
-    if (game === 'tetris') return t(players === 1 ? 'game.tetris.descriptionSolo' : 'game.tetris.descriptionOnline')
-    return t(players === 1 ? 'game.dungeon.descriptionSolo' : 'game.dungeon.descriptionOnline')
-  }
-
-  function createLabel() {
-    if (game === 'dungeon') return t(players === 1 ? 'create.dungeonSolo' : 'create.dungeonOnline')
-    if (game === 'snake') return t('create.snake')
-    if (game === 'drawguess') return t('create.drawguess')
-    if (game === 'gomoku') return t('create.gomoku')
-    if (game === 'chess') return players === 1 ? t('create.chessBot', { difficulty: difficultyLabel(chessDifficulty) }) : t('create.chessOnline')
-    return t(players === 1 ? 'create.tetrisSolo' : 'create.tetrisOnline')
-  }
-
-  function helper() {
-    if (game === 'dungeon') return t(players === 1 ? 'helper.dungeonSolo' : 'helper.dungeonOnline')
-    if (game === 'snake') return t('helper.snake')
-    if (game === 'drawguess') return t('helper.drawguess')
-    if (game === 'chess') return t(players === 1 ? 'helper.chessBot' : 'helper.chessOnline')
-    return t(players === 2 ? 'helper.twoPlayers' : 'helper.solo')
-  }
-
-  function difficultyLabel(level) {
-    if (locale !== 'zh-CN') return level
-    return { easy: '简单', medium: '普通', hard: '困难', expert: '专家' }[level] ?? level
-  }
 
   onMount(() => {
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
@@ -128,8 +100,8 @@
         <div class="home-game">
           <div class="home-game-copy">
             <span class="game-index">{games.findIndex((item) => item.id === game) + 1 < 10 ? '0' : ''}{games.findIndex((item) => item.id === game) + 1}</span>
-            <h1>{title()}</h1>
-            <p>{description()}</p>
+            <h1>{copy.title}</h1>
+            <p>{copy.description}</p>
           </div>
         </div>
 
@@ -149,7 +121,7 @@
           {#if game === 'chess' && players === 1}
             <div class="difficulty-picker" aria-label={t('home.difficulty')}>
               {#each ['easy','medium','hard','expert'] as level}
-                <button class:active={chessDifficulty === level} onclick={() => (chessDifficulty = level)}>{difficultyLabel(level)}</button>
+                <button class:active={chessDifficulty === level} onclick={() => (chessDifficulty = level)}>{difficultyLabel(level, locale)}</button>
               {/each}
             </div>
           {:else}
@@ -158,7 +130,7 @@
         </div>
 
         <div class="setup-actions">
-          <button class="create" onclick={createRoom}>{createLabel()}</button>
+          <button class="create" onclick={createRoom}>{copy.createLabel}</button>
 
           {#if (game !== 'chess' || players === 2) && (game !== 'dungeon' || players === 2)}
             <div class="join-block">
@@ -171,7 +143,7 @@
           {:else}
             <div class="join-placeholder" aria-hidden="true"></div>
           {/if}
-          <small class="helper">{helper()}</small>
+          <small class="helper">{copy.helper}</small>
         </div>
       </section>
     </div>
