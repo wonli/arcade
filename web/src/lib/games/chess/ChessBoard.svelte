@@ -8,6 +8,7 @@
   export let state
   export let identity
   export let onMove
+  export let readonly = false
 
   const baseCells = Array.from({ length: 64 }, (_, index) => ({ x: index % 8, y: Math.floor(index / 8) }))
   const promotionValues = { q: 5, r: 4, b: 3, n: 2 }
@@ -29,12 +30,12 @@
   $: myColor = myIndex === 0 ? 'white' : myIndex === 1 ? 'black' : ''
   $: flipped = myColor === 'black'
   $: cells = flipped ? [...baseCells].reverse() : baseCells
-  $: myTurn = state?.status === 'playing' && state?.turn === myColor
+  $: myTurn = !readonly && state?.status === 'playing' && state?.turn === myColor
   $: if ((state?.ply ?? -1) !== observedPly) { observedPly = state?.ply ?? -1; selected = null; pendingPromotion = null }
   $: if (state?.status !== 'playing') resignConfirmOpen = false
   $: if (state && (state.ply ?? -1) !== observedAudioPly) {
     const effect = chessMoveEffect(previousAudioState, state)
-    if (effect) playChessEffect(effect)
+    if (!readonly && effect) playChessEffect(effect)
     previousAudioState = snapshotAudioState(state)
     observedAudioPly = state.ply ?? -1
     if (state.status === 'finished') bgm?.pause()
@@ -42,22 +43,23 @@
 
   function snapshotAudioState(value) { return { ply: value?.ply ?? -1, board: value?.board?.map((row) => [...row]) ?? [] } }
   function ensureAudio() {
-    if (typeof window === 'undefined') return
+    if (readonly || typeof window === 'undefined') return
     if (!bgm) { bgm = new Audio(chessAudioSources.bgm); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = 0.08 }
     if (!moveAudio) { moveAudio = new Audio(chessAudioSources.move); moveAudio.preload = 'auto'; moveAudio.volume = 0.55 }
     if (!captureAudio) { captureAudio = new Audio(chessAudioSources.capture); captureAudio.preload = 'auto'; captureAudio.volume = 0.62 }
   }
-  function unlockAudio() { if (typeof window === 'undefined') return; audioUnlocked = true; ensureAudio(); if (bgm?.paused && state?.status !== 'finished') bgm.play().catch(() => {}) }
-  function playChessEffect(effect) { if (!audioUnlocked) return; ensureAudio(); const audio = effect === 'capture' ? captureAudio : moveAudio; if (!audio) return; audio.pause(); audio.currentTime = 0; audio.play().catch(() => {}) }
+  function unlockAudio() { if (readonly || typeof window === 'undefined') return; audioUnlocked = true; ensureAudio(); if (bgm?.paused && state?.status !== 'finished') bgm.play().catch(() => {}) }
+  function playChessEffect(effect) { if (readonly || !audioUnlocked) return; ensureAudio(); const audio = effect === 'capture' ? captureAudio : moveAudio; if (!audio) return; audio.pause(); audio.currentTime = 0; audio.play().catch(() => {}) }
 
   function pieceAt(currentState, x, y) { return currentState?.board?.[y]?.[x] ?? 0 }
   function pieceColor(piece) { return piece > 0 ? 'white' : piece < 0 ? 'black' : '' }
   function legalFrom(currentState, x, y) { return (currentState?.legalMoves ?? []).filter((move) => move.from.x === x && move.from.y === y) }
   function legalTo(currentState, x, y) { return selected ? legalFrom(currentState, selected.x, selected.y).filter((move) => move.to.x === x && move.to.y === y) : [] }
-  function isLegalTarget(currentState, x, y) { return legalTo(currentState, x, y).length > 0 }
+  function isLegalTarget(currentState, x, y) { return selected ? legalTo(currentState, x, y).length > 0 : false }
   function isLastSquare(currentState, x, y) { const last = currentState?.last; return !!last && ((last.from.x === x && last.from.y === y) || (last.to.x === x && last.to.y === y)) }
 
   function chooseSquare(x, y) {
+    if (readonly) return
     unlockAudio()
     if (!myTurn || pendingPromotion || resignConfirmOpen) return
     const piece = pieceAt(state, x, y)
@@ -74,17 +76,17 @@
 
   async function submit(move) { selected = null; pendingPromotion = null; await onMove?.(move) }
   function requestResign() {
-    if (!myColor || state?.status !== 'playing' || actionBusy) return
+    if (readonly || !myColor || state?.status !== 'playing' || actionBusy) return
     actionError = ''
     resignConfirmOpen = true
   }
   async function resign() {
-    if (!myColor || state?.status !== 'playing' || actionBusy) return
+    if (readonly || !myColor || state?.status !== 'playing' || actionBusy) return
     actionBusy = true; actionError = ''
     try { await socket.request('game.resign', { roomId: room.id }); resignConfirmOpen = false } catch (error) { actionError = error?.message ?? 'Unable to resign' } finally { actionBusy = false }
   }
   async function rematch() {
-    if (!myColor || actionBusy) return
+    if (readonly || !myColor || actionBusy) return
     actionBusy = true; actionError = ''
     try { await socket.request('room.rematch', { roomId: room.id }) } catch (error) { actionError = error?.message ?? 'Unable to start a new game' } finally { actionBusy = false }
   }
@@ -110,27 +112,27 @@
 <div class="chess-wrap">
   <div class:flipped class="chess-board" aria-label="International chess board">
     {#each cells as cell}
-      <button class="chess-cell" class:light={(cell.x + cell.y) % 2 === 0} class:dark={(cell.x + cell.y) % 2 === 1} class:selected={selected?.x === cell.x && selected?.y === cell.y} class:target={isLegalTarget(state, cell.x, cell.y)} class:capture={isLegalTarget(state, cell.x, cell.y) && pieceAt(state, cell.x, cell.y) !== 0} class:last={isLastSquare(state, cell.x, cell.y)} onclick={() => chooseSquare(cell.x, cell.y)} aria-label={`${fileLabel(cell.x)}${rankLabel(cell.y)}`}>
+      <button class="chess-cell" class:light={(cell.x + cell.y) % 2 === 0} class:dark={(cell.x + cell.y) % 2 === 1} class:selected={selected?.x === cell.x && selected?.y === cell.y} class:target={!readonly && isLegalTarget(state, cell.x, cell.y)} class:capture={!readonly && isLegalTarget(state, cell.x, cell.y) && pieceAt(state, cell.x, cell.y) !== 0} class:last={isLastSquare(state, cell.x, cell.y)} onclick={() => chooseSquare(cell.x, cell.y)} aria-label={`${fileLabel(cell.x)}${rankLabel(cell.y)}`} tabindex={readonly ? -1 : 0}>
         {#if cell.x === (flipped ? 7 : 0)}<span class="rank">{rankLabel(cell.y)}</span>{/if}
         {#if cell.y === (flipped ? 0 : 7)}<span class="file">{fileLabel(cell.x)}</span>{/if}
         {#if pieceAt(state, cell.x, cell.y) !== 0}
           <img class="piece" class:white-piece={pieceAt(state, cell.x, cell.y) > 0} class:black-piece={pieceAt(state, cell.x, cell.y) < 0} src={chessPieceAsset(pieceAt(state, cell.x, cell.y))} alt="" draggable="false" />
-        {:else if isLegalTarget(state, cell.x, cell.y)}<span class="move-dot"></span>{/if}
+        {:else if !readonly && isLegalTarget(state, cell.x, cell.y)}<span class="move-dot"></span>{/if}
       </button>
     {/each}
   </div>
 
-  {#if state?.status === 'playing' && myColor}<div class="chess-actions"><button class="resign-button" onclick={requestResign} disabled={actionBusy}>Resign</button>{#if actionError && !resignConfirmOpen}<span>{actionError}</span>{/if}</div>{/if}
+  {#if !readonly && state?.status === 'playing' && myColor}<div class="chess-actions"><button class="resign-button" onclick={requestResign} disabled={actionBusy}>Resign</button>{#if actionError && !resignConfirmOpen}<span>{actionError}</span>{/if}</div>{/if}
 
-  {#if pendingPromotion}
+  {#if !readonly && pendingPromotion}
     <div class="promotion" role="dialog" aria-label="Choose promotion piece"><span>PROMOTE TO</span><div>{#each ['q', 'r', 'b', 'n'] as piece}<button onclick={() => promoteTo(piece)} aria-label={`Promote to ${piece}`}><img class:white-piece={myColor !== 'black'} class:black-piece={myColor === 'black'} src={promotionAsset(piece)} alt="" draggable="false" /></button>{/each}</div><button class="cancel" onclick={() => (pendingPromotion = null)}>Cancel</button></div>
   {/if}
 
-  {#if resignConfirmOpen}
+  {#if !readonly && resignConfirmOpen}
     <div class="chess-confirm-modal" role="dialog" aria-modal="true" aria-label="Confirm resignation"><div class="confirm-card"><span class="result-kicker">RESIGN GAME</span><h2>Give up?</h2><p>Opponent will win immediately.</p>{#if actionError}<div class="result-error">{actionError}</div>{/if}<div class="confirm-actions"><button class="cancel-resign" onclick={() => (resignConfirmOpen = false)} disabled={actionBusy}>Cancel</button><button class="confirm-resign" onclick={resign} disabled={actionBusy}>Resign</button></div></div></div>
   {/if}
 
-  {#if state?.status === 'finished'}
+  {#if !readonly && state?.status === 'finished'}
     <div class="chess-result-modal" role="dialog" aria-modal="true" aria-label="Chess result"><div class="result-card"><span class="result-kicker">GAME OVER</span><h2>{resultTitle()}</h2><p>{resultDetail()}</p>{#if actionError}<div class="result-error">{actionError}</div>{/if}<div class="result-actions">{#if myColor}<button class="play-again" onclick={rematch} disabled={actionBusy}>Play again</button>{/if}<a href="/">Back to arcade</a></div></div></div>
   {/if}
 </div>
