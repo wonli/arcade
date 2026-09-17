@@ -18,14 +18,11 @@ type drawGuessRuntime struct {
 	publish DrawGuessPublisher
 }
 
-var drawGuessWords = []string{
-	"giraffe", "rocket", "piano", "banana", "bicycle", "rainbow", "castle", "penguin",
-	"camera", "pizza", "dolphin", "airplane", "umbrella", "snowman", "backpack", "football",
-	"butterfly", "volcano", "elephant", "helicopter", "hamburger", "lighthouse", "octopus", "kangaroo",
-	"computer", "watermelon", "strawberry", "dragon", "robot", "train", "island", "cactus",
+func (s *Service) StartDrawGuess(roomID string, playerID game.PlayerID, publish DrawGuessPublisher) error {
+	return s.StartDrawGuessLocale(roomID, playerID, "en", publish)
 }
 
-func (s *Service) StartDrawGuess(roomID string, playerID game.PlayerID, publish DrawGuessPublisher) error {
+func (s *Service) StartDrawGuessLocale(roomID string, playerID game.PlayerID, locale string, publish DrawGuessPublisher) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok { return errors.New("room not found") }
 	if r.GameName != "drawguess" { return errors.New("room is not drawguess") }
@@ -42,7 +39,7 @@ func (s *Service) StartDrawGuess(roomID string, playerID game.PlayerID, publish 
 	for _, player := range r.Players {
 		players = append(players, drawguess.Player{ID: player.ID, Name: player.Name})
 	}
-	engine := drawguess.New(players, drawGuessWords, time.Now)
+	engine := drawguess.New(players, drawguess.WordsForLocale(locale), time.Now)
 	if err := engine.Start(); err != nil {
 		s.drawMu.Unlock()
 		return err
