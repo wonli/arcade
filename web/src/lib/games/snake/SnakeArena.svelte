@@ -1,7 +1,11 @@
 <script>
   import { onMount } from 'svelte'
+  import PreviewButton from '$lib/components/PreviewButton.svelte'
   import { createTranslator } from '$lib/i18n.js'
   import { subscribeLocale } from '$lib/locale.js'
+  import { uploadPreview } from '$lib/preview/client.js'
+  import { createPreviewController } from '$lib/preview/controller.js'
+  import { renderSnakePreview } from '$lib/preview/renderers.js'
   import { swipeDirection } from '$lib/games/touch/swipe.js'
 
   export let room
@@ -14,11 +18,19 @@
   let copied = false
   let unsubscribe = () => {}
   let unsubscribeLocale = () => {}
+  let unsubscribePreview = () => {}
   let audioContext = null
   let locale = 'en'
   let swipeStart = null
+  let previewController = null
+  let previewState = { phase: 'idle', autoRemaining: 0, cooldownRemaining: 0, error: '' }
+  let previewSession = 0
 
   $: t = createTranslator(locale)
+  $: if (previewController) {
+    if (state?.status === 'playing') previewController.enterPlaying(`${roomCode}:${previewSession}`)
+    else previewController.leavePlaying()
+  }
 
   const cells = Array.from({ length: 30 * 20 }, (_, index) => ({ x: index % 30, y: Math.floor(index / 30) }))
   const keyDirections = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right' }
@@ -54,6 +66,7 @@
 
   function applyState(next) {
     const previous = state
+    if (next?.status === 'playing' && previous?.status !== 'playing') previewSession += 1
     state = next
     if (!previous) { play('start'); return }
     const beforeMe = snakeFor(previous, identity.sessionId)
@@ -67,6 +80,12 @@
     }).length
     if (otherDeaths > 0) play('otherDeath')
     if (previous.status !== 'finished' && next.status === 'finished' && next.winner === identity.sessionId) play('win')
+  }
+
+  async function capturePreview() {
+    if (!state) throw new Error('snake preview is not ready')
+    const leaderScore = Math.max(0, ...(state.snakes ?? []).map((snake) => snake.score ?? 0))
+    return { blob: await renderSnakePreview(state), summary: { tick: state.tick ?? 0, score: leaderScore } }
   }
 
   async function start() { error=''; try { await socket.request('snake.start',{roomId:roomCode}) } catch(err){ error=err.message } }
@@ -114,6 +133,16 @@
 
   onMount(() => {
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
+    previewController = createPreviewController({
+      game: 'snake',
+      roomId: () => roomCode,
+      players: () => room?.players?.length ?? state?.snakes?.length ?? 1,
+      capture: capturePreview,
+      upload: (payload) => uploadPreview({ ...payload, socket }),
+    })
+    unsubscribePreview = previewController.subscribe((next) => (previewState = next))
+    if (state?.status === 'playing') { previewSession += 1; previewController.enterPlaying(`${roomCode}:${previewSession}`) }
+
     const topic = `room:${roomCode.toUpperCase()}`
     unsubscribe = socket.subscribe(topic, (message) => {
       if (message.data?.topicId !== topic) return
@@ -121,7 +150,14 @@
       if (payload?.type === 'snake.state') applyState(payload.state)
     })
     window.addEventListener('keydown', handleKey, { passive: false })
-    return () => { unsubscribe(); unsubscribeLocale(); window.removeEventListener('keydown',handleKey); audioContext?.close() }
+    return () => {
+      unsubscribe()
+      unsubscribeLocale()
+      unsubscribePreview()
+      previewController?.destroy()
+      window.removeEventListener('keydown',handleKey)
+      audioContext?.close()
+    }
   })
 </script>
 
@@ -141,7 +177,13 @@
       </aside>
     </div>
   {:else}
-    <div class="arena-head"><div><span>{t('game.snake.name')}</span><h1>{statusLabel()}</h1></div><div class="tick"><strong>{state?.tick??0}</strong><span>{t('snake.tick')}</span></div></div>
+    <div class="arena-head">
+      <div><span>{t('game.snake.name')}</span><h1>{statusLabel()}</h1></div>
+      <div class="arena-tools">
+        {#if state?.status === 'playing'}<PreviewButton state={previewState} {t} onUpdate={() => previewController?.updateNow()} />{/if}
+        <div class="tick"><strong>{state?.tick??0}</strong><span>{t('snake.tick')}</span></div>
+      </div>
+    </div>
     <div class="arena-layout">
       <div class="play-zone">
         <div class="snake-board" aria-label={t('game.snake.name')} onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={() => (swipeStart=null)}>
@@ -172,9 +214,9 @@
 </section>
 
 <style>
-  .snake-shell{width:min(100%,1180px);margin:0 auto}.lobby-head,.arena-head{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}.lobby-head span,.arena-head span,.leaderboard>span{color:#7f8791;font-size:10px;font-weight:900;letter-spacing:.18em}.lobby-head h1,.arena-head h1{margin:5px 0 0;font-size:clamp(30px,5vw,48px);letter-spacing:-.045em}.lobby-head p{margin:8px 0 0;color:#7f8791}.code{text-align:right}.code strong{display:block;color:#c1ff56;font:900 28px ui-monospace,monospace;letter-spacing:.08em}.code small{color:#69727d;font-size:9px;letter-spacing:.14em}.lobby-grid{display:grid;grid-template-columns:minmax(320px,1fr) 260px;gap:24px}.roster{border:1px solid #2d333b;background:#0b0d10}.roster-row{display:grid;grid-template-columns:14px 1fr auto;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid #20252c}.roster-row:last-child{border-bottom:0}.roster-row i,.score-row>i{width:10px;height:10px;background:#c1ff56}.roster-row span{color:#69727d;font-size:9px;letter-spacing:.12em}.lobby-actions{display:flex;flex-direction:column;gap:10px}.lobby-actions button,.restart{height:48px;font-weight:900;cursor:pointer}.invite{border:1px solid #3b424c;background:transparent;color:#f4f0e8}.start,.restart{border:0;background:#c1ff56;color:#0b0d10}.lobby-actions p{color:#7f8791;font-size:12px;text-align:center}.arena-layout{display:grid;grid-template-columns:minmax(560px,900px) 240px;gap:24px;align-items:start}.play-zone{min-width:0}.snake-board{display:grid;grid-template-columns:repeat(30,1fr);aspect-ratio:30/20;background:#080a0d;border:1px solid #30363f;box-shadow:10px 10px 0 #050607;touch-action:none;user-select:none}.snake-board>i{min-width:0;aspect-ratio:1;border:1px solid #11151a}.snake-board>i.food{background:#f4f0e8;border-radius:50%;transform:scale(.55)}.snake-board>i.snake{background:#c1ff56;border-color:#080a0d}.snake-board>i.head{box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)}.leaderboard{padding:16px;border:1px solid #2d333b;background:#0b0d10}.score-row{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #20252c}.score-row.dead{opacity:.38}.player-info,.score-value{display:flex;flex-direction:column;gap:2px}.score-row strong{font-size:12px}.score-row small{color:#69727d;font-size:8px;letter-spacing:.12em}.score-value{text-align:right;align-items:flex-end}.score-value b{font:900 18px ui-monospace,monospace;color:#c1ff56}.keys{margin-top:16px;color:#69727d;font:10px ui-monospace,monospace;text-align:center}.tick{display:flex;flex-direction:column;text-align:right}.tick strong{color:#c1ff56;font:900 22px ui-monospace,monospace}.tick span{font-size:8px}.restart{display:block;width:min(100%,420px);margin:22px auto 0}.snake-error{margin-top:16px;color:#ff8d8d;text-align:center;font-size:12px}.touch-pad{display:none;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,52px) auto;justify-content:center;gap:7px;margin-top:16px;touch-action:none}.touch-pad button{border:1px solid #3b424c;background:#111419;color:#f4f0e8;font-size:22px;font-weight:900;touch-action:manipulation}.touch-pad button:active{background:#c1ff56;color:#0b0d10}.touch-pad .up{grid-column:2}.touch-pad .left{grid-column:1;grid-row:2}.touch-pad .down{grid-column:2;grid-row:2}.touch-pad .right{grid-column:3;grid-row:2}.touch-pad small{grid-column:1/-1;color:#69727d;font-size:9px;text-align:center;letter-spacing:.08em}
+  .snake-shell{width:min(100%,1180px);margin:0 auto}.lobby-head,.arena-head{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}.lobby-head span,.arena-head span,.leaderboard>span{color:#7f8791;font-size:10px;font-weight:900;letter-spacing:.18em}.lobby-head h1,.arena-head h1{margin:5px 0 0;font-size:clamp(30px,5vw,48px);letter-spacing:-.045em}.lobby-head p{margin:8px 0 0;color:#7f8791}.code{text-align:right}.code strong{display:block;color:#c1ff56;font:900 28px ui-monospace,monospace;letter-spacing:.08em}.code small{color:#69727d;font-size:9px;letter-spacing:.14em}.lobby-grid{display:grid;grid-template-columns:minmax(320px,1fr) 260px;gap:24px}.roster{border:1px solid #2d333b;background:#0b0d10}.roster-row{display:grid;grid-template-columns:14px 1fr auto;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid #20252c}.roster-row:last-child{border-bottom:0}.roster-row i,.score-row>i{width:10px;height:10px;background:#c1ff56}.roster-row span{color:#69727d;font-size:9px;letter-spacing:.12em}.lobby-actions{display:flex;flex-direction:column;gap:10px}.lobby-actions button,.restart{height:48px;font-weight:900;cursor:pointer}.invite{border:1px solid #3b424c;background:transparent;color:#f4f0e8}.start,.restart{border:0;background:#c1ff56;color:#0b0d10}.lobby-actions p{color:#7f8791;font-size:12px;text-align:center}.arena-layout{display:grid;grid-template-columns:minmax(560px,900px) 240px;gap:24px;align-items:start}.play-zone{min-width:0}.snake-board{display:grid;grid-template-columns:repeat(30,1fr);aspect-ratio:30/20;background:#080a0d;border:1px solid #30363f;box-shadow:10px 10px 0 #050607;touch-action:none;user-select:none}.snake-board>i{min-width:0;aspect-ratio:1;border:1px solid #11151a}.snake-board>i.food{background:#f4f0e8;border-radius:50%;transform:scale(.55)}.snake-board>i.snake{background:#c1ff56;border-color:#080a0d}.snake-board>i.head{box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)}.leaderboard{padding:16px;border:1px solid #2d333b;background:#0b0d10}.score-row{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #20252c}.score-row.dead{opacity:.38}.player-info,.score-value{display:flex;flex-direction:column;gap:2px}.score-row strong{font-size:12px}.score-row small{color:#69727d;font-size:8px;letter-spacing:.12em}.score-value{text-align:right;align-items:flex-end}.score-value b{font:900 18px ui-monospace,monospace;color:#c1ff56}.keys{margin-top:16px;color:#69727d;font:10px ui-monospace,monospace;text-align:center}.arena-tools{display:flex;align-items:center;gap:12px}.tick{display:flex;flex-direction:column;text-align:right}.tick strong{color:#c1ff56;font:900 22px ui-monospace,monospace}.tick span{font-size:8px}.restart{display:block;width:min(100%,420px);margin:22px auto 0}.snake-error{margin-top:16px;color:#ff8d8d;text-align:center;font-size:12px}.touch-pad{display:none;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,52px) auto;justify-content:center;gap:7px;margin-top:16px;touch-action:none}.touch-pad button{border:1px solid #3b424c;background:#111419;color:#f4f0e8;font-size:22px;font-weight:900;touch-action:manipulation}.touch-pad button:active{background:#c1ff56;color:#0b0d10}.touch-pad .up{grid-column:2}.touch-pad .left{grid-column:1;grid-row:2}.touch-pad .down{grid-column:2;grid-row:2}.touch-pad .right{grid-column:3;grid-row:2}.touch-pad small{grid-column:1/-1;color:#69727d;font-size:9px;text-align:center;letter-spacing:.08em}
   [data-player='0']{background:#c1ff56!important}[data-player='1']{background:#8ee7ff!important}[data-player='2']{background:#ffcf5a!important}[data-player='3']{background:#ff8db3!important}[data-player='4']{background:#b9a1ff!important}[data-player='5']{background:#75f0c0!important}[data-player='6']{background:#ff9f62!important}[data-player='7']{background:#f4f0e8!important}
   @media(hover:none),(pointer:coarse){.touch-pad{display:grid}.keys{display:none}}
   @media(max-width:820px){.lobby-grid,.arena-layout{grid-template-columns:1fr}.arena-layout{gap:18px}.leaderboard{display:grid;grid-template-columns:repeat(2,1fr);gap:0 16px}.leaderboard>span,.keys{grid-column:1/-1}.snake-board{width:100%;box-shadow:6px 6px 0 #050607}.touch-pad{display:grid}}
-  @media(max-width:520px){.lobby-head,.arena-head{align-items:start}.code{font-size:12px}.leaderboard{grid-template-columns:1fr}.lobby-grid{grid-template-columns:1fr}.touch-pad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(2,48px) auto}}
+  @media(max-width:520px){.lobby-head,.arena-head{align-items:start}.arena-tools{align-items:flex-end;flex-direction:column}.code{font-size:12px}.leaderboard{grid-template-columns:1fr}.lobby-grid{grid-template-columns:1fr}.touch-pad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(2,48px) auto}}
 </style>
