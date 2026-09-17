@@ -1,6 +1,5 @@
 import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
 import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
-import DungeonReplaySurface from './DungeonReplaySurface.svelte'
 
 const DUNGEON_WIDTH = 960
 const DUNGEON_HEIGHT = 600
@@ -13,7 +12,8 @@ export const replay = Object.freeze({
   },
   encode: encodeCompactRecording,
   decode: decodeRecording,
-  createPlayer(target, recording, options = {}) {
+  async createPlayer(target, recording, options = {}) {
+    const { default: DungeonReplaySurface } = await import('./DungeonReplaySurface.svelte')
     return createSvelteReplayPlayer(target, recording, DungeonReplaySurface, {
       width: DUNGEON_WIDTH,
       height: DUNGEON_HEIGHT,
@@ -22,8 +22,8 @@ export const replay = Object.freeze({
   },
 })
 
-export function createDungeonReplaySnapshot({ scene, stats = {}, progress = {}, width = DUNGEON_WIDTH, height = DUNGEON_HEIGHT } = {}) {
-  const playerState = scene?.localPlayer?.state
+export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, progress = {}, width = DUNGEON_WIDTH, height = DUNGEON_HEIGHT } = {}) {
+  const playerState = player?.state
   if (!playerState) return null
   const normalizedWidth = Math.max(1, Number(width) || DUNGEON_WIDTH)
   const normalizedHeight = Math.max(1, Number(height) || DUNGEON_HEIGHT)
