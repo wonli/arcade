@@ -22,7 +22,7 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   if (game === 'dungeon') createLabel = t(players === 1 ? 'create.dungeonSolo' : 'create.dungeonOnline')
   else if (game === 'snake') createLabel = t('create.snake')
   else if (game === 'drawguess') createLabel = t('create.drawguess')
-  else if (game === 'gomoku') createLabel = t('create.gomoku')
+  else if (game === 'gomoku') createLabel = t(players === 1 ? 'room.playBot' : 'create.gomoku')
   else if (game === 'chess') createLabel = players === 1
     ? t('create.chessBot', { difficulty: difficultyLabel(chessDifficulty, locale) })
     : t('create.chessOnline')
