@@ -104,9 +104,9 @@
   .fallback,.replay-stage{position:absolute;inset:0;width:100%;height:100%}
   .fallback{object-fit:cover;object-position:center 48%;transform:scale(1.02);filter:saturate(.9) contrast(1.08) brightness(.9);opacity:1;transition:opacity .25s ease}
   .fallback.hidden{opacity:0}
-  .replay-stage{z-index:1;opacity:0;transition:opacity .25s ease;background:#0b0d10}
+  .replay-stage{z-index:1;display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:0;transition:opacity .25s ease;background:#0b0d10}
   .replay-stage.active{opacity:1}
-  .replay-stage :global(canvas){width:100%!important;height:100%!important;display:block}
+  .replay-stage :global(canvas),.replay-stage :global(.native-replay-surface){flex:0 0 auto;display:block}
   .edge-fade{position:absolute;z-index:2;inset:0;pointer-events:none;background:
     linear-gradient(90deg,#0b0d10 0%,rgba(11,13,16,.88) 3%,rgba(11,13,16,.28) 11%,transparent 24%,transparent 76%,rgba(11,13,16,.3) 89%,rgba(11,13,16,.9) 97%,#0b0d10 100%),
     linear-gradient(180deg,#0b0d10 0%,rgba(11,13,16,.45) 7%,transparent 22%,transparent 72%,rgba(11,13,16,.55) 92%,#0b0d10 100%)}
