@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"testing"
 	"time"
 
@@ -23,10 +24,10 @@ func uploadRequest(t *testing.T, game, token string, image []byte, contentType s
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	partHeader := make(map[string][]string)
-	partHeader["Content-Disposition"] = []string{`form-data; name="image"; filename="preview.jpg"`}
-	partHeader["Content-Type"] = []string{contentType}
-	part, err := writer.CreatePart(textprotoMIMEHeader(partHeader))
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", `form-data; name="image"; filename="preview.jpg"`)
+	partHeader.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(partHeader)
 	if err != nil { t.Fatal(err) }
 	if _, err := part.Write(image); err != nil { t.Fatal(err) }
 	_ = writer.WriteField("roomId", "ABC123")
@@ -39,10 +40,6 @@ func uploadRequest(t *testing.T, game, token string, image []byte, contentType s
 	if token != "" { req.Header.Set("X-Arcade-Preview-Token", token) }
 	return req
 }
-
-// textprotoMIMEHeader keeps the test readable without coupling routes to multipart.FileHeader internals.
-func textprotoMIMEHeader(values map[string][]string) mapHeader { return mapHeader(values) }
-type mapHeader map[string][]string
 
 func TestRoutesMissingPreviewReturns404(t *testing.T) {
 	engine := previewRouter(NewStore(t.TempDir()))
