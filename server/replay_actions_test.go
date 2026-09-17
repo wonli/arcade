@@ -34,6 +34,21 @@ func TestAcquireReplayLeaseRequiresStartedRoomHost(t *testing.T) {
 	}
 }
 
+func TestAcquireReplayLeaseAllowsStandaloneDungeonPlayer(t *testing.T) {
+	service := arcade.NewService()
+	store := gamereplay.NewStore(t.TempDir())
+	player := game.PlayerID("solo-player")
+
+	lease, err := acquireReplayLease(service, store, standaloneDungeonReplayRoomID, "dungeon", player)
+	if err != nil { t.Fatal(err) }
+	if lease.Token == "" || !store.ValidateLease("dungeon", lease.Token) {
+		t.Fatalf("invalid standalone dungeon lease %#v", lease)
+	}
+	if _, err := acquireReplayLease(service, store, standaloneDungeonReplayRoomID, "gomoku", player); err == nil {
+		t.Fatal("standalone replay lease must remain dungeon-only")
+	}
+}
+
 func TestAcquireReplayLeaseReturnsBusyForAnotherRoom(t *testing.T) {
 	service := arcade.NewService()
 	store := gamereplay.NewStore(t.TempDir())
