@@ -248,7 +248,6 @@
       {#if connection === 'offline'}<button class="secondary-button reconnect" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
     {:else if gameName === 'tetris'}
       {#if room}<TetrisBattle {room} {roomCode} {identity} {socket} />{/if}
-      {#if isMultiplayer(room)}<aside class="room-panel tetris-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button></aside>{/if}
       {#if error}<div class="room-error">{error}</div>{/if}
       {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
     {:else if gameName === 'chess'}
@@ -281,5 +280,5 @@
 </div>
 
 <style>
-  .tetris-panel{width:min(100%,960px);margin:26px auto 0;display:grid;grid-template-columns:180px minmax(180px,260px);gap:12px;align-items:stretch}.tetris-panel .code-display{margin:0}.standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}.chess-stage{align-items:start}.chess-board-column{min-width:0;width:100%}.chess-side{display:grid;place-items:center;width:42px;height:42px;border:1px solid #343a42;font-family:'Times New Roman',serif;font-size:32px}.white-side{background:#f3eddf;color:#17191c}.black-side{background:#17191c;color:#f3eddf}.difficulty-control{display:grid;gap:7px;margin-top:12px}.difficulty-control label{color:#727c87;font-size:9px;font-weight:900;letter-spacing:.14em}.difficulty-control select{height:44px;padding:0 10px;border:1px solid #3b424c;border-radius:0;background:#0b0d10;color:#f4f0e8;font:inherit;text-transform:uppercase}.chess-panel{position:sticky;top:92px}@media(max-width:900px){.chess-panel{position:static}}@media(max-width:640px){.tetris-panel{grid-template-columns:1fr}.chess-head .player-card strong{font-size:11px}.chess-side{width:34px;height:34px;font-size:26px}}
+  .standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}.chess-stage{align-items:start}.chess-board-column{min-width:0;width:100%}.chess-side{display:grid;place-items:center;width:42px;height:42px;border:1px solid #343a42;font-family:'Times New Roman',serif;font-size:32px}.white-side{background:#f3eddf;color:#17191c}.black-side{background:#17191c;color:#f3eddf}.difficulty-control{display:grid;gap:7px;margin-top:12px}.difficulty-control label{color:#727c87;font-size:9px;font-weight:900;letter-spacing:.14em}.difficulty-control select{height:44px;padding:0 10px;border:1px solid #3b424c;border-radius:0;background:#0b0d10;color:#f4f0e8;font:inherit;text-transform:uppercase}.chess-panel{position:sticky;top:92px}@media(max-width:900px){.chess-panel{position:static}}@media(max-width:640px){.chess-head .player-card strong{font-size:11px}.chess-side{width:34px;height:34px;font-size:26px}}
 </style>
