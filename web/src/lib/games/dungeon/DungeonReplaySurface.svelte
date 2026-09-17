@@ -102,7 +102,7 @@
       const x = Math.min(1, Math.max(0, Number(source.x) || 0)) * width
       const y = Math.min(1, Math.max(0, Number(source.y) || 0)) * height
       const hp = Math.max(0, Number(source.hp ?? source.maxHp ?? 1))
-      const maxHp = Math.max(1, Number(source.maxHp ?? hp || 1))
+      const maxHp = Math.max(1, Number(source.maxHp ?? (hp || 1)))
       enemy.visual?.setPosition?.(x, y)
       scene.updateHealthBar?.(enemy.healthBar, x, y - enemy.barOffset, hp, maxHp)
     })
