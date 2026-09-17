@@ -1,11 +1,9 @@
 <script>
   import { onMount } from 'svelte'
-  import PreviewButton from '$lib/components/PreviewButton.svelte'
   import { createTranslator } from '$lib/i18n.js'
   import { subscribeLocale } from '$lib/locale.js'
-  import { canvasToPreviewBlob } from '$lib/preview/canvas.js'
-  import { uploadPreview } from '$lib/preview/client.js'
-  import { createPreviewController } from '$lib/preview/controller.js'
+  import { createReplaySession } from '$lib/replay/session.js'
+  import { replay as drawReplay } from './replay.js'
   import { mountCanvas } from './canvas.js'
 
   export let room
@@ -30,18 +28,13 @@
   let eraser = false
   let unsubscribe = () => {}
   let unsubscribeLocale = () => {}
-  let unsubscribePreview = () => {}
   let timer = null
   let audioContext = null
   let locale = 'en'
-  let previewController = null
-  let previewState = { phase: 'idle', autoRemaining: 0, cooldownRemaining: 0, error: '' }
+  let replaySession = null
+  let replayFinished = false
 
   $: t = createTranslator(locale)
-  $: if (previewController) {
-    if (state?.status === 'playing') previewController.enterPlaying(`${roomCode}:drawguess`)
-    else previewController.leavePlaying()
-  }
 
   const palette = ['#111111', '#ff5d5d', '#ffcf5a', '#c1ff56', '#65d5ff', '#a98bff']
 
@@ -79,7 +72,18 @@
   function applyState(next, sound = true) {
     if (!next) return
     const previous = state
+    const startingGame = next.status === 'playing' && previous?.status !== 'playing'
     state = next
+    if (startingGame) {
+      replayFinished = false
+      void replaySession?.restart(next)
+    } else if (next.status === 'playing') {
+      replaySession?.record(next)
+    }
+    if (previous?.status !== 'finished' && next.status === 'finished' && !replayFinished) {
+      replayFinished = true
+      void replaySession?.finish(next)
+    }
     updateRemaining()
     requestAnimationFrame(redraw)
     if (sound && previous?.round !== next.round && next.status === 'playing') play('round')
@@ -98,7 +102,7 @@
       const result = await socket.request('draw.privateState', { roomId: roomCode })
       if (result?.round === state.round && result?.drawerId === identity.sessionId) {
         privateWord = result.word ?? ''
-        privateRound = state.round
+        privateRound = result.round
       }
     } catch (err) {
       error = err.message
@@ -110,6 +114,7 @@
     messages = []
     privateWord = ''
     privateRound = 0
+    replayFinished = false
     try { await socket.request('draw.start', { roomId: roomCode, locale }) }
     catch (err) { error = err.message }
   }
@@ -132,16 +137,12 @@
   async function clearCanvas() {
     if (!isDrawer()) return
     error = ''
-    try { await socket.request('draw.clear', { roomId: roomCode }) }
-    catch (err) { error = err.message }
-  }
-
-  async function capturePreview() {
-    if (!canvas) throw new Error('draw preview is not ready')
-    return {
-      blob: await canvasToPreviewBlob(canvas),
-      summary: { round: state?.round ?? 0, totalRounds: state?.totalRounds ?? 0 },
-    }
+    try {
+      await socket.request('draw.clear', { roomId: roomCode })
+      state = { ...state, strokes: [] }
+      replaySession?.record(state, { force: true })
+      redraw()
+    } catch (err) { error = err.message }
   }
 
   function logicalPoint(event) {
@@ -194,6 +195,7 @@
     const tail = points[points.length - 1]
     pendingPoints = final ? [] : [tail]
     state = { ...state, strokes: [...(state?.strokes ?? []), stroke] }
+    replaySession?.record(state)
     socket.request('draw.stroke', { roomId: roomCode, stroke }).catch((err) => { error = err.message })
   }
 
@@ -261,14 +263,7 @@
 
   onMount(() => {
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
-    previewController = createPreviewController({
-      game: 'drawguess',
-      roomId: () => roomCode,
-      players: () => state?.players?.length ?? room?.players?.length ?? 0,
-      capture: capturePreview,
-      upload: (payload) => uploadPreview({ ...payload, socket }),
-    })
-    unsubscribePreview = previewController.subscribe((next) => (previewState = next))
+    replaySession = createReplaySession({adapter:drawReplay,roomCode:()=>roomCode,room:()=>room,identity,socket})
 
     const topic = `room:${roomCode.toUpperCase()}`
     unsubscribe = socket.subscribe(topic, (message) => {
@@ -278,10 +273,12 @@
       if (payload.type === 'draw.state') applyState(payload.state)
       if (payload.type === 'draw.stroke' && payload.playerId !== identity.sessionId) {
         state = { ...state, strokes: [...(state?.strokes ?? []), payload.stroke] }
+        replaySession?.record(state)
         drawStroke(payload.stroke)
       }
       if (payload.type === 'draw.clear') {
         state = { ...state, strokes: [] }
+        replaySession?.record(state, { force: true })
         redraw()
       }
       if (payload.type === 'draw.chat') addMessage('chat', payload.text, payload.playerName)
@@ -298,8 +295,7 @@
     return () => {
       unsubscribe()
       unsubscribeLocale()
-      unsubscribePreview()
-      previewController?.destroy()
+      replaySession?.destroy()
       if (timer) clearInterval(timer)
       audioContext?.close()
     }
@@ -327,7 +323,6 @@
     <div class="game-head">
       <div><span>{t('game.drawguess.name')}</span><h1>{statusTitle()}</h1><p>{state?.status === 'playing' ? t('draw.round',{round:state.round,total:state.totalRounds}) : t('draw.finalScore')}</p></div>
       <div class="game-tools">
-        {#if state?.status === 'playing'}<PreviewButton state={previewState} {t} onUpdate={() => previewController?.updateNow()} />{/if}
         {#if state?.status === 'playing'}<div class:danger={remaining <= 10} class="timer"><strong>{remaining}</strong><small>{t('draw.seconds')}</small></div>{/if}
       </div>
     </div>
