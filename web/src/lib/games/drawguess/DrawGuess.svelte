@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte'
+  import { createTranslator } from '$lib/i18n.js'
+  import { subscribeLocale } from '$lib/locale.js'
   import { mountCanvas } from './canvas.js'
 
   export let room
@@ -23,8 +25,12 @@
   let width = 6
   let eraser = false
   let unsubscribe = () => {}
+  let unsubscribeLocale = () => {}
   let timer = null
   let audioContext = null
+  let locale = 'en'
+
+  $: t = createTranslator(locale)
 
   const palette = ['#111111', '#ff5d5d', '#ffcf5a', '#c1ff56', '#65d5ff', '#a98bff']
 
@@ -93,7 +99,7 @@
     messages = []
     privateWord = ''
     privateRound = 0
-    try { await socket.request('draw.start', { roomId: roomCode }) }
+    try { await socket.request('draw.start', { roomId: roomCode, locale }) }
     catch (err) { error = err.message }
   }
 
@@ -225,16 +231,17 @@
   }
 
   function statusTitle() {
-    if (!state || room?.status === 'waiting') return 'Waiting room'
+    if (!state || room?.status === 'waiting') return t('draw.waitingRoom')
     if (state.status === 'finished') {
-      if (state.winners?.includes(identity.sessionId)) return 'You win'
+      if (state.winners?.includes(identity.sessionId)) return t('draw.youWin')
       const winner = state.players?.find((player) => state.winners?.includes(player.id))
-      return winner ? `${winner.name} wins` : 'Game finished'
+      return winner ? t('draw.wins', { name: winner.name }) : t('draw.finished')
     }
-    return isDrawer() ? 'Your turn to draw' : `${state.drawerName} is drawing`
+    return isDrawer() ? t('draw.yourTurn') : t('draw.isDrawing', { name: state.drawerName })
   }
 
   onMount(() => {
+    unsubscribeLocale = subscribeLocale((next) => (locale = next))
     const topic = `room:${roomCode.toUpperCase()}`
     unsubscribe = socket.subscribe(topic, (message) => {
       if (message.data?.topicId !== topic) return
@@ -251,7 +258,7 @@
       }
       if (payload.type === 'draw.chat') addMessage('chat', payload.text, payload.playerName)
       if (payload.type === 'draw.correct') {
-        addMessage('correct', 'guessed it!', payload.playerName)
+        addMessage('correct', t('draw.guessedIt'), payload.playerName)
         play('correct')
         if (payload.state) applyState(payload.state, false)
       }
@@ -262,6 +269,7 @@
 
     return () => {
       unsubscribe()
+      unsubscribeLocale()
       if (timer) clearInterval(timer)
       audioContext?.close()
     }
@@ -271,36 +279,36 @@
 <section class="draw-shell">
   {#if room?.status === 'waiting' && !state}
     <div class="lobby-head">
-      <div><span>DRAW & GUESS</span><h1>Waiting room</h1><p>{room.players.length}/{room.maxPlayers} players · 2 minimum · Host starts</p></div>
-      <div class="code"><strong>{roomCode.toLowerCase()}</strong><small>ROOM CODE</small></div>
+      <div><span>{t('game.drawguess.name')}</span><h1>{t('draw.waitingRoom')}</h1><p>{t('draw.players',{count:room.players.length,max:room.maxPlayers})}</p></div>
+      <div class="code"><strong>{roomCode.toLowerCase()}</strong><small>{t('common.roomCode')}</small></div>
     </div>
     <div class="lobby-grid">
       <div class="roster">
         {#each room.players as player, index}
-          <div class="roster-row"><i>{index + 1}</i><strong>{player.name}</strong><span>{player.id === room.hostId ? 'HOST' : 'READY'}</span></div>
+          <div class="roster-row"><i>{index + 1}</i><strong>{player.name}</strong><span>{player.id === room.hostId ? t('common.host') : t('common.ready')}</span></div>
         {/each}
       </div>
       <aside class="lobby-actions">
-        <button class="outline" onclick={copyInvite}>{copied ? 'Link copied' : 'Copy invite link'}</button>
-        {#if isHost()}<button class="primary" disabled={room.players.length < 2} onclick={start}>Start game</button>{:else}<p>Waiting for host to start…</p>{/if}
+        <button class="outline" onclick={copyInvite}>{copied ? t('common.linkCopied') : t('common.copyInvite')}</button>
+        {#if isHost()}<button class="primary" disabled={room.players.length < 2} onclick={start}>{t('draw.start')}</button>{:else}<p>{t('draw.waitHost')}</p>{/if}
       </aside>
     </div>
   {:else}
     <div class="game-head">
-      <div><span>DRAW & GUESS</span><h1>{statusTitle()}</h1><p>{state?.status === 'playing' ? `ROUND ${state.round} / ${state.totalRounds}` : 'FINAL SCORE'}</p></div>
-      {#if state?.status === 'playing'}<div class:danger={remaining <= 10} class="timer"><strong>{remaining}</strong><small>SECONDS</small></div>{/if}
+      <div><span>{t('game.drawguess.name')}</span><h1>{statusTitle()}</h1><p>{state?.status === 'playing' ? t('draw.round',{round:state.round,total:state.totalRounds}) : t('draw.finalScore')}</p></div>
+      {#if state?.status === 'playing'}<div class:danger={remaining <= 10} class="timer"><strong>{remaining}</strong><small>{t('draw.seconds')}</small></div>{/if}
     </div>
 
     <div class="game-grid">
       <div class="canvas-column">
         <div class:locked={!isDrawer()} class="canvas-frame">
-          <canvas bind:this={canvas} use:canvasSurface onpointerdown={pointerDown} onpointermove={pointerMove} onpointerup={pointerUp} onpointercancel={pointerUp} aria-label="Drawing canvas"></canvas>
-          {#if !isDrawer() && state?.status === 'playing'}<div class="watching">WATCH & GUESS</div>{/if}
+          <canvas bind:this={canvas} use:canvasSurface onpointerdown={pointerDown} onpointermove={pointerMove} onpointerup={pointerUp} onpointercancel={pointerUp} aria-label={t('draw.canvas')}></canvas>
+          {#if !isDrawer() && state?.status === 'playing'}<div class="watching">{t('draw.watch')}</div>{/if}
         </div>
 
         <div class="word-bar">
-          <span>{isDrawer() ? 'YOUR WORD' : 'WORD'}</span>
-          <strong>{isDrawer() ? (privateWord || 'loading…') : (state?.hint ?? '')}</strong>
+          <span>{isDrawer() ? t('draw.yourWord') : t('draw.word')}</span>
+          <strong>{isDrawer() ? (privateWord || t('draw.loading')) : (state?.hint ?? '')}</strong>
         </div>
 
         {#if isDrawer() && state?.status === 'playing'}
@@ -311,43 +319,43 @@
             <div class="widths">
               {#each [4, 8, 14] as item}<button class:active={width === item && !eraser} onclick={() => { width = item; eraser = false }}>{item}px</button>{/each}
             </div>
-            <button class:active={eraser} class="tool" onclick={() => (eraser = !eraser)}>Eraser</button>
-            <button class="tool danger-button" onclick={clearCanvas}>Clear</button>
+            <button class:active={eraser} class="tool" onclick={() => (eraser = !eraser)}>{t('draw.eraser')}</button>
+            <button class="tool danger-button" onclick={clearCanvas}>{t('draw.clear')}</button>
           </div>
         {/if}
       </div>
 
       <aside class="side-panel">
         <section class="scores">
-          <div class="panel-title">SCOREBOARD</div>
+          <div class="panel-title">{t('common.scoreboard')}</div>
           {#each sortedPlayers() as player, index}
             <div class="score-row">
               <span>{index + 1}</span>
-              <div><strong>{player.name}</strong><small>{player.id === state?.drawerId ? 'DRAWING' : state?.guessed?.includes(player.id) ? 'GUESSED' : 'PLAYING'}</small></div>
+              <div><strong>{player.name}</strong><small>{player.id === state?.drawerId ? t('draw.drawing') : state?.guessed?.includes(player.id) ? t('draw.guessed') : t('draw.playing')}</small></div>
               <b>{state?.scores?.[player.id] ?? 0}</b>
             </div>
           {/each}
         </section>
 
         <section class="chat">
-          <div class="panel-title">GUESSES</div>
+          <div class="panel-title">{t('draw.guesses')}</div>
           <div class="messages">
-            {#if messages.length === 0}<p class="empty">Bad guesses will appear here. Great guesses stay secret.</p>{/if}
+            {#if messages.length === 0}<p class="empty">{t('draw.emptyGuesses')}</p>{/if}
             {#each messages as message}
               <div class:correct={message.kind === 'correct'} class="message"><strong>{message.name}</strong><span>{message.text}</span></div>
             {/each}
           </div>
           {#if state?.status === 'playing' && !isDrawer()}
             <div class="guess-box">
-              <input bind:value={guess} disabled={alreadyGuessed()} maxlength="48" placeholder={alreadyGuessed() ? 'YOU GOT IT!' : 'TYPE YOUR GUESS'} onkeydown={(event) => event.key === 'Enter' && submitGuess()} />
-              <button disabled={alreadyGuessed()} onclick={submitGuess}>Guess</button>
+              <input bind:value={guess} disabled={alreadyGuessed()} maxlength="48" placeholder={alreadyGuessed() ? t('draw.gotIt') : t('draw.typeGuess')} onkeydown={(event) => event.key === 'Enter' && submitGuess()} />
+              <button disabled={alreadyGuessed()} onclick={submitGuess}>{t('draw.guessButton')}</button>
             </div>
           {/if}
         </section>
       </aside>
     </div>
 
-    {#if state?.status === 'finished' && isHost()}<button class="play-again" onclick={start}>Play again</button>{/if}
+    {#if state?.status === 'finished' && isHost()}<button class="play-again" onclick={start}>{t('common.playAgain')}</button>{/if}
   {/if}
 
   {#if error}<div class="draw-error">{error}</div>{/if}
