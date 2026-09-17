@@ -3,8 +3,10 @@
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
+  import { createReplaySession } from '$lib/replay/session.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
+  import { replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
@@ -28,6 +30,8 @@
 
   const identity = getIdentity()
   const name = defaultName(identity.playerId)
+  const DUNGEON_WIDTH = 960
+  const DUNGEON_HEIGHT = 600
 
   let roomCode = String(data?.code ?? '').toUpperCase()
   let room = null
@@ -39,6 +43,9 @@
   let hudRuntime = null
   let playerIntentRuntime = null
   let networkRuntime = null
+  let replaySession = null
+  let replayTimer = null
+  let replayFinished = false
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let unsubscribeLocale = () => {}
@@ -120,6 +127,37 @@
     }
   }
 
+  function dungeonReplaySnapshot() {
+    const playerState = scene?.localPlayer?.state
+    if (!playerState) return null
+    return {
+      player: {
+        x: Math.min(1, Math.max(0, Number(playerState.x ?? 0) / DUNGEON_WIDTH)),
+        y: Math.min(1, Math.max(0, Number(playerState.y ?? 0) / DUNGEON_HEIGHT)),
+      },
+      enemies: (scene?.enemies ?? []).map((enemy) => ({
+        x: Math.min(1, Math.max(0, Number(enemy?.x ?? 0) / DUNGEON_WIDTH)),
+        y: Math.min(1, Math.max(0, Number(enemy?.y ?? 0) / DUNGEON_HEIGHT)),
+        kind: enemy?.boss ? 'boss' : enemy?.elite ? 'elite' : (enemy?.archetype ?? 'enemy'),
+        alive: Number(enemy?.hp ?? 0) > 0,
+      })),
+      stats: { hp: stats?.hp ?? playerState.hp ?? 0, maxHp: stats?.maxHp ?? playerState.maxHp ?? 100, kills: stats?.kills ?? scene?.kills ?? 0 },
+      progress: { floor: progress?.floor ?? scene?.floor ?? 1, room: progress?.room ?? 1, roomRole: progress?.roomRole ?? 'combat' },
+    }
+  }
+
+  function recordDungeonReplay(force = false) {
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) replaySession?.record(snapshot, { force })
+  }
+
+  function finishDungeonReplay() {
+    if (replayFinished) return
+    replayFinished = true
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) void replaySession?.finish(snapshot)
+  }
+
   async function loadResources() {
     if (resources) return resources
     const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
@@ -146,6 +184,7 @@
     else if (event.type === 'gameover') {
       panelOpen = false
       eventText = t('gameover')
+      finishDungeonReplay()
     } else eventText = event.type
   }
 
@@ -181,6 +220,7 @@
       room = payload
       ensureNetwork()
       networkRuntime?.updatePeers(room?.players ?? [])
+      if (room.status === 'playing') recordDungeonReplay(true)
     })
   }
 
@@ -188,6 +228,7 @@
     const { Phaser, assets, vfxManifest } = await loadResources()
     if (!mount) return
 
+    replayFinished = false
     setProceduralRunSeed(roomCode)
     setProgressionRunSeed(roomCode)
     const runGame = createDungeonGame({
@@ -282,6 +323,7 @@
       })
       ready = true
       ensureNetwork()
+      recordDungeonReplay(true)
     }
     install()
   }
@@ -304,9 +346,13 @@
     }
 
     if (room?.game !== 'dungeon') throw new Error(t('roomNotDungeon'))
+    replaySession = createReplaySession({adapter:dungeonReplay,roomCode:()=>room?.id??roomCode,room:()=>room,identity,socket})
     subscribeRoomState()
     connection = 'live'
     await startGame()
+    replayTimer = setInterval(() => {
+      if (ready && room?.status === 'playing' && !replayFinished) recordDungeonReplay()
+    }, 200)
   }
 
   function moveJoystick(event) {
@@ -338,6 +384,8 @@
     })
 
     return () => {
+      if (replayTimer) clearInterval(replayTimer)
+      replaySession?.destroy()
       playerIntentRuntime?.restore?.()
       playerIntentRuntime = null
       networkRuntime?.stop()
