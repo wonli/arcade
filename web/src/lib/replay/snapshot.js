@@ -12,13 +12,17 @@ export function createSnapshotRecorder({
 } = {}) {
   const timeline = createRollingTimeline({ windowMs, now })
   let lastAt = -Infinity
+  let lastSignature = ''
 
   return {
     record(value, at = now(), { force = false } = {}) {
       if (!force && at - lastAt < minIntervalMs) return false
       const clean = sanitize(value)
       if (clean == null) return false
+      const signature = JSON.stringify(clean)
+      if (!force && signature === lastSignature) return false
       lastAt = at
+      lastSignature = signature
       timeline.push(clean, at)
       return true
     },
@@ -31,6 +35,7 @@ export function createSnapshotRecorder({
     },
     reset() {
       lastAt = -Infinity
+      lastSignature = ''
       timeline.reset()
     },
   }
