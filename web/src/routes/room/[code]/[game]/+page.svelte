@@ -3,10 +3,9 @@
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { createTranslator } from '$lib/i18n.js'
   import { subscribeLocale } from '$lib/locale.js'
-  import PreviewButton from '$lib/components/PreviewButton.svelte'
-  import { uploadPreview } from '$lib/preview/client.js'
-  import { createPreviewController } from '$lib/preview/controller.js'
-  import { renderChessPreview, renderGomokuPreview } from '$lib/preview/renderers.js'
+  import { createReplaySession } from '$lib/replay/session.js'
+  import { replay as gomokuReplay } from '$lib/games/gomoku/replay.js'
+  import { replay as chessReplay } from '$lib/games/chess/replay.js'
   import { socket } from '$lib/ws/arcade'
   import TetrisBattle from '$lib/games/tetris/TetrisBattle.svelte'
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
@@ -30,19 +29,12 @@
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let unsubscribeLocale = () => {}
-  let unsubscribePreview = () => {}
   let audioContext = null
-  let previewController = null
-  let previewGame = ''
-  let previewState = { phase: 'idle', autoRemaining: 0, cooldownRemaining: 0, error: '' }
+  let replaySession = null
+  let replayGame = ''
+  let replayFinished = false
 
   $: t = createTranslator(locale)
-  $: if (room && (gameName === 'gomoku' || gameName === 'chess') && previewGame !== gameName) setupRoomPreview(gameName)
-  $: roomPreviewActive = !!previewController && gameState?.status === 'playing' && (room?.players?.length ?? 0) >= (room?.maxPlayers ?? 2)
-  $: if (previewController) {
-    if (roomPreviewActive) previewController.enterPlaying(`${roomCode}:${gameName}`)
-    else previewController.leavePlaying()
-  }
 
   const size = 15
   const cells = Array.from({ length: size * size }, (_, index) => ({ x: index % size, y: Math.floor(index / size) }))
@@ -77,11 +69,45 @@
     else { tone(330, .1); tone(220, .18, .035, .09) }
   }
 
+  function setupRoomReplay(nextGame) {
+    if (nextGame !== 'gomoku' && nextGame !== 'chess') return
+    if (replaySession && replayGame === nextGame) return
+    replaySession?.destroy()
+    replayGame = nextGame
+    replayFinished = false
+    replaySession = createReplaySession({
+      adapter: nextGame === 'chess' ? chessReplay : gomokuReplay,
+      roomCode: () => room?.id ?? roomCode,
+      room: () => room,
+      identity,
+      socket,
+    })
+  }
+
+  function updateRoomReplay(previous) {
+    if (gameName !== 'gomoku' && gameName !== 'chess') return
+    setupRoomReplay(gameName)
+    if (!gameState) return
+    const started = gameState.status === 'playing' && previous?.status !== 'playing'
+    const finished = gameState.status === 'finished' && previous?.status !== 'finished'
+    if (started) {
+      replayFinished = false
+      void replaySession?.restart(gameState)
+    } else if (gameState.status === 'playing') {
+      replaySession?.record(gameState)
+    }
+    if (finished && !replayFinished) {
+      replayFinished = true
+      void replaySession?.finish(gameState)
+    }
+  }
+
   function applySnapshot(snapshot) {
     if (!snapshot || snapshot.type) return
     const previous = gameState
     room = snapshot
     gameState = snapshot.state ?? null
+    updateRoomReplay(previous)
     if (!previous || !gameState) return
     if (gameName === 'gomoku') {
       if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
@@ -105,28 +131,6 @@
   function canMove(roomState, state, x, y) { return !!state && state.status === 'playing' && myStone(roomState) === state.turn && state.board?.[y]?.[x] === 0 }
   function canAddBot(roomState) { return (gameName === 'gomoku' || gameName === 'chess') && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
   function isMultiplayer(roomState) { return roomState?.maxPlayers === 2 }
-
-  function setupRoomPreview(nextGame) {
-    unsubscribePreview()
-    previewController?.destroy()
-    previewGame = nextGame
-    previewController = createPreviewController({
-      game: nextGame,
-      roomId: () => roomCode,
-      players: () => room?.players?.length ?? 0,
-      capture: captureRoomPreview,
-      upload: (payload) => uploadPreview({ ...payload, socket }),
-    })
-    unsubscribePreview = previewController.subscribe((next) => (previewState = next))
-  }
-
-  async function captureRoomPreview() {
-    if (!gameState) throw new Error('game preview is not ready')
-    if (gameName === 'chess') {
-      return { blob: await renderChessPreview(gameState), summary: { moves: gameState.ply ?? 0 } }
-    }
-    return { blob: await renderGomokuPreview(gameState), summary: { moves: gameState.moves ?? 0 } }
-  }
 
   function subscribeRoom() {
     unsubscribeRoom()
@@ -225,7 +229,7 @@
     unsubscribeLocale=subscribeLocale((next)=>{locale=next})
     unsubscribeConnection=socket.onConnection((state)=>{connection=state})
     bootstrap().catch((err)=>{connection='offline';error=err.message})
-    return()=>{unsubscribeRoom();unsubscribeConnection();unsubscribeLocale();unsubscribePreview();previewController?.destroy();audioContext?.close()}
+    return()=>{unsubscribeRoom();unsubscribeConnection();unsubscribeLocale();replaySession?.destroy();audioContext?.close()}
   })
 </script>
 
@@ -261,7 +265,6 @@
         <aside class="room-panel chess-panel">
           <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div>
           <button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>
-          {#if roomPreviewActive}<PreviewButton state={previewState} {t} onUpdate={() => previewController?.updateNow()} />{/if}
           {#if canAddBot(room)}
             <div class="difficulty-control"><label for="bot-difficulty">{t('room.botDifficulty')}</label><select id="bot-difficulty" bind:value={botDifficulty}><option value="easy">{difficultyLabel('easy')}</option><option value="medium">{difficultyLabel('medium')}</option><option value="hard">{difficultyLabel('hard')}</option><option value="expert">{difficultyLabel('expert')}</option></select></div>
             <button class="secondary-button" onclick={addBot}>{t('room.playBot')}</button>
@@ -274,7 +277,7 @@
     {:else}
       <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>{t('room.black')}</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>{t('game.gomoku.name').toUpperCase()}</span><h1>{gameLabel(room,gameState)}</h1><p>{t('room.players',{count:room?.players?.length??0,max:room?.maxPlayers??2})}</p></div><div class="player-card right"><div><span>{t('room.white')}</span><strong>{room?.players?.[1]?.name??t('common.waiting')}</strong></div><div class="player-stone white"></div></div></section>
       <section class="board-stage"><div class="board-frame"><div class="gomoku-board" aria-label={gomokuBoardLabel()}>{#each cells as cell}<button class:last={isLast(gameState,cell.x,cell.y)} class:playable={canMove(room,gameState,cell.x,cell.y)} class="board-cell" onclick={()=>moveStone(cell.x,cell.y)} aria-label={placeStoneLabel(cell.x,cell.y)}>{#if stoneAt(gameState,cell.x,cell.y)===1}<span class="stone stone-black"></span>{:else if stoneAt(gameState,cell.x,cell.y)===2}<span class="stone stone-white"></span>{:else}<span class="ghost-stone"></span>{/if}</button>{/each}</div></div>
-      {#if isMultiplayer(room)}<aside class="room-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>{#if roomPreviewActive}<PreviewButton state={previewState} {t} onUpdate={() => previewController?.updateNow()} />{/if}{#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>{t('room.addBot')}</button>{/if}{#if gameState?.status==='finished'&&myStone(room)!==0}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}{#if error}<div class="room-error">{error}</div>{/if}{#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}</aside>{/if}</section>
+      {#if isMultiplayer(room)}<aside class="room-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>{#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>{t('room.addBot')}</button>{/if}{#if gameState?.status==='finished'&&myStone(room)!==0}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}{#if error}<div class="room-error">{error}</div>{/if}{#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}</aside>{/if}</section>
     {/if}
   </main>
 </div>
