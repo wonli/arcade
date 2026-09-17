@@ -6,6 +6,7 @@
   import { uploadPreview } from '$lib/preview/client.js'
   import { createPreviewController } from '$lib/preview/controller.js'
   import { renderSnakePreview } from '$lib/preview/renderers.js'
+  import { DEFAULT_SNAKE_SPEED, normalizeSnakeSpeed } from '$lib/games/snake/speed.js'
   import { swipeDirection } from '$lib/games/touch/swipe.js'
 
   export let room
@@ -16,6 +17,7 @@
   let state = room?.state ?? null
   let error = ''
   let copied = false
+  let speed = DEFAULT_SNAKE_SPEED
   let unsubscribe = () => {}
   let unsubscribeLocale = () => {}
   let unsubscribePreview = () => {}
@@ -88,7 +90,7 @@
     return { blob: await renderSnakePreview(state), summary: { tick: state.tick ?? 0, score: leaderScore } }
   }
 
-  async function start() { error=''; try { await socket.request('snake.start',{roomId:roomCode}) } catch(err){ error=err.message } }
+  async function start() { error=''; try { await socket.request('snake.start',{roomId:roomCode,speed}) } catch(err){ error=err.message } }
   async function restart() { error=''; state=null; try { await socket.request('snake.restart',{roomId:roomCode}) } catch(err){ error=err.message } }
   async function copyInvite() { await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/snake`); copied=true; setTimeout(()=>copied=false,1200) }
 
@@ -132,6 +134,7 @@
   }
 
   onMount(() => {
+    speed = normalizeSnakeSpeed(sessionStorage.getItem('arcade.snake.speed'))
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
     previewController = createPreviewController({
       game: 'snake',
