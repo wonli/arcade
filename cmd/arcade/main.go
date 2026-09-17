@@ -11,6 +11,7 @@ import (
 	"github.com/wonli/arcade/arcade"
 	"github.com/wonli/arcade/internal/frontend"
 	"github.com/wonli/arcade/internal/gameconfig"
+	"github.com/wonli/arcade/internal/gamepreview"
 	arcadeserver "github.com/wonli/arcade/server"
 	webconfig "github.com/wonli/arcade/web/config"
 )
@@ -29,6 +30,8 @@ func main() {
 		ws.HttpHandler(c.Writer, c.Request)
 	})
 	gameconfig.RegisterRoutes(engine, gameconfig.NewStore(webconfig.Files, "data"))
+	previewStore := gamepreview.NewStore("data")
+	gamepreview.RegisterRoutes(engine, previewStore)
 
 	router := ws.NewRouter().Use(middlewares.Recovery())
 	actions := arcadeserver.NewActions(arcade.NewService())
@@ -36,6 +39,7 @@ func main() {
 	actions.RegisterChess(router)
 	actions.RegisterDungeon(router)
 	actions.RegisterSessionState(router)
+	actions.RegisterPreview(router, previewStore)
 
 	frontend.Register(engine)
 
