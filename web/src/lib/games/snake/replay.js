@@ -1,6 +1,5 @@
 import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
 import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
-import SnakeReplaySurface from './SnakeReplaySurface.svelte'
 
 export const replay = Object.freeze({
   id: 'snake',
@@ -10,7 +9,8 @@ export const replay = Object.freeze({
   },
   encode: encodeCompactRecording,
   decode: decodeRecording,
-  createPlayer(target, recording, options = {}) {
+  async createPlayer(target, recording, options = {}) {
+    const { default: SnakeReplaySurface } = await import('./SnakeReplaySurface.svelte')
     return createSvelteReplayPlayer(target, recording, SnakeReplaySurface, {
       width: 1164,
       height: 640,
