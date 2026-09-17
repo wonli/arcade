@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
+  import { createTranslator } from '$lib/i18n.js'
+  import { subscribeLocale } from '$lib/locale.js'
   import { socket } from '$lib/ws/arcade'
   import TetrisBattle from '$lib/games/tetris/TetrisBattle.svelte'
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
@@ -20,9 +22,13 @@
   let error = ''
   let copied = false
   let botDifficulty = data?.difficulty ?? 'medium'
+  let locale = 'en'
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
+  let unsubscribeLocale = () => {}
   let audioContext = null
+
+  $: t = createTranslator(locale)
 
   const size = 15
   const cells = Array.from({ length: size * size }, (_, index) => ({ x: index % size, y: Math.floor(index / size) }))
@@ -135,40 +141,55 @@
   function isLast(state,x,y){ return state?.last?.x===x&&state?.last?.y===y }
 
   function gameLabel(roomState,state){
-    if(!roomState||roomState.players.length<roomState.maxPlayers)return'Waiting for a friend'
-    if(!state)return'Preparing board'
-    if(state.status==='finished'){if(!state.winner)return'Draw';return state.winner===myStone(roomState)?'You win':'Friend wins'}
-    return state.turn===myStone(roomState)?'Your turn':"Friend's turn"
+    if(!roomState||roomState.players.length<roomState.maxPlayers)return t('room.waitFriend')
+    if(!state)return t('room.preparing')
+    if(state.status==='finished'){if(!state.winner)return t('room.draw');return state.winner===myStone(roomState)?t('room.youWin'):t('room.friendWins')}
+    return state.turn===myStone(roomState)?t('room.yourTurn'):t('room.friendTurn')
   }
 
   function chessLabel(roomState, state) {
-    if (!roomState || roomState.players.length < roomState.maxPlayers) return 'Waiting for an opponent'
-    if (!state) return 'Preparing board'
+    if (!roomState || roomState.players.length < roomState.maxPlayers) return t('room.waitOpponent')
+    if (!state) return t('room.preparing')
     if (state.status === 'finished') {
-      if (state.winner) return state.winner === myChessColor(roomState) ? 'Checkmate · You win' : 'Checkmate · Opponent wins'
-      if (state.drawReason === 'stalemate') return 'Draw · Stalemate'
-      if (state.drawReason === 'threefold-repetition') return 'Draw · Threefold repetition'
-      if (state.drawReason === 'fifty-move') return 'Draw · Fifty-move rule'
-      if (state.drawReason === 'insufficient-material') return 'Draw · Insufficient material'
-      return 'Draw'
+      if (state.winner) return state.winner === myChessColor(roomState) ? t('room.checkmateYou') : t('room.checkmateOpponent')
+      if (state.drawReason === 'stalemate') return t('room.stalemate')
+      if (state.drawReason === 'threefold-repetition') return t('room.threefold')
+      if (state.drawReason === 'fifty-move') return t('room.fiftyMove')
+      if (state.drawReason === 'insufficient-material') return t('room.insufficient')
+      return t('room.draw')
     }
     const mine = myChessColor(roomState)
-    const turn = state.turn === mine ? 'Your turn' : (roomState.players?.[1]?.bot && state.turn === 'black' ? 'Bot to move' : "Opponent's turn")
-    return state.check ? `${turn} · Check` : turn
+    const turn = state.turn === mine ? t('room.yourTurn') : (roomState.players?.[1]?.bot && state.turn === 'black' ? t('room.botTurn') : t('room.opponentTurn'))
+    return state.check ? `${turn} · ${t('room.check')}` : turn
   }
 
   function pageTitle(){
-    if(gameName==='tetris')return'Tetris Battle'
-    if(gameName==='snake')return'Snake Arena'
-    if(gameName==='drawguess')return'Draw & Guess'
-    if(gameName==='chess')return'Chess'
-    return'Gomoku'
+    if(gameName==='tetris')return t('game.tetris.name')
+    if(gameName==='snake')return t('game.snake.name')
+    if(gameName==='drawguess')return t('game.drawguess.name')
+    if(gameName==='chess')return t('game.chess.name')
+    return t('game.gomoku.name')
   }
 
+  function connectionLabel() {
+    if (connection === 'live') return t('common.live')
+    if (connection === 'offline') return locale === 'zh-CN' ? '离线' : 'OFFLINE'
+    return locale === 'zh-CN' ? '连接中' : 'CONNECTING'
+  }
+
+  function difficultyLabel(value) {
+    if (locale !== 'zh-CN') return value[0].toUpperCase() + value.slice(1)
+    return { easy:'简单', medium:'普通', hard:'困难', expert:'专家' }[value] ?? value
+  }
+
+  function gomokuBoardLabel() { return locale === 'zh-CN' ? '五子棋棋盘' : 'Gomoku board' }
+  function placeStoneLabel(x, y) { return locale === 'zh-CN' ? `在第 ${x + 1} 列第 ${y + 1} 行落子` : `Place stone at ${x + 1}, ${y + 1}` }
+
   onMount(()=>{
+    unsubscribeLocale=subscribeLocale((next)=>{locale=next})
     unsubscribeConnection=socket.onConnection((state)=>{connection=state})
     bootstrap().catch((err)=>{connection='offline';error=err.message})
-    return()=>{unsubscribeRoom();unsubscribeConnection();audioContext?.close()}
+    return()=>{unsubscribeRoom();unsubscribeConnection();unsubscribeLocale();audioContext?.close()}
   })
 </script>
 
@@ -177,47 +198,47 @@
 <div class="room-shell">
   <header class="room-topbar">
     <a class="brand" href="/"><span class="brand-mark">A</span><span>AQI ARCADE</span></a>
-    <div class="room-meta"><span>{gameName.toUpperCase()} · <strong>{roomCode.toLowerCase()}</strong></span><span class:offline={connection!=='live'} class="live-badge"><i></i>{connection==='live'?'LIVE':connection.toUpperCase()}</span></div>
+    <div class="room-meta"><span>{pageTitle()} · <strong>{roomCode.toLowerCase()}</strong></span><span class:offline={connection!=='live'} class="live-badge"><i></i>{connectionLabel()}</span></div>
   </header>
 
   <main class="room-main">
     {#if gameName === 'drawguess'}
       {#if room}<DrawGuess {room} {roomCode} {identity} {socket} />{/if}
       {#if error}<div class="room-error standalone-error">{error}</div>{/if}
-      {#if connection === 'offline'}<button class="secondary-button reconnect" onclick={reconnect}>Reconnect</button>{/if}
+      {#if connection === 'offline'}<button class="secondary-button reconnect" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
     {:else if gameName === 'snake'}
       {#if room}<SnakeArena {room} {roomCode} {identity} {socket} />{/if}
       {#if error}<div class="room-error standalone-error">{error}</div>{/if}
-      {#if connection === 'offline'}<button class="secondary-button reconnect" onclick={reconnect}>Reconnect</button>{/if}
+      {#if connection === 'offline'}<button class="secondary-button reconnect" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
     {:else if gameName === 'tetris'}
       {#if room}<TetrisBattle {room} {roomCode} {identity} {socket} />{/if}
-      {#if isMultiplayer(room)}<aside class="room-panel tetris-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div><button class="primary-button" onclick={copyInvite}>{copied?'Link copied':'Copy invite link'}</button></aside>{/if}
+      {#if isMultiplayer(room)}<aside class="room-panel tetris-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button></aside>{/if}
       {#if error}<div class="room-error">{error}</div>{/if}
-      {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>Reconnect</button>{/if}
+      {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
     {:else if gameName === 'chess'}
       <section class="match-head chess-head">
-        <div class="player-card active-player"><div class="chess-side white-side">♔</div><div><span>WHITE</span><strong>{room?.players?.[0]?.name??name}</strong></div></div>
-        <div class="match-status"><span>INTERNATIONAL CHESS</span><h1>{chessLabel(room,gameState)}</h1><p>{gameState?.ply ?? 0} half-moves</p></div>
-        <div class="player-card right"><div><span>BLACK</span><strong>{room?.players?.[1]?.name??'Waiting...'}{room?.players?.[1]?.botDifficulty ? ` · ${room.players[1].botDifficulty.toUpperCase()}` : ''}</strong></div><div class="chess-side black-side">♚</div></div>
+        <div class="player-card active-player"><div class="chess-side white-side">♔</div><div><span>{t('room.white')}</span><strong>{room?.players?.[0]?.name??name}</strong></div></div>
+        <div class="match-status"><span>{t('game.chess.name').toUpperCase()}</span><h1>{chessLabel(room,gameState)}</h1><p>{t('room.halfMoves',{count:gameState?.ply??0})}</p></div>
+        <div class="player-card right"><div><span>{t('room.black')}</span><strong>{room?.players?.[1]?.name??t('common.waiting')}{room?.players?.[1]?.botDifficulty ? ` · ${difficultyLabel(room.players[1].botDifficulty).toUpperCase()}` : ''}</strong></div><div class="chess-side black-side">♚</div></div>
       </section>
       <section class="board-stage chess-stage">
         <div class="chess-board-column">{#if room && gameState}<ChessBoard {room} state={gameState} {identity} onMove={moveChess} />{/if}</div>
         <aside class="room-panel chess-panel">
-          <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div>
-          <button class="primary-button" onclick={copyInvite}>{copied?'Link copied':'Copy invite link'}</button>
+          <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div>
+          <button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>
           {#if canAddBot(room)}
-            <div class="difficulty-control"><label for="bot-difficulty">BOT DIFFICULTY</label><select id="bot-difficulty" bind:value={botDifficulty}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="expert">Expert</option></select></div>
-            <button class="secondary-button" onclick={addBot}>Play vs Bot</button>
+            <div class="difficulty-control"><label for="bot-difficulty">{t('room.botDifficulty')}</label><select id="bot-difficulty" bind:value={botDifficulty}><option value="easy">{difficultyLabel('easy')}</option><option value="medium">{difficultyLabel('medium')}</option><option value="hard">{difficultyLabel('hard')}</option><option value="expert">{difficultyLabel('expert')}</option></select></div>
+            <button class="secondary-button" onclick={addBot}>{t('room.playBot')}</button>
           {/if}
-          {#if gameState?.status==='finished'&&myChessColor(room)}<button class="secondary-button" onclick={rematch}>Play again</button>{/if}
+          {#if gameState?.status==='finished'&&myChessColor(room)}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}
           {#if error}<div class="room-error">{error}</div>{/if}
-          {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>Reconnect</button>{/if}
+          {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
         </aside>
       </section>
     {:else}
-      <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>BLACK</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>GOMOKU</span><h1>{gameLabel(room,gameState)}</h1><p>{room?.players?.length??0}/{room?.maxPlayers??2} players</p></div><div class="player-card right"><div><span>WHITE</span><strong>{room?.players?.[1]?.name??'Waiting...'}</strong></div><div class="player-stone white"></div></div></section>
-      <section class="board-stage"><div class="board-frame"><div class="gomoku-board" aria-label="Gomoku board">{#each cells as cell}<button class:last={isLast(gameState,cell.x,cell.y)} class:playable={canMove(room,gameState,cell.x,cell.y)} class="board-cell" onclick={()=>moveStone(cell.x,cell.y)} aria-label={`Place stone at ${cell.x+1}, ${cell.y+1}`}>{#if stoneAt(gameState,cell.x,cell.y)===1}<span class="stone stone-black"></span>{:else if stoneAt(gameState,cell.x,cell.y)===2}<span class="stone stone-white"></span>{:else}<span class="ghost-stone"></span>{/if}</button>{/each}</div></div>
-      {#if isMultiplayer(room)}<aside class="room-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>ROOM CODE</small></div><button class="primary-button" onclick={copyInvite}>{copied?'Link copied':'Copy invite link'}</button>{#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>Add Bot</button>{/if}{#if gameState?.status==='finished'&&myStone(room)!==0}<button class="secondary-button" onclick={rematch}>Play again</button>{/if}{#if error}<div class="room-error">{error}</div>{/if}{#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>Reconnect</button>{/if}</aside>{/if}</section>
+      <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>{t('room.black')}</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>{t('game.gomoku.name').toUpperCase()}</span><h1>{gameLabel(room,gameState)}</h1><p>{t('room.players',{count:room?.players?.length??0,max:room?.maxPlayers??2})}</p></div><div class="player-card right"><div><span>{t('room.white')}</span><strong>{room?.players?.[1]?.name??t('common.waiting')}</strong></div><div class="player-stone white"></div></div></section>
+      <section class="board-stage"><div class="board-frame"><div class="gomoku-board" aria-label={gomokuBoardLabel()}>{#each cells as cell}<button class:last={isLast(gameState,cell.x,cell.y)} class:playable={canMove(room,gameState,cell.x,cell.y)} class="board-cell" onclick={()=>moveStone(cell.x,cell.y)} aria-label={placeStoneLabel(cell.x,cell.y)}>{#if stoneAt(gameState,cell.x,cell.y)===1}<span class="stone stone-black"></span>{:else if stoneAt(gameState,cell.x,cell.y)===2}<span class="stone stone-white"></span>{:else}<span class="ghost-stone"></span>{/if}</button>{/each}</div></div>
+      {#if isMultiplayer(room)}<aside class="room-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>{#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>{t('room.addBot')}</button>{/if}{#if gameState?.status==='finished'&&myStone(room)!==0}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}{#if error}<div class="room-error">{error}</div>{/if}{#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}</aside>{/if}</section>
     {/if}
   </main>
 </div>
