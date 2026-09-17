@@ -59,6 +59,7 @@ type roomRequest struct {
 	RoomID     string `json:"roomId"`
 	Name       string `json:"name"`
 	Difficulty string `json:"difficulty,omitempty"`
+	Locale     string `json:"locale,omitempty"`
 }
 type createRoomRequest struct {
 	Game    string `json:"game"`
@@ -385,7 +386,7 @@ func (a *Actions) drawStart(c *ws.Context) {
 	}
 	req.RoomID = strings.ToUpper(strings.TrimSpace(req.RoomID))
 	pubsub := c.Client.Hub.PubSub
-	if err := a.service.StartDrawGuess(req.RoomID, playerID, func(roomID string, event map[string]any) { pubsub.Pub(roomTopic(roomID), event) }); err != nil {
+	if err := a.service.StartDrawGuessLocale(req.RoomID, playerID, req.Locale, func(roomID string, event map[string]any) { pubsub.Pub(roomTopic(roomID), event) }); err != nil {
 		c.SendCode(400, err.Error())
 		return
 	}
