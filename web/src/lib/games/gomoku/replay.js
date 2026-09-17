@@ -1,5 +1,6 @@
-import { createSnapshotRecorder, encodeCompactRecording, decodeRecording, createCanvasReplayPlayer } from '../../replay/snapshot.js'
-import { clearScene, drawFrame, occupiedCells } from '../../replay/canvas.js'
+import { createSnapshotRecorder, encodeCompactRecording, decodeRecording } from '../../replay/snapshot.js'
+import { createSvelteReplayPlayer } from '../../replay/svelte-player.js'
+import GomokuReplaySurface from './GomokuReplaySurface.svelte'
 
 export const replay = Object.freeze({
   id: 'gomoku',
@@ -10,7 +11,11 @@ export const replay = Object.freeze({
   encode: encodeCompactRecording,
   decode: decodeRecording,
   createPlayer(target, recording, options = {}) {
-    return createCanvasReplayPlayer(target, recording, drawState, options)
+    return createSvelteReplayPlayer(target, recording, GomokuReplaySurface, {
+      width: 828,
+      height: 828,
+      ...options,
+    })
   },
 })
 
@@ -23,38 +28,5 @@ function sanitizeState(state = {}) {
     status: state.status === 'finished' ? 'finished' : 'playing',
     winner: Number(state.winner) || 0,
     last: state.last ? { x: Number(state.last.x) || 0, y: Number(state.last.y) || 0 } : null,
-  }
-}
-
-function drawState(canvas, state = {}) {
-  const ctx = clearScene(canvas)
-  const size = state.board?.length || 15
-  const boardSize = Math.min(590, canvas.height - 100)
-  const x = Math.round((canvas.width - boardSize) / 2)
-  const y = Math.round((canvas.height - boardSize) / 2)
-  drawFrame(ctx, x, y, boardSize, boardSize)
-
-  const inset = 30
-  const gap = (boardSize - inset * 2) / Math.max(1, size - 1)
-  ctx.strokeStyle = '#4d5660'
-  ctx.lineWidth = 1
-  for (let index = 0; index < size; index += 1) {
-    const offset = inset + index * gap
-    ctx.beginPath(); ctx.moveTo(x + inset, y + offset); ctx.lineTo(x + boardSize - inset, y + offset); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(x + offset, y + inset); ctx.lineTo(x + offset, y + boardSize - inset); ctx.stroke()
-  }
-
-  for (const stone of occupiedCells(state.board)) {
-    const cx = x + inset + stone.x * gap
-    const cy = y + inset + stone.y * gap
-    ctx.beginPath()
-    ctx.arc(cx, cy, Math.max(8, gap * 0.38), 0, Math.PI * 2)
-    ctx.fillStyle = stone.value === 1 ? '#080a0d' : '#f4f0e8'
-    ctx.fill()
-    ctx.strokeStyle = stone.value === 1 ? '#3a414a' : '#a8a49c'
-    ctx.stroke()
-    if (state.last?.x === stone.x && state.last?.y === stone.y) {
-      ctx.beginPath(); ctx.arc(cx, cy, Math.max(2.5, gap * .08), 0, Math.PI * 2); ctx.fillStyle = '#c1ff56'; ctx.fill()
-    }
   }
 }
