@@ -82,7 +82,12 @@ export function createCanvasReplayPlayer(target, recording, draw, {
   canvas.width = width
   canvas.height = height
   canvas.setAttribute('aria-hidden', 'true')
-  Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block' })
+  Object.assign(canvas.style, {
+    width: `${width}px`,
+    height: `${height}px`,
+    flex: '0 0 auto',
+    display: 'block',
+  })
   target.replaceChildren(canvas)
 
   let timer = null
