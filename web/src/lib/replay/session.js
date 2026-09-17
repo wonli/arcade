@@ -73,11 +73,14 @@ export function createReplaySession({
     return uploaded
   }
 
-  function restart(value = null) {
-    pending = value == null ? null : { value, at: now(), options: { force: true } }
+  async function restart(value = null) {
+    if (!isHost()) return false
+    if (starting) await starting
+    if (started) await controller.finish()
     started = false
+    pending = value == null ? null : { value, at: now(), options: { force: true } }
     recorder.reset?.()
-    void ensureStarted()
+    return ensureStarted()
   }
 
   function destroy() {
