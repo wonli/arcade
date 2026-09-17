@@ -1,8 +1,12 @@
 <script>
   import { onMount } from 'svelte'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
+  import { getIdentity } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
+  import { createReplaySession } from '$lib/replay/session.js'
+  import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
+  import { replay as dungeonReplay, createDungeonReplaySnapshot } from '$lib/games/dungeon/replay.js'
   import { formatAffixLabel, gameOverSummary, weaponHudModel, weaponIdentityLabel } from '$lib/games/dungeon/presentation.js'
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
@@ -17,6 +21,15 @@
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
 
+  const identity = getIdentity()
+  const SOLO_REPLAY_ROOM = 'SOLO-DUNGEON'
+  const soloReplayRoom = {
+    id: SOLO_REPLAY_ROOM,
+    hostId: identity.sessionId,
+    players: [{ id: identity.sessionId, name: 'Solo' }],
+    status: 'playing',
+  }
+
   const messages = {
     'zh-CN': { title:'无尽地牢', subtitle:'WASD 移动 · 自动普攻 · Space 主动技能 · E 交互/换装', hp:'生命', damage:'伤害', kills:'击杀', floor:'层数', chapter:'章节', room:'房间', weapon:'武器', none:'无', loading:'正在进入地牢…', back:'返回 Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'装备 {rarity} · {identity}，基础伤害 +{damage}。', pickupPotion:'喝下生命药水，恢复 {heal} 点生命。', storePotion:'生命药水已收入背包。', fullHealth:'生命值已满。', dropWeapon:'{rarity} · {identity} 掉落！', dropPotion:'生命药水掉落！', gameover:'本次探索结束。', runEnded:'探索终结', runSummary:'本次地牢记录', restart:'重新开始', skill:'主动技能命中 {hits} 个敌人。', floorTitle:'第 {floor} 层', floorClear:'本层已清空', floorStart:'进入第 {floor} 层。', portal:'出口已开启，进入绿色传送门。', dungeonBlade:'地牢之刃', rarityCommon:'普通', rarityUncommon:'精良', rarityRare:'稀有', rarityEpic:'史诗', rarityLegendary:'传奇', current:'当前装备', ground:'地上装备', equip:'装备', emptyWeapon:'未装备武器', combat:'战斗', elite:'精英', rest:'休息', boss:'首领', restTitle:'篝火休息', restComplete:'休整完成 · 出口已开启', restRecover:'恢复 50% 最大生命', restTemper:'强化当前武器', restFortune:'下一战利品品质提升', restEntered:'发现休息层，靠近篝火选择奖励。', restChoice:'已选择：{choice}', openChest:'打开宝箱', chestOpened:'宝箱开启！', touchSkill:'技能', touchInteract:'交互', potion:'药水', usePotion:'使用药水', details:'属性', close:'返回战斗', baseDamage:'武器伤害', totalDamage:'总伤害', affixes:'词缀', noAffixes:'暂无词缀', paused:'游戏已暂停' },
     en: { title:'Endless Dungeon', subtitle:'WASD move · auto attack · Space skill · E interact/equip', hp:'HP', damage:'Damage', kills:'Kills', floor:'Floor', chapter:'Chapter', room:'Room', weapon:'Weapon', none:'None', loading:'Entering the dungeon…', back:'Back to Arcade', asset:'Dungeon + Pixel VFX assets', pickupWeapon:'Equipped {rarity} · {identity}. Base damage +{damage}.', pickupPotion:'Health potion restored {heal} HP.', storePotion:'Health potion stored.', fullHealth:'HP is already full.', dropWeapon:'{rarity} · {identity} dropped!', dropPotion:'Health potion dropped!', gameover:'Run ended.', runEnded:'RUN ENDED', runSummary:'DUNGEON RECORD', restart:'Restart', skill:'Active skill hit {hits} enemies.', floorTitle:'FLOOR {floor}', floorClear:'FLOOR CLEAR', floorStart:'Entered floor {floor}.', portal:'Exit portal opened. Step into the green portal.', dungeonBlade:'Dungeon Blade', rarityCommon:'Common', rarityUncommon:'Uncommon', rarityRare:'Rare', rarityEpic:'Epic', rarityLegendary:'Legendary', current:'Equipped', ground:'Ground Item', equip:'Equip', emptyWeapon:'No weapon equipped', combat:'Combat', elite:'Elite', rest:'Rest', boss:'Boss', restTitle:'REST CAMP', restComplete:'Rest complete · exit opened', restRecover:'Recover 50% max HP', restTemper:'Temper current weapon', restFortune:'Improve next loot quality', restEntered:'Rest floor found. Approach the camp to choose.', restChoice:'Selected: {choice}', openChest:'Open Chest', chestOpened:'Chest opened!', touchSkill:'SKILL', touchInteract:'USE', potion:'Potion', usePotion:'Use potion', details:'Stats', close:'Resume', baseDamage:'Weapon damage', totalDamage:'Total damage', affixes:'Affixes', noAffixes:'No affixes', paused:'GAME PAUSED' }
@@ -28,6 +41,7 @@
   let error = '', locale = 'en', eventText = ''
   let stats = initialDungeonStats(), progress = initialDungeonProgress()
   let viewportFrame = 0
+  let replaySession = null, replayTimer = null, replayFinished = false
   let unsubscribeLocale = () => {}
 
   const t = (key, values = {}) => { let text = messages[locale]?.[key] ?? messages.en[key] ?? key; for (const [name,value] of Object.entries(values)) text = text.replace(`{${name}}`, value); return text }
@@ -41,6 +55,43 @@
   }
 
   function dungeonScene() { return game?.scene?.getScene?.('Dungeon') }
+
+  function dungeonReplaySnapshot() {
+    return createDungeonReplaySnapshot({ scene: dungeonScene(), stats, progress })
+  }
+
+  function recordDungeonReplay(force = false) {
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) replaySession?.record(snapshot, { force })
+  }
+
+  function finishDungeonReplay() {
+    if (replayFinished) return
+    replayFinished = true
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) void replaySession?.finish(snapshot)
+  }
+
+  async function setupDungeonReplay() {
+    try {
+      await socket.connect()
+      await socket.request('arcade.login', { playerId: identity.sessionId, sessionId: identity.sessionId })
+      if (!mounted) return
+      replaySession = createReplaySession({
+        adapter: dungeonReplay,
+        roomCode: SOLO_REPLAY_ROOM,
+        room: () => soloReplayRoom,
+        identity,
+        socket,
+      })
+      replayTimer = setInterval(() => {
+        if (ready && !gameOver && !replayFinished) recordDungeonReplay()
+      }, 200)
+      recordDungeonReplay(true)
+    } catch (cause) {
+      console.warn('Dungeon replay disabled:', cause)
+    }
+  }
 
   function applyLocale(next) {
     locale = next || 'en'
@@ -90,7 +141,7 @@
     const identityLabel = weaponIdentityLabel(event.item, locale) || t('dungeonBlade')
     if (event.type === 'pickup') eventText = potion ? t('pickupPotion', { heal: event.healed ?? 0 }) : t('pickupWeapon', { rarity: rarityName(event.item?.rarity), identity: identityLabel, damage: event.item?.damage ?? 0 })
     if (event.type === 'drop') eventText = potion ? t('dropPotion') : t('dropWeapon', { rarity: rarityName(event.item?.rarity), identity: identityLabel })
-    if (event.type === 'gameover') { eventText = t('gameover'); gameOver = true; panelOpen = false; touchInput?.stopMove() }
+    if (event.type === 'gameover') { eventText = t('gameover'); gameOver = true; panelOpen = false; touchInput?.stopMove(); finishDungeonReplay() }
     if (event.type === 'skill') eventText = t('skill', { hits: event.hits })
     if (event.type === 'floorstart') eventText = `${t('floorStart', { floor: event.floor })} · ${roomName(event.roomRole)}`
     if (event.type === 'floorclear') eventText = t('floorClear')
@@ -127,6 +178,7 @@
     progress = initialDungeonProgress()
     eventText = ''
     gameOver = false
+    replayFinished = false
     ready = false
     error = ''
 
@@ -175,6 +227,7 @@
         touchInput = installDungeonTouchInput(scene)
         hudRuntime = installDungeonHud(scene, { getStats:()=>stats, getProgress:()=>progress, getLabels:hudLabels, onPotion:()=>usePotion(), onDetails:()=>togglePanel() })
         syncGameViewport()
+        recordDungeonReplay(true)
       }
 
       installRuntime()
@@ -192,10 +245,13 @@
     const observer = new ResizeObserver(syncGameViewport)
     if (stageShell) observer.observe(stageShell)
     window.addEventListener('resize', syncGameViewport)
+    void setupDungeonReplay()
     startDungeon()
 
     return () => {
       mounted = false
+      if (replayTimer) clearInterval(replayTimer)
+      replaySession?.destroy()
       cancelAnimationFrame(viewportFrame)
       observer.disconnect()
       window.removeEventListener('resize', syncGameViewport)
