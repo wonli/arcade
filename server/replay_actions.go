@@ -10,6 +10,8 @@ import (
 	"github.com/wonli/arcade/internal/gamereplay"
 )
 
+const standaloneDungeonReplayRoomID = "SOLO-DUNGEON"
+
 type replayLeaseRequest struct {
 	RoomID string `json:"roomId"`
 	Game   string `json:"game"`
@@ -43,6 +45,13 @@ func (a *Actions) RegisterReplay(router ws.IRouter, replays *gamereplay.Store) {
 func acquireReplayLease(service *arcade.Service, replays *gamereplay.Store, roomID, gameName string, playerID game.PlayerID) (gamereplay.Lease, error) {
 	roomID = strings.ToUpper(strings.TrimSpace(roomID))
 	gameName = strings.ToLower(strings.TrimSpace(gameName))
+	if roomID == standaloneDungeonReplayRoomID {
+		if gameName != "dungeon" {
+			return gamereplay.Lease{}, errors.New("standalone replay lease is only available for dungeon")
+		}
+		holder := strings.ToLower(standaloneDungeonReplayRoomID) + ":" + string(playerID)
+		return replays.AcquireLease(gameName, holder)
+	}
 	if !service.ReplayHost(roomID, playerID, gameName) {
 		return gamereplay.Lease{}, errors.New("replay lease requires the started room host")
 	}
