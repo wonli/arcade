@@ -45,10 +45,8 @@
 
   :global(.arcade-content > .page){height:100%!important;min-height:0!important}
   :global(.arcade-content > .page > .topbar){height:0!important;min-height:0!important;position:relative;z-index:90}
-  :global(.arcade-content > .page > .topbar .title-copy){display:none!important}
-  :global(.arcade-content > .page > .topbar .actions){position:absolute;top:8px;right:0}
-  :global(.arcade-content > .page > .topbar .actions > button:not(.preview-button)),
-  :global(.arcade-content > .page > .topbar .actions > a){display:none!important}
+  :global(.arcade-content > .page > .topbar .title-copy),
+  :global(.arcade-content > .page > .topbar .actions){display:none!important}
 
   :global(.arcade-content > .page > header:not(.topbar) > div:first-child > a){display:none!important}
   :global(.arcade-content > .page > header:not(.topbar) .players button:first-of-type){display:none!important}
