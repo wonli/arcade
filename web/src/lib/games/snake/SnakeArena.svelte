@@ -1,12 +1,10 @@
 <script>
   import { onMount } from 'svelte'
-  import PreviewButton from '$lib/components/PreviewButton.svelte'
   import { createTranslator } from '$lib/i18n.js'
   import { subscribeLocale } from '$lib/locale.js'
-  import { uploadPreview } from '$lib/preview/client.js'
-  import { createPreviewController } from '$lib/preview/controller.js'
-  import { renderSnakePreview } from '$lib/preview/renderers.js'
+  import { createReplaySession } from '$lib/replay/session.js'
   import { DEFAULT_SNAKE_SPEED, normalizeSnakeSpeed } from '$lib/games/snake/speed.js'
+  import { replay as snakeReplay } from '$lib/games/snake/replay.js'
   import { swipeDirection } from '$lib/games/touch/swipe.js'
 
   export let room
@@ -20,19 +18,13 @@
   let speed = DEFAULT_SNAKE_SPEED
   let unsubscribe = () => {}
   let unsubscribeLocale = () => {}
-  let unsubscribePreview = () => {}
   let audioContext = null
   let locale = 'en'
   let swipeStart = null
-  let previewController = null
-  let previewState = { phase: 'idle', autoRemaining: 0, cooldownRemaining: 0, error: '' }
-  let previewSession = 0
+  let replaySession = null
+  let replayFinished = false
 
   $: t = createTranslator(locale)
-  $: if (previewController) {
-    if (state?.status === 'playing') previewController.enterPlaying(`${roomCode}:${previewSession}`)
-    else previewController.leavePlaying()
-  }
 
   const cells = Array.from({ length: 30 * 20 }, (_, index) => ({ x: index % 30, y: Math.floor(index / 30) }))
   const keyDirections = { ArrowUp:'up', w:'up', W:'up', ArrowDown:'down', s:'down', S:'down', ArrowLeft:'left', a:'left', A:'left', ArrowRight:'right', d:'right', D:'right' }
@@ -67,9 +59,17 @@
   function snakeFor(snapshot, playerId) { return snapshot?.snakes?.find((snake) => snake.playerId === playerId) }
 
   function applyState(next) {
+    if (!next) return
     const previous = state
-    if (next?.status === 'playing' && previous?.status !== 'playing') previewSession += 1
+    const startingRound = next.status === 'playing' && previous?.status !== 'playing'
     state = next
+    if (startingRound) {
+      replayFinished = false
+      void replaySession?.restart(next)
+    } else if (next.status === 'playing') {
+      replaySession?.record(next)
+    }
+
     if (!previous) { play('start'); return }
     const beforeMe = snakeFor(previous, identity.sessionId)
     const afterMe = snakeFor(next, identity.sessionId)
@@ -81,17 +81,17 @@
       return after && !after.alive
     }).length
     if (otherDeaths > 0) play('otherDeath')
-    if (previous.status !== 'finished' && next.status === 'finished' && next.winner === identity.sessionId) play('win')
-  }
-
-  async function capturePreview() {
-    if (!state) throw new Error('snake preview is not ready')
-    const leaderScore = Math.max(0, ...(state.snakes ?? []).map((snake) => snake.score ?? 0))
-    return { blob: await renderSnakePreview(state), summary: { tick: state.tick ?? 0, score: leaderScore } }
+    if (previous.status !== 'finished' && next.status === 'finished') {
+      if (next.winner === identity.sessionId) play('win')
+      if (!replayFinished) {
+        replayFinished = true
+        void replaySession?.finish(next)
+      }
+    }
   }
 
   async function start() { error=''; try { await socket.request('snake.start',{roomId:roomCode,speed}) } catch(err){ error=err.message } }
-  async function restart() { error=''; state=null; try { await socket.request('snake.restart',{roomId:roomCode}) } catch(err){ error=err.message } }
+  async function restart() { error=''; state=null; replayFinished=false; try { await socket.request('snake.restart',{roomId:roomCode}) } catch(err){ error=err.message } }
   async function copyInvite() { await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/snake`); copied=true; setTimeout(()=>copied=false,1200) }
 
   function sendDirection(direction) {
@@ -136,15 +136,8 @@
   onMount(() => {
     speed = normalizeSnakeSpeed(sessionStorage.getItem('arcade.snake.speed'))
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
-    previewController = createPreviewController({
-      game: 'snake',
-      roomId: () => roomCode,
-      players: () => room?.players?.length ?? state?.snakes?.length ?? 1,
-      capture: capturePreview,
-      upload: (payload) => uploadPreview({ ...payload, socket }),
-    })
-    unsubscribePreview = previewController.subscribe((next) => (previewState = next))
-    if (state?.status === 'playing') { previewSession += 1; previewController.enterPlaying(`${roomCode}:${previewSession}`) }
+    replaySession = createReplaySession({adapter:snakeReplay,roomCode:()=>roomCode,room:()=>room,identity,socket})
+    if (state?.status === 'playing') void replaySession.restart(state)
 
     const topic = `room:${roomCode.toUpperCase()}`
     unsubscribe = socket.subscribe(topic, (message) => {
@@ -156,8 +149,7 @@
     return () => {
       unsubscribe()
       unsubscribeLocale()
-      unsubscribePreview()
-      previewController?.destroy()
+      replaySession?.destroy()
       window.removeEventListener('keydown',handleKey)
       audioContext?.close()
     }
@@ -183,7 +175,6 @@
     <div class="arena-head">
       <div><span>{t('game.snake.name')}</span><h1>{statusLabel()}</h1></div>
       <div class="arena-tools">
-        {#if state?.status === 'playing'}<PreviewButton state={previewState} {t} onUpdate={() => previewController?.updateNow()} />{/if}
         <div class="tick"><strong>{state?.tick??0}</strong><span>{t('snake.tick')}</span></div>
       </div>
     </div>
