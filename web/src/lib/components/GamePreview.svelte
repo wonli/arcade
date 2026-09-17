@@ -13,7 +13,7 @@
   const summaryRows = $derived(previewSummaryKeys(metadata?.summary ?? {}))
   const capturedTime = $derived(formatCapturedTime(metadata?.capturedAt))
   const hasLivePreview = $derived(!!metadata?.imageUrl && !imageFailed)
-  const previewSrc = $derived(hasLivePreview ? metadata.imageUrl : '/assets/preview-fallback.svg')
+  const previewSrc = $derived(hasLivePreview ? metadata.imageUrl : '/assets/banner.png')
 
   $effect(() => {
     if (!game || game === loadedGame) return
