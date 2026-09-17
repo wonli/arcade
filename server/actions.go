@@ -67,6 +67,21 @@ type createRoomRequest struct {
 	Players int    `json:"players"`
 }
 
+type roomCreatePlan struct {
+	players int
+	addBot  bool
+}
+
+func planRoomCreate(gameName string, players int) roomCreatePlan {
+	if players == 0 {
+		players = 2
+	}
+	if gameName == "gomoku" && players == 1 {
+		return roomCreatePlan{players: 2, addBot: true}
+	}
+	return roomCreatePlan{players: players}
+}
+
 func (a *Actions) createRoom(c *ws.Context) {
 	playerID, ok := currentPlayer(c)
 	if !ok {
@@ -85,6 +100,7 @@ func (a *Actions) createRoom(c *ws.Context) {
 	var roomValue interface{ Snapshot() map[string]any }
 	var roomID string
 	var err error
+	autoBot := false
 	switch req.Game {
 	case "snake":
 		r, createErr := a.service.Create("snake", 1, 8)
@@ -101,10 +117,9 @@ func (a *Actions) createRoom(c *ws.Context) {
 			roomID = r.ID
 		}
 	default:
-		if req.Players == 0 {
-			req.Players = 2
-		}
-		r, createErr := a.service.Create(req.Game, req.Players)
+		plan := planRoomCreate(req.Game, req.Players)
+		autoBot = plan.addBot
+		r, createErr := a.service.Create(req.Game, plan.players)
 		err = createErr
 		if r != nil {
 			roomValue = r
@@ -118,6 +133,12 @@ func (a *Actions) createRoom(c *ws.Context) {
 	if err := a.service.Join(roomID, playerID, displayName(req.Name, playerID)); err != nil {
 		c.SendCode(400, err.Error())
 		return
+	}
+	if autoBot {
+		if err := a.service.AddBot(roomID, playerID); err != nil {
+			c.SendCode(400, err.Error())
+			return
+		}
 	}
 	topic := roomTopic(roomID)
 	c.Sub(topic)
