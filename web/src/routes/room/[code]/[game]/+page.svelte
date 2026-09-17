@@ -11,6 +11,7 @@
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
   import DrawGuess from '$lib/games/drawguess/DrawGuess.svelte'
   import ChessBoard from '$lib/games/chess/ChessBoard.svelte'
+  import GomokuBoard from '$lib/games/gomoku/GomokuBoard.svelte'
 
   export let data
 
@@ -35,9 +36,6 @@
   let replayFinished = false
 
   $: t = createTranslator(locale)
-
-  const size = 15
-  const cells = Array.from({ length: size * size }, (_, index) => ({ x: index % size, y: Math.floor(index / size) }))
 
   function tone(frequency, duration, volume = .035, delay = 0) {
     if (typeof window === 'undefined') return
@@ -177,8 +175,6 @@
   async function rematch() { error=''; try { applySnapshot(await socket.request('room.rematch',{roomId:roomCode})) } catch(err){ error=err.message } }
   async function copyInvite() { await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/${gameName}`); copied=true; setTimeout(()=>copied=false,1200) }
   async function reconnect() { try { await bootstrap() } catch(err){ connection='offline'; error=err.message } }
-  function stoneAt(state,x,y){ return state?.board?.[y]?.[x]??0 }
-  function isLast(state,x,y){ return state?.last?.x===x&&state?.last?.y===y }
 
   function gameLabel(roomState,state){
     if(!roomState||roomState.players.length<roomState.maxPlayers)return t('room.waitFriend')
@@ -276,7 +272,7 @@
       </section>
     {:else}
       <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>{t('room.black')}</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>{t('game.gomoku.name').toUpperCase()}</span><h1>{gameLabel(room,gameState)}</h1><p>{t('room.players',{count:room?.players?.length??0,max:room?.maxPlayers??2})}</p></div><div class="player-card right"><div><span>{t('room.white')}</span><strong>{room?.players?.[1]?.name??t('common.waiting')}</strong></div><div class="player-stone white"></div></div></section>
-      <section class="board-stage"><div class="board-frame"><div class="gomoku-board" aria-label={gomokuBoardLabel()}>{#each cells as cell}<button class:last={isLast(gameState,cell.x,cell.y)} class:playable={canMove(room,gameState,cell.x,cell.y)} class="board-cell" onclick={()=>moveStone(cell.x,cell.y)} aria-label={placeStoneLabel(cell.x,cell.y)}>{#if stoneAt(gameState,cell.x,cell.y)===1}<span class="stone stone-black"></span>{:else if stoneAt(gameState,cell.x,cell.y)===2}<span class="stone stone-white"></span>{:else}<span class="ghost-stone"></span>{/if}</button>{/each}</div></div>
+      <section class="board-stage"><div class="board-frame"><GomokuBoard state={gameState} interactive={true} canMove={(x,y)=>canMove(room,gameState,x,y)} onMove={moveStone} boardLabel={gomokuBoardLabel()} placeLabel={placeStoneLabel} /></div>
       {#if isMultiplayer(room)}<aside class="room-panel"><div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div><button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>{#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>{t('room.addBot')}</button>{/if}{#if gameState?.status==='finished'&&myStone(room)!==0}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}{#if error}<div class="room-error">{error}</div>{/if}{#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}</aside>{/if}</section>
     {/if}
   </main>
