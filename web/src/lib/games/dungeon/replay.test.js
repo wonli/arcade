@@ -37,7 +37,12 @@ test('standalone dungeon snapshot normalizes live scene coordinates for replay',
   })
 
   assert.deepEqual(snapshot.player, { x: 0.5, y: 0.5 })
-  assert.deepEqual(snapshot.enemies[0], { x: 1, y: 0, kind: 'boss', alive: true })
+  assert.equal(snapshot.enemies[0].x, 1)
+  assert.equal(snapshot.enemies[0].y, 0)
+  assert.equal(snapshot.enemies[0].kind, 'boss')
+  assert.equal(snapshot.enemies[0].boss, true)
+  assert.equal(snapshot.enemies[0].hp, 20)
+  assert.equal(snapshot.enemies[0].alive, true)
   assert.equal(snapshot.enemies[1].alive, false)
   assert.deepEqual(snapshot.stats, { hp: 63, maxHp: 120, kills: 8 })
   assert.deepEqual(snapshot.progress, { floor: 5, room: 2, roomRole: 'boss' })
