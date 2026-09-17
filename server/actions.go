@@ -319,6 +319,10 @@ func (a *Actions) tetrisRestart(c *ws.Context) {
 	c.Send(ws.H{"ok": true})
 }
 
+type snakeStartRequest struct {
+	RoomID string `json:"roomId"`
+	Speed  *int   `json:"speed,omitempty"`
+}
 type snakeInputRequest struct {
 	RoomID    string          `json:"roomId"`
 	Direction snake.Direction `json:"direction"`
@@ -330,14 +334,18 @@ func (a *Actions) snakeStart(c *ws.Context) {
 		c.SendCode(401, "guest login required")
 		return
 	}
-	var req roomRequest
+	var req snakeStartRequest
 	if err := c.BindingJson(&req); err != nil || strings.TrimSpace(req.RoomID) == "" {
 		c.SendCode(400, "invalid snake start")
 		return
 	}
 	req.RoomID = strings.ToUpper(strings.TrimSpace(req.RoomID))
+	speed := 2
+	if req.Speed != nil {
+		speed = *req.Speed
+	}
 	pubsub := c.Client.Hub.PubSub
-	if err := a.service.StartSnake(req.RoomID, playerID, func(roomID string, state snake.State) {
+	if err := a.service.StartSnake(req.RoomID, playerID, speed, func(roomID string, state snake.State) {
 		pubsub.Pub(roomTopic(roomID), ws.H{"type": "snake.state", "state": state})
 	}); err != nil {
 		c.SendCode(400, err.Error())
