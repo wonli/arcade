@@ -2,10 +2,8 @@
   import { onMount } from 'svelte'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
 
-  export let game = ''
-  export let room = ''
-
-  let locale = 'en'
+  let { game = '', room = '' } = $props()
+  let locale = $state('en')
   let unsubscribeLocale = () => {}
 
   const labels = {
@@ -17,8 +15,8 @@
     dungeon: { en: 'DUNGEON', 'zh-CN': '无尽地牢' },
   }
 
-  $: gameLabel = labels[game]?.[locale] ?? labels[game]?.en ?? ''
-  $: roomLabel = room && room !== 'new' ? room.toLowerCase() : ''
+  const gameLabel = $derived(labels[game]?.[locale] ?? labels[game]?.en ?? '')
+  const roomLabel = $derived(room && room !== 'new' ? room.toLowerCase() : '')
 
   onMount(() => {
     unsubscribeLocale = subscribeLocale((next) => (locale = next))
@@ -47,13 +45,13 @@
 </nav>
 
 <style>
-  .arcade-top-nav{height:44px;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid #272c33;background:#0b0d10;color:#f4f0e8;position:relative;z-index:100}
-  .brand{justify-self:start;display:inline-flex;align-items:center;gap:9px;min-width:0;color:#f4f0e8;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.15em;white-space:nowrap}
+  .arcade-top-nav{height:44px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid #272c33;background:#0b0d10;color:#f4f0e8;position:relative;z-index:100}
+  .brand{position:relative;z-index:2;display:inline-flex;align-items:center;gap:9px;min-width:0;color:#f4f0e8;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.15em;white-space:nowrap}
   .brand-mark{display:grid;place-items:center;width:24px;height:24px;flex:0 0 auto;background:#c1ff56;color:#0b0d10;font-size:11px;letter-spacing:0}
-  .context{justify-self:center;display:flex;align-items:center;gap:7px;min-width:0;color:#727b85;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;white-space:nowrap;text-transform:uppercase}
+  .context{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:7px;max-width:calc(100% - 360px);min-width:0;color:#727b85;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;white-space:nowrap;text-transform:uppercase;pointer-events:none}
   .context span{overflow:hidden;text-overflow:ellipsis}.context i{color:#3f4650;font-style:normal}.context strong{color:#f4f0e8;font:inherit}
-  .language-switch{justify-self:end;display:flex;align-items:center;gap:4px;color:#3f4650;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .language-switch{position:relative;z-index:2;margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:4px;color:#3f4650;font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace}
   .language-switch button{height:28px;padding:0 6px;border:0;background:transparent;color:#737b85;font:inherit;cursor:pointer}.language-switch button.active{color:#c1ff56}
-  @media(max-width:640px){.arcade-top-nav{height:40px;grid-template-columns:minmax(0,1fr) auto;padding:0 10px;gap:8px}.brand{font-size:9px;gap:7px}.brand-mark{width:22px;height:22px}.context{display:none}.language-switch button{height:26px;padding:0 5px}}
+  @media(max-width:640px){.arcade-top-nav{height:40px;padding:0 10px;gap:8px}.brand{font-size:9px;gap:7px}.brand-mark{width:22px;height:22px}.context{display:none}.language-switch button{height:26px;padding:0 5px}}
   @media(max-width:360px){.brand-copy{display:none}}
 </style>
