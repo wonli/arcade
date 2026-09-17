@@ -1,3 +1,5 @@
+import { normalizeSnakeSpeed } from '$lib/games/snake/speed.js'
+
 export const ssr = false
 export const prerender = false
 
@@ -10,5 +12,6 @@ export function load({ params, url }) {
     game: params.game,
     players: Number(url.searchParams.get('players')) === 1 ? 1 : 2,
     difficulty,
+    speed: normalizeSnakeSpeed(url.searchParams.get('speed')),
   }
 }
