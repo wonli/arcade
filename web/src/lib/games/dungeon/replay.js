@@ -23,7 +23,8 @@ export const replay = Object.freeze({
 })
 
 export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, progress = {}, width = DUNGEON_WIDTH, height = DUNGEON_HEIGHT } = {}) {
-  const playerState = player?.state
+  const playerEntity = player ?? scene?.localPlayer
+  const playerState = playerEntity?.state
   if (!playerState) return null
   const normalizedWidth = Math.max(1, Number(width) || DUNGEON_WIDTH)
   const normalizedHeight = Math.max(1, Number(height) || DUNGEON_HEIGHT)
