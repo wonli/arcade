@@ -45,7 +45,6 @@ export function createPreviewController({
     if (!playing || destroyed) return
     const remainingMs = autoDeadline - now()
     if (remainingMs <= 0) {
-      emit({ phase: 'uploading', autoRemaining: 0, error: '' })
       void runUpdate(true)
       return
     }
@@ -61,8 +60,9 @@ export function createPreviewController({
       emit({ phase: 'ready', cooldownRemaining: 0, autoRemaining: 0, error: '' })
       return
     }
-    emit({ phase: state.phase === 'updated' ? 'updated' : 'cooldown', cooldownRemaining: Math.ceil(remainingMs / 1000), autoRemaining: 0, error: '' })
-    if (state.phase === 'updated') state = { ...state, phase: 'cooldown' }
+    const nextPhase = state.phase === 'updated' ? 'updated' : 'cooldown'
+    emit({ phase: nextPhase, cooldownRemaining: Math.ceil(remainingMs / 1000), autoRemaining: 0, error: '' })
+    if (nextPhase === 'updated') state = { ...state, phase: 'cooldown' }
     schedule(cooldownTick, Math.min(1000, remainingMs))
   }
 
