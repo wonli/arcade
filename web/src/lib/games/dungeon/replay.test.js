@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { replay } from './replay.js'
+import { createDungeonReplaySnapshot, replay } from './replay.js'
 
 test('dungeon replay keeps compact visible scene facts only', () => {
   let now = 0
@@ -18,4 +18,27 @@ test('dungeon replay keeps compact visible scene facts only', () => {
   const decoded = replay.decode(bytes)
   assert.equal(decoded.frames[0].state.progress.floor, 3)
   assert.equal(decoded.frames[0].state.enemies.length, 1)
+})
+
+test('standalone dungeon snapshot normalizes live scene coordinates for replay', () => {
+  const scene = {
+    localPlayer: { state: { x: 480, y: 300, hp: 64, maxHp: 120 } },
+    enemies: [
+      { x: 960, y: 0, hp: 20, boss: true },
+      { x: 240, y: 150, hp: 0, elite: true },
+    ],
+    kills: 7,
+    floor: 4,
+  }
+  const snapshot = createDungeonReplaySnapshot({
+    scene,
+    stats: { hp: 63, maxHp: 120, kills: 8 },
+    progress: { floor: 5, room: 2, roomRole: 'boss' },
+  })
+
+  assert.deepEqual(snapshot.player, { x: 0.5, y: 0.5 })
+  assert.deepEqual(snapshot.enemies[0], { x: 1, y: 0, kind: 'boss', alive: true })
+  assert.equal(snapshot.enemies[1].alive, false)
+  assert.deepEqual(snapshot.stats, { hp: 63, maxHp: 120, kills: 8 })
+  assert.deepEqual(snapshot.progress, { floor: 5, room: 2, roomRole: 'boss' })
 })
