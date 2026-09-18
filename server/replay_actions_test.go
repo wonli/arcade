@@ -34,6 +34,25 @@ func TestAcquireReplayLeaseRequiresStartedRoomHost(t *testing.T) {
 	}
 }
 
+func TestAcquireReplayLeaseAllowsDungeonHostBeforeSecondPlayerJoins(t *testing.T) {
+	service := arcade.NewService()
+	store := gamereplay.NewStore(t.TempDir())
+	roomValue, err := service.Create("dungeon", 2)
+	if err != nil { t.Fatal(err) }
+	host := game.PlayerID("host")
+	guest := game.PlayerID("guest")
+	if err := service.Join(roomValue.ID, host, "Host"); err != nil { t.Fatal(err) }
+
+	lease, err := acquireReplayLease(service, store, roomValue.ID, "dungeon", host)
+	if err != nil { t.Fatal(err) }
+	if lease.Token == "" || !store.ValidateLease("dungeon", lease.Token) {
+		t.Fatalf("invalid dungeon lease %#v", lease)
+	}
+	if _, err := acquireReplayLease(service, store, roomValue.ID, "dungeon", guest); err == nil {
+		t.Fatal("player outside the room must not receive dungeon replay lease")
+	}
+}
+
 func TestAcquireReplayLeaseAllowsStandaloneDungeonPlayer(t *testing.T) {
 	service := arcade.NewService()
 	store := gamereplay.NewStore(t.TempDir())
