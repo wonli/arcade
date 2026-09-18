@@ -35,7 +35,7 @@ export function createSvelteReplayPlayer(target, recording, Component, {
   }
 
   const frameStore = writable(frames[0].state)
-  const component = mount(Component, { target: host, props: { frameStore } })
+  const component = mount(Component, { target: host, props: { frameStore, recording } })
   let timer = null
   let destroyed = false
   let index = 0
