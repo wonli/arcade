@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/stretchr/testify v1.12.1
-	github.com/wonli/aqi v1.9.1
+	github.com/wonli/aqi v1.10.0
 	google.golang.org/protobuf v1.36.12
 )
 
