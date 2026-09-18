@@ -31,17 +31,17 @@ function fakeClock() {
     current = target
     await flush()
   }
-  return { now, setTimeoutFn, clearTimeoutFn, advance }
+  return { now, setTimeoutFn, clearTimeoutFn, advance, flush }
 }
 
 function bytes(text) { return new TextEncoder().encode(text) }
 
-function subject({ isHost = true, clock, encode, acquireLease, upload }) {
+function subject({ isHost = true, clock, encode, acquireLease, releaseLease, upload }) {
   const recorder = { snapshot: () => ({ durationMs: Math.max(1, clock.now()), frames: [1] }), reset() {} }
   return createReplayController({
     game: 'tetris', roomId: 'ABC123', players: () => 2, isHost: () => isHost,
     version: 1, recorder, encode,
-    acquireLease, upload,
+    acquireLease, releaseLease, upload,
     hash: async (data) => `hash:${new TextDecoder().decode(data)}`,
     now: clock.now, setTimeoutFn: clock.setTimeoutFn, clearTimeoutFn: clock.clearTimeoutFn,
     firstUploadMs: 20_000, refreshMs: 180_000,
@@ -74,15 +74,39 @@ test('host uploads first replay after twenty seconds then no sooner than three m
   assert.equal(uploads, 2)
 })
 
-test('finish forces upload and identical hash skips duplicate upload', async () => {
+test('finish forces upload, skips identical data, and releases the active lease', async () => {
   const clock = fakeClock()
   let uploads = 0
-  const controller = subject({ clock, encode: () => bytes('same'), acquireLease: async () => ({ token: 'lease' }), upload: async () => { uploads += 1 } })
+  const releases = []
+  const controller = subject({
+    clock,
+    encode: () => bytes('same'),
+    acquireLease: async () => ({ token: 'lease' }),
+    releaseLease: async (request) => { releases.push(request) },
+    upload: async () => { uploads += 1 },
+  })
   await controller.start()
   await clock.advance(20_000)
   assert.equal(uploads, 1)
   await controller.finish()
   assert.equal(uploads, 1)
+  assert.deepEqual(releases, [{ game: 'tetris', lease: 'lease' }])
+})
+
+test('destroy best-effort releases an acquired lease', async () => {
+  const clock = fakeClock()
+  const releases = []
+  const controller = subject({
+    clock,
+    encode: () => bytes('one'),
+    acquireLease: async () => ({ token: 'lease' }),
+    releaseLease: async (request) => { releases.push(request) },
+    upload: async () => {},
+  })
+  await controller.start()
+  controller.destroy()
+  await clock.flush()
+  assert.deepEqual(releases, [{ game: 'tetris', lease: 'lease' }])
 })
 
 test('oversized replay is rejected locally and gameplay-facing calls do not throw', async () => {
