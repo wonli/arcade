@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
+  import { setProceduralRunSeed } from './spatial.js'
   import { installDungeonSpatial } from './spatial-runtime.js'
   import { loadPhaser } from './phaser.js'
 
@@ -13,6 +14,7 @@
   let replayEnemies = new Map()
   let replayDropSignature = ''
   let activeSceneKey = ''
+  let activeRunSeed = null
   let replayProgress = { floor: 1, chapter: 1, chapterFloor: 1, roomRole: 'combat' }
   let ready = $state(false)
 
@@ -62,11 +64,25 @@
     return String(frame.sceneKey || `${progress.floor}:${progress.chapter}:${progress.chapterFloor}`)
   }
 
+  function frameRunSeed(frame = {}) {
+    const value = String(frame.runSeed ?? '').trim().toUpperCase()
+    return value || null
+  }
+
+  function applyRunSeed(frame = {}) {
+    const nextRunSeed = frameRunSeed(frame)
+    if (nextRunSeed === activeRunSeed) return false
+    setProceduralRunSeed(nextRunSeed)
+    activeRunSeed = nextRunSeed
+    return true
+  }
+
   function rebuildSceneIfNeeded(frame = {}) {
     const nextProgress = normalizeProgress(frame)
     const nextSceneKey = frameSceneKey(frame)
+    const seedChanged = applyRunSeed(frame)
     replayProgress = nextProgress
-    if (activeSceneKey === nextSceneKey && ready) return false
+    if (!seedChanged && activeSceneKey === nextSceneKey && ready) return false
 
     activeSceneKey = nextSceneKey
     destroyReplayEnemies()
@@ -215,6 +231,7 @@
 
       const firstFrame = $frameStore
       replayProgress = normalizeProgress(firstFrame)
+      applyRunSeed(firstFrame)
       clearLiveArtifacts()
       spatialRuntime = installDungeonSpatial(scene, {
         player: scene.localPlayer,
@@ -236,6 +253,8 @@
       destroyReplayEnemies()
       clearReplayDrops()
       game?.destroy?.(true)
+      setProceduralRunSeed(null)
+      activeRunSeed = null
       game = null
       scene = null
       spatialRuntime = null
