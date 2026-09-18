@@ -17,20 +17,20 @@ test('replay surface waits for Dungeon create before replacing live artifacts', 
   assert.ok(applyIndex > clearIndex, 'the replay frame must be applied only after live artifacts are cleared')
 })
 
-test('replay surface upgrades recorded weapon drops instead of leaving generic placeholders', () => {
-  assert.match(source, /import\s*\{[^}]*queueReplayWeaponArt[^}]*syncReplayGroundWeaponPresentation[^}]*\}\s*from\s*['"]\.\/replay-drop-presentation\.js['"]/)
+test('replay surface uses the same ground-drop presentation as live gameplay', () => {
+  assert.match(source, /import\s*\{[^}]*queueGroundDropArt[^}]*syncGroundDropPresentation[^}]*updateGroundDropPresentation[^}]*\}\s*from\s*['"]\.\/ground-drop-presentation\.js['"]/)
+  assert.doesNotMatch(source, /replay-drop-presentation\.js/)
 
   const syncDrops = source.match(/function\s+syncReplayDrops\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ''
   assert.match(syncDrops, /scene\.spawnDrop\?\.\(x,\s*y,\s*drop\.item\)/)
-  assert.match(syncDrops, /syncReplayGroundWeaponPresentation\(scene,\s*spawned/)
+  assert.match(syncDrops, /syncGroundDropPresentation\(scene,\s*spawned/)
 
-  assert.match(source, /const\s+queuedWeaponArt\s*=\s*queueReplayWeaponArt\(scene\)/)
-  assert.match(source, /queuedWeaponArt\s*>\s*0[\s\S]*?scene\.load\.once\(['"]complete['"],\s*finishAttach\)[\s\S]*?scene\.load\.start\(\)[\s\S]*?return/)
+  assert.match(source, /const\s+queuedDropArt\s*=\s*queueGroundDropArt\(scene\)/)
+  assert.match(source, /queuedDropArt\s*>\s*0[\s\S]*?scene\.load\.once\(['"]complete['"],\s*finishAttach\)[\s\S]*?scene\.load\.start\(\)[\s\S]*?return/)
+})
 
-  const finishStart = source.indexOf('const finishAttach = () => {')
-  const queueStart = source.indexOf('const queuedWeaponArt = queueReplayWeaponArt(scene)')
-  assert.ok(finishStart >= 0 && queueStart > finishStart, 'replay attach finalizer must exist before the weapon-art loader')
-  const finishAttach = source.slice(finishStart, queueStart)
-  assert.match(finishAttach, /scene\.scene\?\.pause\?\.\(\)/)
-  assert.match(finishAttach, /applyFrame\(firstFrame\)/)
+test('replay keeps Phaser presentation time alive while gameplay update is disabled', () => {
+  assert.doesNotMatch(source, /scene\.scene\?\.pause\?\.\(\)/)
+  assert.match(source, /scene\.update\s*=\s*\(time\)\s*=>\s*\{/)
+  assert.match(source, /updateGroundDropPresentation\(scene,\s*drop,\s*time\)/)
 })
