@@ -12,6 +12,12 @@ test('dungeon replay starts when the local scene is ready even before a peer joi
   assert.match(source, /ready\s*=\s*true[\s\S]*?ensureNetwork\(\)[\s\S]*?recordDungeonReplay\(true\)/)
 })
 
+test('dungeon replay keeps sampling while the optional co-op peer is absent', () => {
+  const timerBlock = source.match(/replayTimer\s*=\s*setInterval\(\(\)\s*=>\s*\{([\s\S]*?)\},\s*200\)/)?.[1] ?? ''
+  assert.match(timerBlock, /ready\s*&&\s*!replayFinished[\s\S]*?recordDungeonReplay\(\)/)
+  assert.doesNotMatch(timerBlock, /room\?*\.status|['"]playing['"]/) 
+})
+
 test('co-op navigation waits for the final replay upload', () => {
   assert.match(source, /import\s*\{[^}]*onNavigate[^}]*\}\s*from\s*['"]\$app\/navigation['"]/) 
   assert.match(source, /onNavigate\(\(\)\s*=>\s*\{[\s\S]*?return\s+finishDungeonReplay\(\)[\s\S]*?\}\)/)
