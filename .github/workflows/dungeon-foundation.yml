@@ -64,8 +64,10 @@ jobs:
         working-directory: web
         run: |
           node --test \
+            src/lib/replay/controller.test.js \
             src/lib/replay/session.test.js \
             src/lib/games/dungeon/replay.test.js \
+            src/lib/games/dungeon/coop-replay-lifecycle-contract.test.js \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/checkpoint-clock-state.test.js \
             src/lib/games/dungeon/session-gameplay-clock.test.js \
