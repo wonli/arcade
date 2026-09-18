@@ -17,6 +17,11 @@ type replayLeaseRequest struct {
 	Game   string `json:"game"`
 }
 
+type replayReleaseRequest struct {
+	Game  string `json:"game"`
+	Lease string `json:"lease"`
+}
+
 func (a *Actions) RegisterReplay(router ws.IRouter, replays *gamereplay.Store) {
 	router.Add("replay.lease", func(c *ws.Context) {
 		playerID, ok := currentPlayer(c)
@@ -39,6 +44,19 @@ func (a *Actions) RegisterReplay(router ws.IRouter, replays *gamereplay.Store) {
 			return
 		}
 		c.Send(ws.H{"token": lease.Token, "expiresAt": lease.ExpiresAt})
+	})
+
+	router.Add("replay.release", func(c *ws.Context) {
+		if _, ok := currentPlayer(c); !ok {
+			c.SendCode(401, "guest login required")
+			return
+		}
+		var req replayReleaseRequest
+		if err := c.BindingJson(&req); err != nil || strings.TrimSpace(req.Game) == "" || strings.TrimSpace(req.Lease) == "" {
+			c.SendCode(400, "invalid replay release request")
+			return
+		}
+		c.Send(ws.H{"released": replays.ReleaseLease(req.Game, req.Lease)})
 	})
 }
 
