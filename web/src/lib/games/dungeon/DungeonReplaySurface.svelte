@@ -301,7 +301,7 @@
     const attach = () => {
       if (!game || !mount) return
       scene = game.scene?.getScene?.('Dungeon')
-      if (!scene) {
+      if (!scene?.localPlayer?.actor) {
         if (attempts++ < 90) requestAnimationFrame(attach)
         return
       }
