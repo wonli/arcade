@@ -53,6 +53,33 @@ func TestAcquireReplayLeaseAllowsDungeonHostBeforeSecondPlayerJoins(t *testing.T
 	}
 }
 
+func TestDungeonReplayLeaseReleaseLetsSameHostStartNewRoomImmediately(t *testing.T) {
+	service := arcade.NewService()
+	store := gamereplay.NewStore(t.TempDir())
+	host := game.PlayerID("host")
+
+	firstRoom, err := service.Create("dungeon", 2)
+	if err != nil { t.Fatal(err) }
+	if err := service.Join(firstRoom.ID, host, "Host"); err != nil { t.Fatal(err) }
+	firstLease, err := acquireReplayLease(service, store, firstRoom.ID, "dungeon", host)
+	if err != nil { t.Fatal(err) }
+
+	secondRoom, err := service.Create("dungeon", 2)
+	if err != nil { t.Fatal(err) }
+	if err := service.Join(secondRoom.ID, host, "Host"); err != nil { t.Fatal(err) }
+	if _, err := acquireReplayLease(service, store, secondRoom.ID, "dungeon", host); !errors.Is(err, gamereplay.ErrLeaseBusy) {
+		t.Fatalf("second room should be blocked until the first lease is released, got %v", err)
+	}
+	if !store.ReleaseLease("dungeon", firstLease.Token) {
+		t.Fatal("first room lease should release")
+	}
+	secondLease, err := acquireReplayLease(service, store, secondRoom.ID, "dungeon", host)
+	if err != nil { t.Fatalf("second room should acquire immediately after release: %v", err) }
+	if secondLease.Token == "" || secondLease.Token == firstLease.Token {
+		t.Fatalf("second room should receive a fresh token: first=%q second=%q", firstLease.Token, secondLease.Token)
+	}
+}
+
 func TestAcquireReplayLeaseAllowsStandaloneDungeonPlayer(t *testing.T) {
 	service := arcade.NewService()
 	store := gamereplay.NewStore(t.TempDir())
