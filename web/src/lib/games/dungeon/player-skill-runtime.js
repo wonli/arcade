@@ -49,5 +49,14 @@ export function castPlayerSkill(scene, player, skillId = 'primary', time = scene
 
   const result = handler(scene, player)
   startPlayerSkillCooldown(player, skillId, time, result.profile.cooldown)
+  scene.captureDungeonEvent?.({
+    type: 'player.skill',
+    playerId: String(player.id ?? ''),
+    skillId,
+    x: Number(player.state?.x) || 0,
+    y: Number(player.state?.y) || 0,
+    radius: Number(result.profile?.radius) || 0,
+    hits: result.hits,
+  })
   return { cast: true, hits: result.hits, skillId, profile: result.profile }
 }
