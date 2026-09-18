@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
-  import { createReplaySession } from '$lib/replay/session.js'
+  import { createReplaySession, finalizeReplaySession } from '$lib/replay/session.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
   import { createDungeonReplaySnapshot, replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
@@ -44,6 +45,7 @@
   let replaySession = null
   let replayTimer = null
   let replayFinished = false
+  let replayFinishPromise = null
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
   let unsubscribeLocale = () => {}
@@ -135,10 +137,23 @@
   }
 
   function finishDungeonReplay() {
-    if (replayFinished) return
+    if (replayFinishPromise) return replayFinishPromise
+    if (replayFinished) return Promise.resolve(false)
     replayFinished = true
+    const session = replaySession
     const snapshot = dungeonReplaySnapshot()
-    if (snapshot) void replaySession?.finish(snapshot)
+    if (!session || !snapshot) return Promise.resolve(false)
+    replayFinishPromise = session.finish(snapshot).catch((cause) => {
+      console.warn('Dungeon replay final upload failed:', cause)
+      return false
+    })
+    return replayFinishPromise
+  }
+
+  async function returnHome(event) {
+    event?.preventDefault?.()
+    await finishDungeonReplay()
+    await goto('/')
   }
 
   async function loadResources() {
@@ -167,7 +182,7 @@
     else if (event.type === 'gameover') {
       panelOpen = false
       eventText = t('gameover')
-      finishDungeonReplay()
+      void finishDungeonReplay()
     } else eventText = event.type
   }
 
@@ -212,6 +227,7 @@
     if (!mount) return
 
     replayFinished = false
+    replayFinishPromise = null
     setProceduralRunSeed(roomCode)
     setProgressionRunSeed(roomCode)
     const runGame = createDungeonGame({
@@ -368,7 +384,20 @@
 
     return () => {
       if (replayTimer) clearInterval(replayTimer)
-      replaySession?.destroy()
+      const session = replaySession
+      replaySession = null
+      if (session) {
+        if (replayFinishPromise) {
+          void replayFinishPromise.finally(() => session.destroy())
+        } else if (!replayFinished) {
+          const snapshot = dungeonReplaySnapshot()
+          replayFinished = true
+          if (snapshot) void finalizeReplaySession(session, snapshot).catch(() => false)
+          else session.destroy()
+        } else {
+          session.destroy()
+        }
+      }
       playerIntentRuntime?.restore?.()
       playerIntentRuntime = null
       networkRuntime?.stop()
@@ -396,7 +425,7 @@
 <main class="page">
   <header>
     <div>
-      <a href="/">AQI ARCADE</a>
+      <a href="/" onclick={returnHome}>AQI ARCADE</a>
       <strong>DUNGEON · {roomCode.toLowerCase()}</strong>
       <span class:offline={connection !== 'live'}>{connectionLabel()}</span>
     </div>

@@ -74,19 +74,7 @@ export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, 
 }
 
 export function normalizeDungeonReplayPlayers(state = {}) {
-  const source = Array.isArray(state.players) && state.players.length
-    ? state.players
-    : state.player
-      ? [{
-          id: 'player-0',
-          slot: 0,
-          ...state.player,
-          hp: state.player.hp ?? state.stats?.hp,
-          maxHp: state.player.maxHp ?? state.stats?.maxHp,
-          dead: state.player.dead ?? false,
-        }]
-      : []
-
+  const source = Array.isArray(state.players) ? state.players : []
   return source
     .slice(0, 8)
     .map((entry, index) => sanitizeReplayPlayer(entry, index))

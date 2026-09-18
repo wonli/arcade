@@ -99,3 +99,12 @@ export function createReplaySession({
     subscribe: controller.subscribe,
   }
 }
+
+export async function finalizeReplaySession(session, value = null) {
+  if (!session) return false
+  try {
+    return await session.finish(value)
+  } finally {
+    session.destroy()
+  }
+}
