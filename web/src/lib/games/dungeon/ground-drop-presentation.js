@@ -43,7 +43,7 @@ export function cleanupGroundDropPresentation(scene, drop) {
   for (const sparkle of drop.sparkles ?? []) killTween(scene, sparkle)
 }
 
-function syncGroundWeaponLabel(drop, locale = 'en') {
+export function syncGroundDropLabel(drop, locale = 'en') {
   if (!drop?.item?.type?.startsWith?.('weapon.') || !drop.label?.setText) return
   const identity = weaponIdentityLabel(drop.item, locale)
   if (!identity) return
@@ -91,7 +91,7 @@ export function syncGroundDropPresentation(scene, drop, {
 
   if (drop.item?.type?.startsWith?.('weapon.') && (force || !drop.visual)) {
     replaceGroundWeaponVisual(scene, drop, px, py)
-    syncGroundWeaponLabel(drop, locale)
+    syncGroundDropLabel(drop, locale)
   }
 
   drop.spawnedAt ??= Number(now) || 0
