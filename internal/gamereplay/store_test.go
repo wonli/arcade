@@ -104,3 +104,28 @@ func TestLeaseRenewsForHolderAndBlocksOthersUntilExpiry(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	if takeover.Token == renewed.Token { t.Fatal("new holder should receive a new token") }
 }
+
+func TestReleaseLeaseLetsNextRoomAcquireImmediately(t *testing.T) {
+	store := NewStore(t.TempDir())
+	first, err := store.AcquireLease("dungeon", "room-a:host")
+	if err != nil { t.Fatal(err) }
+
+	if store.ReleaseLease("dungeon", "wrong-token") {
+		t.Fatal("wrong token must not release another recorder's lease")
+	}
+	if !store.ValidateLease("dungeon", first.Token) {
+		t.Fatal("wrong-token release must keep the active lease")
+	}
+	if !store.ReleaseLease("dungeon", first.Token) {
+		t.Fatal("active lease should release")
+	}
+	if store.ValidateLease("dungeon", first.Token) {
+		t.Fatal("released lease must stop validating")
+	}
+
+	second, err := store.AcquireLease("dungeon", "room-b:host")
+	if err != nil { t.Fatalf("next room should acquire immediately after release: %v", err) }
+	if second.Token == "" || second.Token == first.Token {
+		t.Fatalf("next room should receive a fresh lease: first=%q second=%q", first.Token, second.Token)
+	}
+}
