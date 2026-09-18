@@ -193,6 +193,7 @@ export function createReplayController({
     destroy,
     uploadNow: () => uploadCurrent(),
     record: (...args) => recorder?.record?.(...args),
+    recordEvent: (...args) => recorder?.recordEvent?.(...args) ?? false,
     subscribe(listener) { listeners.add(listener); listener(state); return () => listeners.delete(listener) },
     getState: () => state,
   }
