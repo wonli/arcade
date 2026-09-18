@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { onNavigate } from '$app/navigation'
+  import { goto } from '$app/navigation'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
@@ -132,10 +132,8 @@
   }
 
   function recordDungeonReplay(force = false) {
-    if (replayFinished || room?.status !== 'playing') return false
     const snapshot = dungeonReplaySnapshot()
-    if (!snapshot) return false
-    return replaySession?.record(snapshot, { force }) ?? false
+    if (snapshot) replaySession?.record(snapshot, { force })
   }
 
   function finishDungeonReplay() {
@@ -152,10 +150,11 @@
     return replayFinishPromise
   }
 
-  onNavigate(() => {
-    if (!replaySession) return
-    return finishDungeonReplay().then(() => {})
-  })
+  async function returnHome(event) {
+    event?.preventDefault?.()
+    await finishDungeonReplay()
+    await goto('/')
+  }
 
   async function loadResources() {
     if (resources) return resources
@@ -426,7 +425,7 @@
 <main class="page">
   <header>
     <div>
-      <a href="/">AQI ARCADE</a>
+      <a href="/" onclick={returnHome}>AQI ARCADE</a>
       <strong>DUNGEON · {roomCode.toLowerCase()}</strong>
       <span class:offline={connection !== 'live'}>{connectionLabel()}</span>
     </div>
