@@ -143,6 +143,20 @@ test('replay recorder adds a new frame when only the remote player moves', () =>
   assert.equal(recorder.snapshot().frames.length, 2)
 })
 
+test('replay v2 upgrades a legacy singular player frame for playback', () => {
+  assert.equal(replay.version, 2)
+  assert.equal(typeof replay.normalizePlayers, 'function')
+  assert.deepEqual(replay.normalizePlayers({
+    player: { x: 0.5, y: 0.25, facing: 'up', moving: true, attacking: false },
+    stats: { hp: 77, maxHp: 120 },
+  }), [
+    {
+      id: 'player-0', slot: 0, x: 0.5, y: 0.25, hp: 77, maxHp: 120,
+      facing: 'up', moving: true, attacking: false, dead: false,
+    },
+  ])
+})
+
 test('procedural dungeon geometry exposes the run seed used by replay', () => {
   setProceduralRunSeed('replay-map-42')
   try {
