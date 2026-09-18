@@ -5,6 +5,8 @@ import { castPlayerSkill } from './player-skill-runtime.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
 import { affixSummary } from './affixes.js'
 import { createDefaultPlayerState } from './player-state.js'
+import { createDungeonWorldStateMaterializer } from './world-state-materializer.js'
+import { installDungeonPresentationEvents } from './presentation-events.js'
 import {
   applyPickup,
   attackInterval,
@@ -138,7 +140,8 @@ export function chooseDungeonAssets(manifest = {}) {
   }
 }
 
-export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, onStats = () => {}, onEvent = () => {} }) {
+export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, onStats = () => {}, onEvent = () => {}, mode = 'live' }) {
+  const replayMode = mode === 'replay'
   const text = {
     floor: (value) => typeof labels.floor === 'function' ? labels.floor(value) : `FLOOR ${value}`,
     floorClear: () => typeof labels.floorClear === 'function' ? labels.floorClear() : (labels.floorClear || 'FLOOR CLEAR'),
@@ -151,6 +154,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
   class DungeonScene extends Phaser.Scene {
     constructor() {
       super('Dungeon')
+      this.mode = replayMode ? 'replay' : 'live'
       attachLocalPlayerEntity(this, {
         id: 'local',
         state: createDefaultPlayerState({
@@ -161,6 +165,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       })
       this.enemies = []
       this.enemyProjectiles = []
+      this.enemyProjectileSequence = 0
       this.drops = []
       this.portal = null
       this.arenaObjects = []
@@ -202,15 +207,25 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
 
     create() {
       this.drawArena()
-      this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE')
+      if (!replayMode) this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE')
       this.localPlayer.actor = this.makeActor(this.localPlayer.state.x, this.localPlayer.state.y, 'player').setDepth(20)
       this.localPlayer.bar = this.createHealthBar(this.localPlayer.state.x, this.localPlayer.state.y - 42, 54, 6, 0x55e879)
       this.setupPlayerAnimations()
       this.syncPlayerAnimation()
-      this.startFloor(true, this.localPlayer)
-      const startAmbient = () => this.ambient.start().catch(() => {})
-      this.input.once('pointerdown', startAmbient)
-      this.input.keyboard.once('keydown', startAmbient)
+
+      installDungeonPresentationEvents(this, { onEvent })
+      this.__dungeonReplayMaterializer = createDungeonWorldStateMaterializer(this)
+      this.applyReplayState = (state) => this.__dungeonReplayMaterializer.apply(state)
+      this.resetReplayTransient = () => this.__dungeonReplayMaterializer.resetTransient()
+
+      if (!replayMode) {
+        this.startFloor(true, this.localPlayer)
+        const startAmbient = () => this.ambient.start().catch(() => {})
+        this.input.once('pointerdown', startAmbient)
+        this.input.keyboard.once('keydown', startAmbient)
+      } else {
+        this.ambient.stop()
+      }
       this.events.once('shutdown', () => this.ambient.stop())
       this.events.once('destroy', () => this.ambient.stop())
       this.emitStats()
@@ -433,6 +448,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     }
 
     update(time, delta) {
+      if (replayMode) return
       const player = this.localPlayer
       if (player.dead || this.runComplete) return
       const dt = Math.min(delta, 40) / 1000
@@ -522,7 +538,11 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       const speed = enemy.projectileSpeed || 260
       const visual = this.add.circle(enemy.x, enemy.y - 4, 7, 0x70f2ce, 0.92).setStrokeStyle(2, 0xd6fff3, 0.9).setDepth(24)
       const glow = this.add.circle(enemy.x, enemy.y - 4, 13, 0x70f2ce, 0.16).setDepth(23)
+      const id = `enemy-projectile:${++this.enemyProjectileSequence}`
       this.enemyProjectiles.push({
+        id,
+        kind: 'enemy',
+        ownerId: String(enemy?.id ?? ''),
         x: enemy.x,
         y: enemy.y - 4,
         vx: (dx / distance) * speed,
