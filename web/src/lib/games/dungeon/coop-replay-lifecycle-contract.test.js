@@ -6,11 +6,13 @@ import { fileURLToPath } from 'node:url'
 const routePath = fileURLToPath(new URL('../../../routes/room/[code]/dungeon/+page.svelte', import.meta.url))
 const source = readFileSync(routePath, 'utf8')
 
-test('co-op replay does not start before the room is playing', () => {
-  assert.match(source, /function\s+recordDungeonReplay\([^)]*\)\s*\{[\s\S]*?room\?\.status\s*!==\s*['"]playing['"][\s\S]*?return\s+false/)
+test('dungeon replay starts when the local scene is ready even before a peer joins', () => {
+  const recordFunction = source.match(/function\s+recordDungeonReplay\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ''
+  assert.doesNotMatch(recordFunction, /room\?\.status\s*!==\s*['"]playing['"]|room\.status\s*!==\s*['"]playing['"]/) 
+  assert.match(source, /ready\s*=\s*true[\s\S]*?ensureNetwork\(\)[\s\S]*?recordDungeonReplay\(true\)/)
 })
 
 test('co-op navigation waits for the final replay upload', () => {
-  assert.match(source, /import\s*\{[^}]*onNavigate[^}]*\}\s*from\s*['"]\$app\/navigation['"]/)
+  assert.match(source, /import\s*\{[^}]*onNavigate[^}]*\}\s*from\s*['"]\$app\/navigation['"]/) 
   assert.match(source, /onNavigate\(\(\)\s*=>\s*\{[\s\S]*?return\s+finishDungeonReplay\(\)[\s\S]*?\}\)/)
 })
