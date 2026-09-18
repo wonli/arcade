@@ -7,6 +7,7 @@ export function createSvelteReplayPlayer(target, recording, Component, {
   loopDelayMs = 700,
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
+  componentOwnsTimeline = false,
 } = {}) {
   if (!target) throw new Error('replay target is required')
   const frames = Array.isArray(recording?.frames) ? recording.frames : []
@@ -22,6 +23,16 @@ export function createSvelteReplayPlayer(target, recording, Component, {
     overflow: 'hidden',
   })
   target.replaceChildren(host)
+
+  if (componentOwnsTimeline) {
+    const component = mount(Component, { target: host, props: { recording } })
+    return {
+      destroy() {
+        void unmount(component)
+        host.remove()
+      },
+    }
+  }
 
   const frameStore = writable(frames[0].state)
   const component = mount(Component, { target: host, props: { frameStore } })
