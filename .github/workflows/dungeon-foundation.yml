@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix/dungeon-multiplayer-replay
     paths:
       - 'arcade/**'
       - 'server/**'
@@ -43,6 +44,7 @@ jobs:
         working-directory: web
         run: |
           node --test \
+            src/lib/games/dungeon/replay.test.js \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/checkpoint-clock-state.test.js \
             src/lib/games/dungeon/session-gameplay-clock.test.js \
