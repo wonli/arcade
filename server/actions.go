@@ -59,11 +59,27 @@ type roomRequest struct {
 	RoomID     string `json:"roomId"`
 	Name       string `json:"name"`
 	Difficulty string `json:"difficulty,omitempty"`
+	Locale     string `json:"locale,omitempty"`
 }
 type createRoomRequest struct {
 	Game    string `json:"game"`
 	Name    string `json:"name"`
 	Players int    `json:"players"`
+}
+
+type roomCreatePlan struct {
+	players int
+	addBot  bool
+}
+
+func planRoomCreate(gameName string, players int) roomCreatePlan {
+	if players == 0 {
+		players = 2
+	}
+	if gameName == "gomoku" && players == 1 {
+		return roomCreatePlan{players: 2, addBot: true}
+	}
+	return roomCreatePlan{players: players}
 }
 
 func (a *Actions) createRoom(c *ws.Context) {
@@ -84,6 +100,7 @@ func (a *Actions) createRoom(c *ws.Context) {
 	var roomValue interface{ Snapshot() map[string]any }
 	var roomID string
 	var err error
+	autoBot := false
 	switch req.Game {
 	case "snake":
 		r, createErr := a.service.Create("snake", 1, 8)
@@ -100,10 +117,9 @@ func (a *Actions) createRoom(c *ws.Context) {
 			roomID = r.ID
 		}
 	default:
-		if req.Players == 0 {
-			req.Players = 2
-		}
-		r, createErr := a.service.Create(req.Game, req.Players)
+		plan := planRoomCreate(req.Game, req.Players)
+		autoBot = plan.addBot
+		r, createErr := a.service.Create(req.Game, plan.players)
 		err = createErr
 		if r != nil {
 			roomValue = r
@@ -117,6 +133,12 @@ func (a *Actions) createRoom(c *ws.Context) {
 	if err := a.service.Join(roomID, playerID, displayName(req.Name, playerID)); err != nil {
 		c.SendCode(400, err.Error())
 		return
+	}
+	if autoBot {
+		if err := a.service.AddBot(roomID, playerID); err != nil {
+			c.SendCode(400, err.Error())
+			return
+		}
 	}
 	topic := roomTopic(roomID)
 	c.Sub(topic)
@@ -297,6 +319,10 @@ func (a *Actions) tetrisRestart(c *ws.Context) {
 	c.Send(ws.H{"ok": true})
 }
 
+type snakeStartRequest struct {
+	RoomID string `json:"roomId"`
+	Speed  *int   `json:"speed,omitempty"`
+}
 type snakeInputRequest struct {
 	RoomID    string          `json:"roomId"`
 	Direction snake.Direction `json:"direction"`
@@ -308,14 +334,18 @@ func (a *Actions) snakeStart(c *ws.Context) {
 		c.SendCode(401, "guest login required")
 		return
 	}
-	var req roomRequest
+	var req snakeStartRequest
 	if err := c.BindingJson(&req); err != nil || strings.TrimSpace(req.RoomID) == "" {
 		c.SendCode(400, "invalid snake start")
 		return
 	}
 	req.RoomID = strings.ToUpper(strings.TrimSpace(req.RoomID))
+	speed := 2
+	if req.Speed != nil {
+		speed = *req.Speed
+	}
 	pubsub := c.Client.Hub.PubSub
-	if err := a.service.StartSnake(req.RoomID, playerID, func(roomID string, state snake.State) {
+	if err := a.service.StartSnake(req.RoomID, playerID, speed, func(roomID string, state snake.State) {
 		pubsub.Pub(roomTopic(roomID), ws.H{"type": "snake.state", "state": state})
 	}); err != nil {
 		c.SendCode(400, err.Error())
@@ -385,7 +415,7 @@ func (a *Actions) drawStart(c *ws.Context) {
 	}
 	req.RoomID = strings.ToUpper(strings.TrimSpace(req.RoomID))
 	pubsub := c.Client.Hub.PubSub
-	if err := a.service.StartDrawGuess(req.RoomID, playerID, func(roomID string, event map[string]any) { pubsub.Pub(roomTopic(roomID), event) }); err != nil {
+	if err := a.service.StartDrawGuessLocale(req.RoomID, playerID, req.Locale, func(roomID string, event map[string]any) { pubsub.Pub(roomTopic(roomID), event) }); err != nil {
 		c.SendCode(400, err.Error())
 		return
 	}

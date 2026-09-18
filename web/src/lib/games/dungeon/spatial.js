@@ -86,8 +86,14 @@ function proceduralGeometry(floor, random) {
     proceduralCache.clear()
   }
   highestProceduralFloor = Math.max(highestProceduralFloor, normalizedFloor)
-  if (!proceduralCache.has(normalizedFloor)) proceduralCache.set(normalizedFloor, generateDungeonGeometry({ runSeed: proceduralRunSeed, floor: normalizedFloor }))
-  return structuredClone(proceduralCache.get(normalizedFloor))
+  if (!proceduralCache.has(normalizedFloor)) {
+    const geometry = generateDungeonGeometry({ runSeed: proceduralRunSeed, floor: normalizedFloor })
+    geometry.runSeed = String(proceduralRunSeed)
+    proceduralCache.set(normalizedFloor, geometry)
+  }
+  const geometry = structuredClone(proceduralCache.get(normalizedFloor))
+  geometry.runSeed ??= String(proceduralRunSeed)
+  return geometry
 }
 
 export function roomGeometry(template = null, floor = 1, random = Math.random) {

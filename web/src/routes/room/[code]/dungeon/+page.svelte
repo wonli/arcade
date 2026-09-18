@@ -2,8 +2,11 @@
   import { onMount } from 'svelte'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
+  import { setAppLocale, subscribeLocale } from '$lib/locale.js'
+  import { createReplaySession } from '$lib/replay/session.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
+  import { replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
   import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
@@ -27,6 +30,8 @@
 
   const identity = getIdentity()
   const name = defaultName(identity.playerId)
+  const DUNGEON_WIDTH = 960
+  const DUNGEON_HEIGHT = 600
 
   let roomCode = String(data?.code ?? '').toUpperCase()
   let room = null
@@ -38,8 +43,12 @@
   let hudRuntime = null
   let playerIntentRuntime = null
   let networkRuntime = null
+  let replaySession = null
+  let replayTimer = null
+  let replayFinished = false
   let unsubscribeRoom = () => {}
   let unsubscribeConnection = () => {}
+  let unsubscribeLocale = () => {}
   let connection = 'connecting'
   let ready = false
   let panelOpen = false
@@ -77,12 +86,15 @@
     return t({ connecting: 'connectionConnecting', live: 'connectionLive', offline: 'connectionOffline' }[connection] ?? 'connectionOffline')
   }
 
-  function setLocale(next) {
+  function applyLocale(next) {
     locale = normalizeDungeonLocale(next)
-    localStorage.setItem('arcade.locale', locale)
     scene?.__comparisonCard?.refresh?.()
     pickupRuntime?.refreshLabels?.()
     hudRuntime?.update()
+  }
+
+  function setLocale(next) {
+    setAppLocale(normalizeDungeonLocale(next))
   }
 
   function toggleLocale() {
@@ -115,6 +127,37 @@
     }
   }
 
+  function dungeonReplaySnapshot() {
+    const playerState = scene?.localPlayer?.state
+    if (!playerState) return null
+    return {
+      player: {
+        x: Math.min(1, Math.max(0, Number(playerState.x ?? 0) / DUNGEON_WIDTH)),
+        y: Math.min(1, Math.max(0, Number(playerState.y ?? 0) / DUNGEON_HEIGHT)),
+      },
+      enemies: (scene?.enemies ?? []).map((enemy) => ({
+        x: Math.min(1, Math.max(0, Number(enemy?.x ?? 0) / DUNGEON_WIDTH)),
+        y: Math.min(1, Math.max(0, Number(enemy?.y ?? 0) / DUNGEON_HEIGHT)),
+        kind: enemy?.boss ? 'boss' : enemy?.elite ? 'elite' : (enemy?.archetype ?? 'enemy'),
+        alive: Number(enemy?.hp ?? 0) > 0,
+      })),
+      stats: { hp: stats?.hp ?? playerState.hp ?? 0, maxHp: stats?.maxHp ?? playerState.maxHp ?? 100, kills: stats?.kills ?? scene?.kills ?? 0 },
+      progress: { floor: progress?.floor ?? scene?.floor ?? 1, room: progress?.room ?? 1, roomRole: progress?.roomRole ?? 'combat' },
+    }
+  }
+
+  function recordDungeonReplay(force = false) {
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) replaySession?.record(snapshot, { force })
+  }
+
+  function finishDungeonReplay() {
+    if (replayFinished) return
+    replayFinished = true
+    const snapshot = dungeonReplaySnapshot()
+    if (snapshot) void replaySession?.finish(snapshot)
+  }
+
   async function loadResources() {
     if (resources) return resources
     const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
@@ -127,7 +170,6 @@
     resources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
     return resources
   }
-
   function onEvent(event) {
     if (!event?.type) return
     if (event.type === 'floorstart') eventText = t('floorStart', { floor: event.floor })
@@ -142,6 +184,7 @@
     else if (event.type === 'gameover') {
       panelOpen = false
       eventText = t('gameover')
+      finishDungeonReplay()
     } else eventText = event.type
   }
 
@@ -177,6 +220,7 @@
       room = payload
       ensureNetwork()
       networkRuntime?.updatePeers(room?.players ?? [])
+      if (room.status === 'playing') recordDungeonReplay(true)
     })
   }
 
@@ -184,6 +228,7 @@
     const { Phaser, assets, vfxManifest } = await loadResources()
     if (!mount) return
 
+    replayFinished = false
     setProceduralRunSeed(roomCode)
     setProgressionRunSeed(roomCode)
     const runGame = createDungeonGame({
@@ -278,6 +323,7 @@
       })
       ready = true
       ensureNetwork()
+      recordDungeonReplay(true)
     }
     install()
   }
@@ -300,9 +346,13 @@
     }
 
     if (room?.game !== 'dungeon') throw new Error(t('roomNotDungeon'))
+    replaySession = createReplaySession({adapter:dungeonReplay,roomCode:()=>room?.id??roomCode,room:()=>room,identity,socket})
     subscribeRoomState()
     connection = 'live'
     await startGame()
+    replayTimer = setInterval(() => {
+      if (ready && room?.status === 'playing' && !replayFinished) recordDungeonReplay()
+    }, 200)
   }
 
   function moveJoystick(event) {
@@ -325,8 +375,7 @@
   }
 
   onMount(() => {
-    const saved = localStorage.getItem('arcade.locale')
-    locale = normalizeDungeonLocale(saved || navigator.language)
+    unsubscribeLocale = subscribeLocale(applyLocale)
     unsubscribeConnection = socket.onConnection((state) => { connection = state })
     bootstrap().catch((cause) => {
       console.error(cause)
@@ -335,12 +384,15 @@
     })
 
     return () => {
+      if (replayTimer) clearInterval(replayTimer)
+      replaySession?.destroy()
       playerIntentRuntime?.restore?.()
       playerIntentRuntime = null
       networkRuntime?.stop()
       networkRuntime = null
       unsubscribeRoom()
       unsubscribeConnection()
+      unsubscribeLocale()
       touchInput?.stopMove()
       scene?.__comparisonCard?.destroy?.()
       if (scene) scene.__comparisonCard = null

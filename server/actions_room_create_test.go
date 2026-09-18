@@ -1,0 +1,27 @@
+package server
+
+import "testing"
+
+func TestPlanRoomCreateGomokuBot(t *testing.T) {
+	plan := planRoomCreate("gomoku", 1)
+	if plan.players != 2 {
+		t.Fatalf("gomoku bot room should still have 2 seats, got %d", plan.players)
+	}
+	if !plan.addBot {
+		t.Fatal("gomoku players=1 should request an automatic bot")
+	}
+}
+
+func TestPlanRoomCreateKeepsTwoPlayerGomoku(t *testing.T) {
+	plan := planRoomCreate("gomoku", 2)
+	if plan.players != 2 || plan.addBot {
+		t.Fatalf("two-player gomoku changed unexpectedly: %+v", plan)
+	}
+}
+
+func TestPlanRoomCreateDefaultsToTwoPlayers(t *testing.T) {
+	plan := planRoomCreate("tetris", 0)
+	if plan.players != 2 || plan.addBot {
+		t.Fatalf("default room plan changed unexpectedly: %+v", plan)
+	}
+}

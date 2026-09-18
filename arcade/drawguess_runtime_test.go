@@ -22,6 +22,21 @@ func TestDrawGuessStartRequiresHostAndTwoPlayers(t *testing.T) {
 	if r.Status != room.StatusPlaying { t.Fatalf("status = %q", r.Status) }
 }
 
+func TestDrawGuessLocaleSelectsWordBank(t *testing.T) {
+	s := NewService()
+	s.drawTick = time.Hour
+	r, _ := s.Create("drawguess", 2, 8)
+	_ = s.Join(r.ID, "p1", "Alice")
+	_ = s.Join(r.ID, "p2", "Bob")
+	if err := s.StartDrawGuessLocale(r.ID, "p1", "zh-CN", nil); err != nil { t.Fatal(err) }
+
+	private, err := s.DrawGuessPrivateState(r.ID, "p1")
+	if err != nil { t.Fatal(err) }
+	if private.Word != drawguess.ChineseWords[0] {
+		t.Fatalf("word = %q, want first Chinese word %q", private.Word, drawguess.ChineseWords[0])
+	}
+}
+
 func TestDrawGuessSnapshotIsPublicButDrawerGetsPrivateWord(t *testing.T) {
 	s := NewService()
 	r, _ := s.Create("drawguess", 2, 8)
