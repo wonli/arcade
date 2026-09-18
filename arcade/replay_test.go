@@ -36,3 +36,25 @@ func TestReplayHostRequiresStartedMatchingRoomHost(t *testing.T) {
 		t.Fatal("missing room must not be accepted")
 	}
 }
+
+func TestReplayHostAllowsDungeonHostBeforeSecondPlayerJoins(t *testing.T) {
+	service := NewService()
+	roomValue, err := service.Create("dungeon", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := game.PlayerID("host")
+	guest := game.PlayerID("guest")
+	if err := service.Join(roomValue.ID, host, "Host"); err != nil {
+		t.Fatal(err)
+	}
+	if roomValue.Started() {
+		t.Fatal("single-player dungeon room should still be waiting for its optional co-op peer")
+	}
+	if !service.ReplayHost(roomValue.ID, host, "dungeon") {
+		t.Fatal("dungeon host should be allowed to record while playing alone")
+	}
+	if service.ReplayHost(roomValue.ID, guest, "dungeon") {
+		t.Fatal("player outside the room must not be replay host")
+	}
+}
