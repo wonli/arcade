@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v7.35.1
-// source: proto/dungeon.proto
+// source: dungeon.proto
 
 package server
 
@@ -32,7 +32,7 @@ type DungeonRequest struct {
 
 func (x *DungeonRequest) Reset() {
 	*x = DungeonRequest{}
-	mi := &file_proto_dungeon_proto_msgTypes[0]
+	mi := &file_dungeon_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +44,7 @@ func (x *DungeonRequest) String() string {
 func (*DungeonRequest) ProtoMessage() {}
 
 func (x *DungeonRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[0]
+	mi := &file_dungeon_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +57,7 @@ func (x *DungeonRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonRequest.ProtoReflect.Descriptor instead.
 func (*DungeonRequest) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{0}
+	return file_dungeon_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *DungeonRequest) GetId() string {
@@ -94,7 +94,7 @@ type DungeonResponse struct {
 
 func (x *DungeonResponse) Reset() {
 	*x = DungeonResponse{}
-	mi := &file_proto_dungeon_proto_msgTypes[1]
+	mi := &file_dungeon_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -106,7 +106,7 @@ func (x *DungeonResponse) String() string {
 func (*DungeonResponse) ProtoMessage() {}
 
 func (x *DungeonResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[1]
+	mi := &file_dungeon_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -119,7 +119,7 @@ func (x *DungeonResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonResponse.ProtoReflect.Descriptor instead.
 func (*DungeonResponse) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{1}
+	return file_dungeon_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *DungeonResponse) GetCode() int32 {
@@ -166,7 +166,7 @@ type DungeonAck struct {
 
 func (x *DungeonAck) Reset() {
 	*x = DungeonAck{}
-	mi := &file_proto_dungeon_proto_msgTypes[2]
+	mi := &file_dungeon_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +178,7 @@ func (x *DungeonAck) String() string {
 func (*DungeonAck) ProtoMessage() {}
 
 func (x *DungeonAck) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[2]
+	mi := &file_dungeon_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +191,7 @@ func (x *DungeonAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonAck.ProtoReflect.Descriptor instead.
 func (*DungeonAck) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{2}
+	return file_dungeon_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *DungeonAck) GetOk() bool {
@@ -213,7 +213,7 @@ type DungeonCommand struct {
 
 func (x *DungeonCommand) Reset() {
 	*x = DungeonCommand{}
-	mi := &file_proto_dungeon_proto_msgTypes[3]
+	mi := &file_dungeon_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -225,7 +225,7 @@ func (x *DungeonCommand) String() string {
 func (*DungeonCommand) ProtoMessage() {}
 
 func (x *DungeonCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[3]
+	mi := &file_dungeon_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,7 +238,7 @@ func (x *DungeonCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonCommand.ProtoReflect.Descriptor instead.
 func (*DungeonCommand) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{3}
+	return file_dungeon_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DungeonCommand) GetType() string {
@@ -279,7 +279,7 @@ type DungeonCommandRequest struct {
 
 func (x *DungeonCommandRequest) Reset() {
 	*x = DungeonCommandRequest{}
-	mi := &file_proto_dungeon_proto_msgTypes[4]
+	mi := &file_dungeon_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -291,7 +291,7 @@ func (x *DungeonCommandRequest) String() string {
 func (*DungeonCommandRequest) ProtoMessage() {}
 
 func (x *DungeonCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[4]
+	mi := &file_dungeon_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -304,7 +304,7 @@ func (x *DungeonCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonCommandRequest.ProtoReflect.Descriptor instead.
 func (*DungeonCommandRequest) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{4}
+	return file_dungeon_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DungeonCommandRequest) GetRoomId() string {
@@ -331,7 +331,7 @@ type DungeonCommandRelay struct {
 
 func (x *DungeonCommandRelay) Reset() {
 	*x = DungeonCommandRelay{}
-	mi := &file_proto_dungeon_proto_msgTypes[5]
+	mi := &file_dungeon_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -343,7 +343,7 @@ func (x *DungeonCommandRelay) String() string {
 func (*DungeonCommandRelay) ProtoMessage() {}
 
 func (x *DungeonCommandRelay) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[5]
+	mi := &file_dungeon_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -356,7 +356,7 @@ func (x *DungeonCommandRelay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonCommandRelay.ProtoReflect.Descriptor instead.
 func (*DungeonCommandRelay) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{5}
+	return file_dungeon_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DungeonCommandRelay) GetPlayerId() string {
@@ -373,44 +373,37 @@ func (x *DungeonCommandRelay) GetCommand() *DungeonCommand {
 	return nil
 }
 
-type DungeonSnapshot struct {
+type DungeonPresenceSnapshot struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
-	Slot                     uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
-	X                        float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
-	Y                        float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
-	Hp                       int32                  `protobuf:"varint,4,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp                    int32                  `protobuf:"varint,5,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	Slot                     *uint32                `protobuf:"varint,1,opt,name=slot,proto3,oneof" json:"slot,omitempty"`
+	X                        *float32               `protobuf:"fixed32,2,opt,name=x,proto3,oneof" json:"x,omitempty"`
+	Y                        *float32               `protobuf:"fixed32,3,opt,name=y,proto3,oneof" json:"y,omitempty"`
 	Facing                   string                 `protobuf:"bytes,6,opt,name=facing,proto3" json:"facing,omitempty"`
 	Moving                   bool                   `protobuf:"varint,7,opt,name=moving,proto3" json:"moving,omitempty"`
 	Attacking                bool                   `protobuf:"varint,8,opt,name=attacking,proto3" json:"attacking,omitempty"`
 	Dead                     bool                   `protobuf:"varint,9,opt,name=dead,proto3" json:"dead,omitempty"`
-	LastAttackElapsedMs      float64                `protobuf:"fixed64,10,opt,name=last_attack_elapsed_ms,json=lastAttackElapsedMs,proto3" json:"last_attack_elapsed_ms,omitempty"`
-	LastContactElapsedMs     float64                `protobuf:"fixed64,11,opt,name=last_contact_elapsed_ms,json=lastContactElapsedMs,proto3" json:"last_contact_elapsed_ms,omitempty"`
+	LastAttackElapsedMs      *float64               `protobuf:"fixed64,10,opt,name=last_attack_elapsed_ms,json=lastAttackElapsedMs,proto3,oneof" json:"last_attack_elapsed_ms,omitempty"`
+	LastContactElapsedMs     *float64               `protobuf:"fixed64,11,opt,name=last_contact_elapsed_ms,json=lastContactElapsedMs,proto3,oneof" json:"last_contact_elapsed_ms,omitempty"`
 	SkillCooldownRemainingMs map[string]float64     `protobuf:"bytes,12,rep,name=skill_cooldown_remaining_ms,json=skillCooldownRemainingMs,proto3" json:"skill_cooldown_remaining_ms,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	HasteRemainingMs         float64                `protobuf:"fixed64,13,opt,name=haste_remaining_ms,json=hasteRemainingMs,proto3" json:"haste_remaining_ms,omitempty"`
-	HealthPotions            int32                  `protobuf:"varint,14,opt,name=health_potions,json=healthPotions,proto3" json:"health_potions,omitempty"`
-	// Durable state is kept as a JSON value because equipment and modifiers are
-	// extensible gameplay data. The envelope and transport remain protobuf.
-	StateJson     string `protobuf:"bytes,15,opt,name=state_json,json=stateJson,proto3" json:"state_json,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
-func (x *DungeonSnapshot) Reset() {
-	*x = DungeonSnapshot{}
-	mi := &file_proto_dungeon_proto_msgTypes[6]
+func (x *DungeonPresenceSnapshot) Reset() {
+	*x = DungeonPresenceSnapshot{}
+	mi := &file_dungeon_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DungeonSnapshot) String() string {
+func (x *DungeonPresenceSnapshot) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DungeonSnapshot) ProtoMessage() {}
+func (*DungeonPresenceSnapshot) ProtoMessage() {}
 
-func (x *DungeonSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[6]
+func (x *DungeonPresenceSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -421,127 +414,815 @@ func (x *DungeonSnapshot) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DungeonSnapshot.ProtoReflect.Descriptor instead.
-func (*DungeonSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{6}
+// Deprecated: Use DungeonPresenceSnapshot.ProtoReflect.Descriptor instead.
+func (*DungeonPresenceSnapshot) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *DungeonSnapshot) GetSlot() uint32 {
-	if x != nil {
-		return x.Slot
+func (x *DungeonPresenceSnapshot) GetSlot() uint32 {
+	if x != nil && x.Slot != nil {
+		return *x.Slot
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetX() float32 {
-	if x != nil {
-		return x.X
+func (x *DungeonPresenceSnapshot) GetX() float32 {
+	if x != nil && x.X != nil {
+		return *x.X
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetY() float32 {
-	if x != nil {
-		return x.Y
+func (x *DungeonPresenceSnapshot) GetY() float32 {
+	if x != nil && x.Y != nil {
+		return *x.Y
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetHp() int32 {
-	if x != nil {
-		return x.Hp
-	}
-	return 0
-}
-
-func (x *DungeonSnapshot) GetMaxHp() int32 {
-	if x != nil {
-		return x.MaxHp
-	}
-	return 0
-}
-
-func (x *DungeonSnapshot) GetFacing() string {
+func (x *DungeonPresenceSnapshot) GetFacing() string {
 	if x != nil {
 		return x.Facing
 	}
 	return ""
 }
 
-func (x *DungeonSnapshot) GetMoving() bool {
+func (x *DungeonPresenceSnapshot) GetMoving() bool {
 	if x != nil {
 		return x.Moving
 	}
 	return false
 }
 
-func (x *DungeonSnapshot) GetAttacking() bool {
+func (x *DungeonPresenceSnapshot) GetAttacking() bool {
 	if x != nil {
 		return x.Attacking
 	}
 	return false
 }
 
-func (x *DungeonSnapshot) GetDead() bool {
+func (x *DungeonPresenceSnapshot) GetDead() bool {
 	if x != nil {
 		return x.Dead
 	}
 	return false
 }
 
-func (x *DungeonSnapshot) GetLastAttackElapsedMs() float64 {
-	if x != nil {
-		return x.LastAttackElapsedMs
+func (x *DungeonPresenceSnapshot) GetLastAttackElapsedMs() float64 {
+	if x != nil && x.LastAttackElapsedMs != nil {
+		return *x.LastAttackElapsedMs
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetLastContactElapsedMs() float64 {
-	if x != nil {
-		return x.LastContactElapsedMs
+func (x *DungeonPresenceSnapshot) GetLastContactElapsedMs() float64 {
+	if x != nil && x.LastContactElapsedMs != nil {
+		return *x.LastContactElapsedMs
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetSkillCooldownRemainingMs() map[string]float64 {
+func (x *DungeonPresenceSnapshot) GetSkillCooldownRemainingMs() map[string]float64 {
 	if x != nil {
 		return x.SkillCooldownRemainingMs
 	}
 	return nil
 }
 
-func (x *DungeonSnapshot) GetHasteRemainingMs() float64 {
+type DungeonStatSet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Damage        *float64               `protobuf:"fixed64,1,opt,name=damage,proto3,oneof" json:"damage,omitempty"`
+	CritChance    *float64               `protobuf:"fixed64,2,opt,name=crit_chance,json=critChance,proto3,oneof" json:"crit_chance,omitempty"`
+	Speed         *float64               `protobuf:"fixed64,3,opt,name=speed,proto3,oneof" json:"speed,omitempty"`
+	MaxHp         *float64               `protobuf:"fixed64,4,opt,name=max_hp,json=maxHp,proto3,oneof" json:"max_hp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonStatSet) Reset() {
+	*x = DungeonStatSet{}
+	mi := &file_dungeon_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonStatSet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonStatSet) ProtoMessage() {}
+
+func (x *DungeonStatSet) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[7]
 	if x != nil {
-		return x.HasteRemainingMs
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonStatSet.ProtoReflect.Descriptor instead.
+func (*DungeonStatSet) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DungeonStatSet) GetDamage() float64 {
+	if x != nil && x.Damage != nil {
+		return *x.Damage
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetHealthPotions() int32 {
-	if x != nil {
-		return x.HealthPotions
+func (x *DungeonStatSet) GetCritChance() float64 {
+	if x != nil && x.CritChance != nil {
+		return *x.CritChance
 	}
 	return 0
 }
 
-func (x *DungeonSnapshot) GetStateJson() string {
+func (x *DungeonStatSet) GetSpeed() float64 {
+	if x != nil && x.Speed != nil {
+		return *x.Speed
+	}
+	return 0
+}
+
+func (x *DungeonStatSet) GetMaxHp() float64 {
+	if x != nil && x.MaxHp != nil {
+		return *x.MaxHp
+	}
+	return 0
+}
+
+type DungeonModifierValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Value:
+	//
+	//	*DungeonModifierValue_NumberValue
+	//	*DungeonModifierValue_StringValue
+	//	*DungeonModifierValue_BoolValue
+	Value         isDungeonModifierValue_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonModifierValue) Reset() {
+	*x = DungeonModifierValue{}
+	mi := &file_dungeon_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonModifierValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonModifierValue) ProtoMessage() {}
+
+func (x *DungeonModifierValue) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[8]
 	if x != nil {
-		return x.StateJson
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonModifierValue.ProtoReflect.Descriptor instead.
+func (*DungeonModifierValue) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *DungeonModifierValue) GetValue() isDungeonModifierValue_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *DungeonModifierValue) GetNumberValue() float64 {
+	if x != nil {
+		if x, ok := x.Value.(*DungeonModifierValue_NumberValue); ok {
+			return x.NumberValue
+		}
+	}
+	return 0
+}
+
+func (x *DungeonModifierValue) GetStringValue() string {
+	if x != nil {
+		if x, ok := x.Value.(*DungeonModifierValue_StringValue); ok {
+			return x.StringValue
+		}
 	}
 	return ""
 }
 
-type DungeonSnapshotRequest struct {
+func (x *DungeonModifierValue) GetBoolValue() bool {
+	if x != nil {
+		if x, ok := x.Value.(*DungeonModifierValue_BoolValue); ok {
+			return x.BoolValue
+		}
+	}
+	return false
+}
+
+type isDungeonModifierValue_Value interface {
+	isDungeonModifierValue_Value()
+}
+
+type DungeonModifierValue_NumberValue struct {
+	NumberValue float64 `protobuf:"fixed64,1,opt,name=number_value,json=numberValue,proto3,oneof"`
+}
+
+type DungeonModifierValue_StringValue struct {
+	StringValue string `protobuf:"bytes,2,opt,name=string_value,json=stringValue,proto3,oneof"`
+}
+
+type DungeonModifierValue_BoolValue struct {
+	BoolValue bool `protobuf:"varint,3,opt,name=bool_value,json=boolValue,proto3,oneof"`
+}
+
+func (*DungeonModifierValue_NumberValue) isDungeonModifierValue_Value() {}
+
+func (*DungeonModifierValue_StringValue) isDungeonModifierValue_Value() {}
+
+func (*DungeonModifierValue_BoolValue) isDungeonModifierValue_Value() {}
+
+type DungeonModifierEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RoomId        string                 `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	Snapshot      *DungeonSnapshot       `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         *DungeonModifierValue  `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonModifierEntry) Reset() {
+	*x = DungeonModifierEntry{}
+	mi := &file_dungeon_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonModifierEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonModifierEntry) ProtoMessage() {}
+
+func (x *DungeonModifierEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonModifierEntry.ProtoReflect.Descriptor instead.
+func (*DungeonModifierEntry) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *DungeonModifierEntry) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *DungeonModifierEntry) GetValue() *DungeonModifierValue {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+type DungeonModifierLayer struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Name          string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Values        []*DungeonModifierEntry `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonModifierLayer) Reset() {
+	*x = DungeonModifierLayer{}
+	mi := &file_dungeon_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonModifierLayer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonModifierLayer) ProtoMessage() {}
+
+func (x *DungeonModifierLayer) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonModifierLayer.ProtoReflect.Descriptor instead.
+func (*DungeonModifierLayer) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DungeonModifierLayer) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DungeonModifierLayer) GetValues() []*DungeonModifierEntry {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+type DungeonModifierSet struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Layers        []*DungeonModifierLayer `protobuf:"bytes,1,rep,name=layers,proto3" json:"layers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonModifierSet) Reset() {
+	*x = DungeonModifierSet{}
+	mi := &file_dungeon_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonModifierSet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonModifierSet) ProtoMessage() {}
+
+func (x *DungeonModifierSet) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonModifierSet.ProtoReflect.Descriptor instead.
+func (*DungeonModifierSet) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *DungeonModifierSet) GetLayers() []*DungeonModifierLayer {
+	if x != nil {
+		return x.Layers
+	}
+	return nil
+}
+
+type DungeonWeaponAffix struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Value         *float64               `protobuf:"fixed64,2,opt,name=value,proto3,oneof" json:"value,omitempty"`
+	Tier          *int32                 `protobuf:"varint,3,opt,name=tier,proto3,oneof" json:"tier,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonWeaponAffix) Reset() {
+	*x = DungeonWeaponAffix{}
+	mi := &file_dungeon_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonWeaponAffix) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonWeaponAffix) ProtoMessage() {}
+
+func (x *DungeonWeaponAffix) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonWeaponAffix.ProtoReflect.Descriptor instead.
+func (*DungeonWeaponAffix) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DungeonWeaponAffix) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DungeonWeaponAffix) GetValue() float64 {
+	if x != nil && x.Value != nil {
+		return *x.Value
+	}
+	return 0
+}
+
+func (x *DungeonWeaponAffix) GetTier() int32 {
+	if x != nil && x.Tier != nil {
+		return *x.Tier
+	}
+	return 0
+}
+
+type DungeonWeapon struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Id                   string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                 string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Type                 string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	Archetype            string                 `protobuf:"bytes,4,opt,name=archetype,proto3" json:"archetype,omitempty"`
+	Rarity               string                 `protobuf:"bytes,5,opt,name=rarity,proto3" json:"rarity,omitempty"`
+	Damage               *float64               `protobuf:"fixed64,6,opt,name=damage,proto3,oneof" json:"damage,omitempty"`
+	VfxTheme             string                 `protobuf:"bytes,7,opt,name=vfx_theme,json=vfxTheme,proto3" json:"vfx_theme,omitempty"`
+	VfxVariant           *int32                 `protobuf:"varint,8,opt,name=vfx_variant,json=vfxVariant,proto3,oneof" json:"vfx_variant,omitempty"`
+	Affixes              []*DungeonWeaponAffix  `protobuf:"bytes,9,rep,name=affixes,proto3" json:"affixes,omitempty"`
+	LegendaryLevel       *int32                 `protobuf:"varint,10,opt,name=legendary_level,json=legendaryLevel,proto3,oneof" json:"legendary_level,omitempty"`
+	SignatureAffixes     []string               `protobuf:"bytes,11,rep,name=signature_affixes,json=signatureAffixes,proto3" json:"signature_affixes,omitempty"`
+	BaseDamage           *float64               `protobuf:"fixed64,12,opt,name=base_damage,json=baseDamage,proto3,oneof" json:"base_damage,omitempty"`
+	BossOnly             *bool                  `protobuf:"varint,13,opt,name=boss_only,json=bossOnly,proto3,oneof" json:"boss_only,omitempty"`
+	MinFloor             *int32                 `protobuf:"varint,14,opt,name=min_floor,json=minFloor,proto3,oneof" json:"min_floor,omitempty"`
+	LegendaryBaseDamage  *float64               `protobuf:"fixed64,15,opt,name=legendary_base_damage,json=legendaryBaseDamage,proto3,oneof" json:"legendary_base_damage,omitempty"`
+	LegendaryBaseAffixes []*DungeonWeaponAffix  `protobuf:"bytes,16,rep,name=legendary_base_affixes,json=legendaryBaseAffixes,proto3" json:"legendary_base_affixes,omitempty"`
+	Signature            string                 `protobuf:"bytes,17,opt,name=signature,proto3" json:"signature,omitempty"`
+	SwordNumber          *int32                 `protobuf:"varint,18,opt,name=sword_number,json=swordNumber,proto3,oneof" json:"sword_number,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *DungeonWeapon) Reset() {
+	*x = DungeonWeapon{}
+	mi := &file_dungeon_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonWeapon) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonWeapon) ProtoMessage() {}
+
+func (x *DungeonWeapon) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonWeapon.ProtoReflect.Descriptor instead.
+func (*DungeonWeapon) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DungeonWeapon) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetArchetype() string {
+	if x != nil {
+		return x.Archetype
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetRarity() string {
+	if x != nil {
+		return x.Rarity
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetDamage() float64 {
+	if x != nil && x.Damage != nil {
+		return *x.Damage
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetVfxTheme() string {
+	if x != nil {
+		return x.VfxTheme
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetVfxVariant() int32 {
+	if x != nil && x.VfxVariant != nil {
+		return *x.VfxVariant
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetAffixes() []*DungeonWeaponAffix {
+	if x != nil {
+		return x.Affixes
+	}
+	return nil
+}
+
+func (x *DungeonWeapon) GetLegendaryLevel() int32 {
+	if x != nil && x.LegendaryLevel != nil {
+		return *x.LegendaryLevel
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetSignatureAffixes() []string {
+	if x != nil {
+		return x.SignatureAffixes
+	}
+	return nil
+}
+
+func (x *DungeonWeapon) GetBaseDamage() float64 {
+	if x != nil && x.BaseDamage != nil {
+		return *x.BaseDamage
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetBossOnly() bool {
+	if x != nil && x.BossOnly != nil {
+		return *x.BossOnly
+	}
+	return false
+}
+
+func (x *DungeonWeapon) GetMinFloor() int32 {
+	if x != nil && x.MinFloor != nil {
+		return *x.MinFloor
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetLegendaryBaseDamage() float64 {
+	if x != nil && x.LegendaryBaseDamage != nil {
+		return *x.LegendaryBaseDamage
+	}
+	return 0
+}
+
+func (x *DungeonWeapon) GetLegendaryBaseAffixes() []*DungeonWeaponAffix {
+	if x != nil {
+		return x.LegendaryBaseAffixes
+	}
+	return nil
+}
+
+func (x *DungeonWeapon) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+func (x *DungeonWeapon) GetSwordNumber() int32 {
+	if x != nil && x.SwordNumber != nil {
+		return *x.SwordNumber
+	}
+	return 0
+}
+
+type DungeonEquipment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Weapon        *DungeonWeapon         `protobuf:"bytes,1,opt,name=weapon,proto3" json:"weapon,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DungeonEquipment) Reset() {
+	*x = DungeonEquipment{}
+	mi := &file_dungeon_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonEquipment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonEquipment) ProtoMessage() {}
+
+func (x *DungeonEquipment) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonEquipment.ProtoReflect.Descriptor instead.
+func (*DungeonEquipment) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DungeonEquipment) GetWeapon() *DungeonWeapon {
+	if x != nil {
+		return x.Weapon
+	}
+	return nil
+}
+
+type DungeonPlayerState struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Hp               *int32                 `protobuf:"varint,1,opt,name=hp,proto3,oneof" json:"hp,omitempty"`
+	MaxHp            *int32                 `protobuf:"varint,2,opt,name=max_hp,json=maxHp,proto3,oneof" json:"max_hp,omitempty"`
+	Damage           *float64               `protobuf:"fixed64,3,opt,name=damage,proto3,oneof" json:"damage,omitempty"`
+	CritChance       *float64               `protobuf:"fixed64,4,opt,name=crit_chance,json=critChance,proto3,oneof" json:"crit_chance,omitempty"`
+	Speed            *float64               `protobuf:"fixed64,5,opt,name=speed,proto3,oneof" json:"speed,omitempty"`
+	CritMultiplier   *float64               `protobuf:"fixed64,6,opt,name=crit_multiplier,json=critMultiplier,proto3,oneof" json:"crit_multiplier,omitempty"`
+	BaseStats        *DungeonStatSet        `protobuf:"bytes,7,opt,name=base_stats,json=baseStats,proto3" json:"base_stats,omitempty"`
+	Equipment        *DungeonEquipment      `protobuf:"bytes,8,opt,name=equipment,proto3" json:"equipment,omitempty"`
+	Modifiers        *DungeonModifierSet    `protobuf:"bytes,9,opt,name=modifiers,proto3" json:"modifiers,omitempty"`
+	HasteRemainingMs *float64               `protobuf:"fixed64,10,opt,name=haste_remaining_ms,json=hasteRemainingMs,proto3,oneof" json:"haste_remaining_ms,omitempty"`
+	HealthPotions    *int32                 `protobuf:"varint,11,opt,name=health_potions,json=healthPotions,proto3,oneof" json:"health_potions,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *DungeonPlayerState) Reset() {
+	*x = DungeonPlayerState{}
+	mi := &file_dungeon_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DungeonPlayerState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DungeonPlayerState) ProtoMessage() {}
+
+func (x *DungeonPlayerState) ProtoReflect() protoreflect.Message {
+	mi := &file_dungeon_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DungeonPlayerState.ProtoReflect.Descriptor instead.
+func (*DungeonPlayerState) Descriptor() ([]byte, []int) {
+	return file_dungeon_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *DungeonPlayerState) GetHp() int32 {
+	if x != nil && x.Hp != nil {
+		return *x.Hp
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetMaxHp() int32 {
+	if x != nil && x.MaxHp != nil {
+		return *x.MaxHp
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetDamage() float64 {
+	if x != nil && x.Damage != nil {
+		return *x.Damage
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetCritChance() float64 {
+	if x != nil && x.CritChance != nil {
+		return *x.CritChance
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetSpeed() float64 {
+	if x != nil && x.Speed != nil {
+		return *x.Speed
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetCritMultiplier() float64 {
+	if x != nil && x.CritMultiplier != nil {
+		return *x.CritMultiplier
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetBaseStats() *DungeonStatSet {
+	if x != nil {
+		return x.BaseStats
+	}
+	return nil
+}
+
+func (x *DungeonPlayerState) GetEquipment() *DungeonEquipment {
+	if x != nil {
+		return x.Equipment
+	}
+	return nil
+}
+
+func (x *DungeonPlayerState) GetModifiers() *DungeonModifierSet {
+	if x != nil {
+		return x.Modifiers
+	}
+	return nil
+}
+
+func (x *DungeonPlayerState) GetHasteRemainingMs() float64 {
+	if x != nil && x.HasteRemainingMs != nil {
+		return *x.HasteRemainingMs
+	}
+	return 0
+}
+
+func (x *DungeonPlayerState) GetHealthPotions() int32 {
+	if x != nil && x.HealthPotions != nil {
+		return *x.HealthPotions
+	}
+	return 0
+}
+
+type DungeonSnapshotRequest struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	RoomId        string                   `protobuf:"bytes,1,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	Snapshot      *DungeonPresenceSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	PlayerState   *DungeonPlayerState      `protobuf:"bytes,3,opt,name=player_state,json=playerState,proto3" json:"player_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DungeonSnapshotRequest) Reset() {
 	*x = DungeonSnapshotRequest{}
-	mi := &file_proto_dungeon_proto_msgTypes[7]
+	mi := &file_dungeon_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +1234,7 @@ func (x *DungeonSnapshotRequest) String() string {
 func (*DungeonSnapshotRequest) ProtoMessage() {}
 
 func (x *DungeonSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[7]
+	mi := &file_dungeon_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +1247,7 @@ func (x *DungeonSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*DungeonSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{7}
+	return file_dungeon_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DungeonSnapshotRequest) GetRoomId() string {
@@ -576,24 +1257,32 @@ func (x *DungeonSnapshotRequest) GetRoomId() string {
 	return ""
 }
 
-func (x *DungeonSnapshotRequest) GetSnapshot() *DungeonSnapshot {
+func (x *DungeonSnapshotRequest) GetSnapshot() *DungeonPresenceSnapshot {
 	if x != nil {
 		return x.Snapshot
 	}
 	return nil
 }
 
+func (x *DungeonSnapshotRequest) GetPlayerState() *DungeonPlayerState {
+	if x != nil {
+		return x.PlayerState
+	}
+	return nil
+}
+
 type DungeonSnapshotRelay struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      string                 `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Snapshot      *DungeonSnapshot       `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	PlayerId      string                   `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Snapshot      *DungeonPresenceSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	PlayerState   *DungeonPlayerState      `protobuf:"bytes,3,opt,name=player_state,json=playerState,proto3" json:"player_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DungeonSnapshotRelay) Reset() {
 	*x = DungeonSnapshotRelay{}
-	mi := &file_proto_dungeon_proto_msgTypes[8]
+	mi := &file_dungeon_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -605,7 +1294,7 @@ func (x *DungeonSnapshotRelay) String() string {
 func (*DungeonSnapshotRelay) ProtoMessage() {}
 
 func (x *DungeonSnapshotRelay) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dungeon_proto_msgTypes[8]
+	mi := &file_dungeon_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -618,7 +1307,7 @@ func (x *DungeonSnapshotRelay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DungeonSnapshotRelay.ProtoReflect.Descriptor instead.
 func (*DungeonSnapshotRelay) Descriptor() ([]byte, []int) {
-	return file_proto_dungeon_proto_rawDescGZIP(), []int{8}
+	return file_dungeon_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DungeonSnapshotRelay) GetPlayerId() string {
@@ -628,18 +1317,25 @@ func (x *DungeonSnapshotRelay) GetPlayerId() string {
 	return ""
 }
 
-func (x *DungeonSnapshotRelay) GetSnapshot() *DungeonSnapshot {
+func (x *DungeonSnapshotRelay) GetSnapshot() *DungeonPresenceSnapshot {
 	if x != nil {
 		return x.Snapshot
 	}
 	return nil
 }
 
-var File_proto_dungeon_proto protoreflect.FileDescriptor
+func (x *DungeonSnapshotRelay) GetPlayerState() *DungeonPlayerState {
+	if x != nil {
+		return x.PlayerState
+	}
+	return nil
+}
 
-const file_proto_dungeon_proto_rawDesc = "" +
+var File_dungeon_proto protoreflect.FileDescriptor
+
+const file_dungeon_proto_rawDesc = "" +
 	"\n" +
-	"\x13proto/dungeon.proto\x12\x0earcade.dungeon\"P\n" +
+	"\rdungeon.proto\x12\x0earcade.dungeon\"P\n" +
 	"\x0eDungeonRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x16\n" +
@@ -663,93 +1359,211 @@ const file_proto_dungeon_proto_rawDesc = "" +
 	"\acommand\x18\x02 \x01(\v2\x1e.arcade.dungeon.DungeonCommandR\acommand\"l\n" +
 	"\x13DungeonCommandRelay\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x128\n" +
-	"\acommand\x18\x02 \x01(\v2\x1e.arcade.dungeon.DungeonCommandR\acommand\"\xf5\x04\n" +
-	"\x0fDungeonSnapshot\x12\x12\n" +
-	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\f\n" +
-	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x02R\x01y\x12\x0e\n" +
-	"\x02hp\x18\x04 \x01(\x05R\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x05 \x01(\x05R\x05maxHp\x12\x16\n" +
+	"\acommand\x18\x02 \x01(\v2\x1e.arcade.dungeon.DungeonCommandR\acommand\"\xd0\x04\n" +
+	"\x17DungeonPresenceSnapshot\x12\x17\n" +
+	"\x04slot\x18\x01 \x01(\rH\x00R\x04slot\x88\x01\x01\x12\x11\n" +
+	"\x01x\x18\x02 \x01(\x02H\x01R\x01x\x88\x01\x01\x12\x11\n" +
+	"\x01y\x18\x03 \x01(\x02H\x02R\x01y\x88\x01\x01\x12\x16\n" +
 	"\x06facing\x18\x06 \x01(\tR\x06facing\x12\x16\n" +
 	"\x06moving\x18\a \x01(\bR\x06moving\x12\x1c\n" +
 	"\tattacking\x18\b \x01(\bR\tattacking\x12\x12\n" +
-	"\x04dead\x18\t \x01(\bR\x04dead\x123\n" +
+	"\x04dead\x18\t \x01(\bR\x04dead\x128\n" +
 	"\x16last_attack_elapsed_ms\x18\n" +
-	" \x01(\x01R\x13lastAttackElapsedMs\x125\n" +
-	"\x17last_contact_elapsed_ms\x18\v \x01(\x01R\x14lastContactElapsedMs\x12|\n" +
-	"\x1bskill_cooldown_remaining_ms\x18\f \x03(\v2=.arcade.dungeon.DungeonSnapshot.SkillCooldownRemainingMsEntryR\x18skillCooldownRemainingMs\x12,\n" +
-	"\x12haste_remaining_ms\x18\r \x01(\x01R\x10hasteRemainingMs\x12%\n" +
-	"\x0ehealth_potions\x18\x0e \x01(\x05R\rhealthPotions\x12\x1d\n" +
-	"\n" +
-	"state_json\x18\x0f \x01(\tR\tstateJson\x1aK\n" +
+	" \x01(\x01H\x03R\x13lastAttackElapsedMs\x88\x01\x01\x12:\n" +
+	"\x17last_contact_elapsed_ms\x18\v \x01(\x01H\x04R\x14lastContactElapsedMs\x88\x01\x01\x12\x84\x01\n" +
+	"\x1bskill_cooldown_remaining_ms\x18\f \x03(\v2E.arcade.dungeon.DungeonPresenceSnapshot.SkillCooldownRemainingMsEntryR\x18skillCooldownRemainingMs\x1aK\n" +
 	"\x1dSkillCooldownRemainingMsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"n\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01B\a\n" +
+	"\x05_slotB\x04\n" +
+	"\x02_xB\x04\n" +
+	"\x02_yB\x19\n" +
+	"\x17_last_attack_elapsed_msB\x1a\n" +
+	"\x18_last_contact_elapsed_ms\"\xba\x01\n" +
+	"\x0eDungeonStatSet\x12\x1b\n" +
+	"\x06damage\x18\x01 \x01(\x01H\x00R\x06damage\x88\x01\x01\x12$\n" +
+	"\vcrit_chance\x18\x02 \x01(\x01H\x01R\n" +
+	"critChance\x88\x01\x01\x12\x19\n" +
+	"\x05speed\x18\x03 \x01(\x01H\x02R\x05speed\x88\x01\x01\x12\x1a\n" +
+	"\x06max_hp\x18\x04 \x01(\x01H\x03R\x05maxHp\x88\x01\x01B\t\n" +
+	"\a_damageB\x0e\n" +
+	"\f_crit_chanceB\b\n" +
+	"\x06_speedB\t\n" +
+	"\a_max_hp\"\x8a\x01\n" +
+	"\x14DungeonModifierValue\x12#\n" +
+	"\fnumber_value\x18\x01 \x01(\x01H\x00R\vnumberValue\x12#\n" +
+	"\fstring_value\x18\x02 \x01(\tH\x00R\vstringValue\x12\x1f\n" +
+	"\n" +
+	"bool_value\x18\x03 \x01(\bH\x00R\tboolValueB\a\n" +
+	"\x05value\"d\n" +
+	"\x14DungeonModifierEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12:\n" +
+	"\x05value\x18\x02 \x01(\v2$.arcade.dungeon.DungeonModifierValueR\x05value\"h\n" +
+	"\x14DungeonModifierLayer\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12<\n" +
+	"\x06values\x18\x02 \x03(\v2$.arcade.dungeon.DungeonModifierEntryR\x06values\"R\n" +
+	"\x12DungeonModifierSet\x12<\n" +
+	"\x06layers\x18\x01 \x03(\v2$.arcade.dungeon.DungeonModifierLayerR\x06layers\"k\n" +
+	"\x12DungeonWeaponAffix\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\x05value\x18\x02 \x01(\x01H\x00R\x05value\x88\x01\x01\x12\x17\n" +
+	"\x04tier\x18\x03 \x01(\x05H\x01R\x04tier\x88\x01\x01B\b\n" +
+	"\x06_valueB\a\n" +
+	"\x05_tier\"\xbf\x06\n" +
+	"\rDungeonWeapon\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x1c\n" +
+	"\tarchetype\x18\x04 \x01(\tR\tarchetype\x12\x16\n" +
+	"\x06rarity\x18\x05 \x01(\tR\x06rarity\x12\x1b\n" +
+	"\x06damage\x18\x06 \x01(\x01H\x00R\x06damage\x88\x01\x01\x12\x1b\n" +
+	"\tvfx_theme\x18\a \x01(\tR\bvfxTheme\x12$\n" +
+	"\vvfx_variant\x18\b \x01(\x05H\x01R\n" +
+	"vfxVariant\x88\x01\x01\x12<\n" +
+	"\aaffixes\x18\t \x03(\v2\".arcade.dungeon.DungeonWeaponAffixR\aaffixes\x12,\n" +
+	"\x0flegendary_level\x18\n" +
+	" \x01(\x05H\x02R\x0elegendaryLevel\x88\x01\x01\x12+\n" +
+	"\x11signature_affixes\x18\v \x03(\tR\x10signatureAffixes\x12$\n" +
+	"\vbase_damage\x18\f \x01(\x01H\x03R\n" +
+	"baseDamage\x88\x01\x01\x12 \n" +
+	"\tboss_only\x18\r \x01(\bH\x04R\bbossOnly\x88\x01\x01\x12 \n" +
+	"\tmin_floor\x18\x0e \x01(\x05H\x05R\bminFloor\x88\x01\x01\x127\n" +
+	"\x15legendary_base_damage\x18\x0f \x01(\x01H\x06R\x13legendaryBaseDamage\x88\x01\x01\x12X\n" +
+	"\x16legendary_base_affixes\x18\x10 \x03(\v2\".arcade.dungeon.DungeonWeaponAffixR\x14legendaryBaseAffixes\x12\x1c\n" +
+	"\tsignature\x18\x11 \x01(\tR\tsignature\x12&\n" +
+	"\fsword_number\x18\x12 \x01(\x05H\aR\vswordNumber\x88\x01\x01B\t\n" +
+	"\a_damageB\x0e\n" +
+	"\f_vfx_variantB\x12\n" +
+	"\x10_legendary_levelB\x0e\n" +
+	"\f_base_damageB\f\n" +
+	"\n" +
+	"_boss_onlyB\f\n" +
+	"\n" +
+	"_min_floorB\x18\n" +
+	"\x16_legendary_base_damageB\x0f\n" +
+	"\r_sword_number\"I\n" +
+	"\x10DungeonEquipment\x125\n" +
+	"\x06weapon\x18\x01 \x01(\v2\x1d.arcade.dungeon.DungeonWeaponR\x06weapon\"\xe6\x04\n" +
+	"\x12DungeonPlayerState\x12\x13\n" +
+	"\x02hp\x18\x01 \x01(\x05H\x00R\x02hp\x88\x01\x01\x12\x1a\n" +
+	"\x06max_hp\x18\x02 \x01(\x05H\x01R\x05maxHp\x88\x01\x01\x12\x1b\n" +
+	"\x06damage\x18\x03 \x01(\x01H\x02R\x06damage\x88\x01\x01\x12$\n" +
+	"\vcrit_chance\x18\x04 \x01(\x01H\x03R\n" +
+	"critChance\x88\x01\x01\x12\x19\n" +
+	"\x05speed\x18\x05 \x01(\x01H\x04R\x05speed\x88\x01\x01\x12,\n" +
+	"\x0fcrit_multiplier\x18\x06 \x01(\x01H\x05R\x0ecritMultiplier\x88\x01\x01\x12=\n" +
+	"\n" +
+	"base_stats\x18\a \x01(\v2\x1e.arcade.dungeon.DungeonStatSetR\tbaseStats\x12>\n" +
+	"\tequipment\x18\b \x01(\v2 .arcade.dungeon.DungeonEquipmentR\tequipment\x12@\n" +
+	"\tmodifiers\x18\t \x01(\v2\".arcade.dungeon.DungeonModifierSetR\tmodifiers\x121\n" +
+	"\x12haste_remaining_ms\x18\n" +
+	" \x01(\x01H\x06R\x10hasteRemainingMs\x88\x01\x01\x12*\n" +
+	"\x0ehealth_potions\x18\v \x01(\x05H\aR\rhealthPotions\x88\x01\x01B\x05\n" +
+	"\x03_hpB\t\n" +
+	"\a_max_hpB\t\n" +
+	"\a_damageB\x0e\n" +
+	"\f_crit_chanceB\b\n" +
+	"\x06_speedB\x12\n" +
+	"\x10_crit_multiplierB\x15\n" +
+	"\x13_haste_remaining_msB\x11\n" +
+	"\x0f_health_potions\"\xbd\x01\n" +
 	"\x16DungeonSnapshotRequest\x12\x17\n" +
-	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12;\n" +
-	"\bsnapshot\x18\x02 \x01(\v2\x1f.arcade.dungeon.DungeonSnapshotR\bsnapshot\"p\n" +
+	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12C\n" +
+	"\bsnapshot\x18\x02 \x01(\v2'.arcade.dungeon.DungeonPresenceSnapshotR\bsnapshot\x12E\n" +
+	"\fplayer_state\x18\x03 \x01(\v2\".arcade.dungeon.DungeonPlayerStateR\vplayerState\"\xbf\x01\n" +
 	"\x14DungeonSnapshotRelay\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12;\n" +
-	"\bsnapshot\x18\x02 \x01(\v2\x1f.arcade.dungeon.DungeonSnapshotR\bsnapshotB'Z%github.com/wonli/arcade/server;serverb\x06proto3"
+	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12C\n" +
+	"\bsnapshot\x18\x02 \x01(\v2'.arcade.dungeon.DungeonPresenceSnapshotR\bsnapshot\x12E\n" +
+	"\fplayer_state\x18\x03 \x01(\v2\".arcade.dungeon.DungeonPlayerStateR\vplayerStateB'Z%github.com/wonli/arcade/server;serverb\x06proto3"
 
 var (
-	file_proto_dungeon_proto_rawDescOnce sync.Once
-	file_proto_dungeon_proto_rawDescData []byte
+	file_dungeon_proto_rawDescOnce sync.Once
+	file_dungeon_proto_rawDescData []byte
 )
 
-func file_proto_dungeon_proto_rawDescGZIP() []byte {
-	file_proto_dungeon_proto_rawDescOnce.Do(func() {
-		file_proto_dungeon_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_dungeon_proto_rawDesc), len(file_proto_dungeon_proto_rawDesc)))
+func file_dungeon_proto_rawDescGZIP() []byte {
+	file_dungeon_proto_rawDescOnce.Do(func() {
+		file_dungeon_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_dungeon_proto_rawDesc), len(file_dungeon_proto_rawDesc)))
 	})
-	return file_proto_dungeon_proto_rawDescData
+	return file_dungeon_proto_rawDescData
 }
 
-var file_proto_dungeon_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
-var file_proto_dungeon_proto_goTypes = []any{
-	(*DungeonRequest)(nil),         // 0: arcade.dungeon.DungeonRequest
-	(*DungeonResponse)(nil),        // 1: arcade.dungeon.DungeonResponse
-	(*DungeonAck)(nil),             // 2: arcade.dungeon.DungeonAck
-	(*DungeonCommand)(nil),         // 3: arcade.dungeon.DungeonCommand
-	(*DungeonCommandRequest)(nil),  // 4: arcade.dungeon.DungeonCommandRequest
-	(*DungeonCommandRelay)(nil),    // 5: arcade.dungeon.DungeonCommandRelay
-	(*DungeonSnapshot)(nil),        // 6: arcade.dungeon.DungeonSnapshot
-	(*DungeonSnapshotRequest)(nil), // 7: arcade.dungeon.DungeonSnapshotRequest
-	(*DungeonSnapshotRelay)(nil),   // 8: arcade.dungeon.DungeonSnapshotRelay
-	nil,                            // 9: arcade.dungeon.DungeonSnapshot.SkillCooldownRemainingMsEntry
+var file_dungeon_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_dungeon_proto_goTypes = []any{
+	(*DungeonRequest)(nil),          // 0: arcade.dungeon.DungeonRequest
+	(*DungeonResponse)(nil),         // 1: arcade.dungeon.DungeonResponse
+	(*DungeonAck)(nil),              // 2: arcade.dungeon.DungeonAck
+	(*DungeonCommand)(nil),          // 3: arcade.dungeon.DungeonCommand
+	(*DungeonCommandRequest)(nil),   // 4: arcade.dungeon.DungeonCommandRequest
+	(*DungeonCommandRelay)(nil),     // 5: arcade.dungeon.DungeonCommandRelay
+	(*DungeonPresenceSnapshot)(nil), // 6: arcade.dungeon.DungeonPresenceSnapshot
+	(*DungeonStatSet)(nil),          // 7: arcade.dungeon.DungeonStatSet
+	(*DungeonModifierValue)(nil),    // 8: arcade.dungeon.DungeonModifierValue
+	(*DungeonModifierEntry)(nil),    // 9: arcade.dungeon.DungeonModifierEntry
+	(*DungeonModifierLayer)(nil),    // 10: arcade.dungeon.DungeonModifierLayer
+	(*DungeonModifierSet)(nil),      // 11: arcade.dungeon.DungeonModifierSet
+	(*DungeonWeaponAffix)(nil),      // 12: arcade.dungeon.DungeonWeaponAffix
+	(*DungeonWeapon)(nil),           // 13: arcade.dungeon.DungeonWeapon
+	(*DungeonEquipment)(nil),        // 14: arcade.dungeon.DungeonEquipment
+	(*DungeonPlayerState)(nil),      // 15: arcade.dungeon.DungeonPlayerState
+	(*DungeonSnapshotRequest)(nil),  // 16: arcade.dungeon.DungeonSnapshotRequest
+	(*DungeonSnapshotRelay)(nil),    // 17: arcade.dungeon.DungeonSnapshotRelay
+	nil,                             // 18: arcade.dungeon.DungeonPresenceSnapshot.SkillCooldownRemainingMsEntry
 }
-var file_proto_dungeon_proto_depIdxs = []int32{
-	3, // 0: arcade.dungeon.DungeonCommandRequest.command:type_name -> arcade.dungeon.DungeonCommand
-	3, // 1: arcade.dungeon.DungeonCommandRelay.command:type_name -> arcade.dungeon.DungeonCommand
-	9, // 2: arcade.dungeon.DungeonSnapshot.skill_cooldown_remaining_ms:type_name -> arcade.dungeon.DungeonSnapshot.SkillCooldownRemainingMsEntry
-	6, // 3: arcade.dungeon.DungeonSnapshotRequest.snapshot:type_name -> arcade.dungeon.DungeonSnapshot
-	6, // 4: arcade.dungeon.DungeonSnapshotRelay.snapshot:type_name -> arcade.dungeon.DungeonSnapshot
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+var file_dungeon_proto_depIdxs = []int32{
+	3,  // 0: arcade.dungeon.DungeonCommandRequest.command:type_name -> arcade.dungeon.DungeonCommand
+	3,  // 1: arcade.dungeon.DungeonCommandRelay.command:type_name -> arcade.dungeon.DungeonCommand
+	18, // 2: arcade.dungeon.DungeonPresenceSnapshot.skill_cooldown_remaining_ms:type_name -> arcade.dungeon.DungeonPresenceSnapshot.SkillCooldownRemainingMsEntry
+	8,  // 3: arcade.dungeon.DungeonModifierEntry.value:type_name -> arcade.dungeon.DungeonModifierValue
+	9,  // 4: arcade.dungeon.DungeonModifierLayer.values:type_name -> arcade.dungeon.DungeonModifierEntry
+	10, // 5: arcade.dungeon.DungeonModifierSet.layers:type_name -> arcade.dungeon.DungeonModifierLayer
+	12, // 6: arcade.dungeon.DungeonWeapon.affixes:type_name -> arcade.dungeon.DungeonWeaponAffix
+	12, // 7: arcade.dungeon.DungeonWeapon.legendary_base_affixes:type_name -> arcade.dungeon.DungeonWeaponAffix
+	13, // 8: arcade.dungeon.DungeonEquipment.weapon:type_name -> arcade.dungeon.DungeonWeapon
+	7,  // 9: arcade.dungeon.DungeonPlayerState.base_stats:type_name -> arcade.dungeon.DungeonStatSet
+	14, // 10: arcade.dungeon.DungeonPlayerState.equipment:type_name -> arcade.dungeon.DungeonEquipment
+	11, // 11: arcade.dungeon.DungeonPlayerState.modifiers:type_name -> arcade.dungeon.DungeonModifierSet
+	6,  // 12: arcade.dungeon.DungeonSnapshotRequest.snapshot:type_name -> arcade.dungeon.DungeonPresenceSnapshot
+	15, // 13: arcade.dungeon.DungeonSnapshotRequest.player_state:type_name -> arcade.dungeon.DungeonPlayerState
+	6,  // 14: arcade.dungeon.DungeonSnapshotRelay.snapshot:type_name -> arcade.dungeon.DungeonPresenceSnapshot
+	15, // 15: arcade.dungeon.DungeonSnapshotRelay.player_state:type_name -> arcade.dungeon.DungeonPlayerState
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
-func init() { file_proto_dungeon_proto_init() }
-func file_proto_dungeon_proto_init() {
-	if File_proto_dungeon_proto != nil {
+func init() { file_dungeon_proto_init() }
+func file_dungeon_proto_init() {
+	if File_dungeon_proto != nil {
 		return
 	}
+	file_dungeon_proto_msgTypes[6].OneofWrappers = []any{}
+	file_dungeon_proto_msgTypes[7].OneofWrappers = []any{}
+	file_dungeon_proto_msgTypes[8].OneofWrappers = []any{
+		(*DungeonModifierValue_NumberValue)(nil),
+		(*DungeonModifierValue_StringValue)(nil),
+		(*DungeonModifierValue_BoolValue)(nil),
+	}
+	file_dungeon_proto_msgTypes[12].OneofWrappers = []any{}
+	file_dungeon_proto_msgTypes[13].OneofWrappers = []any{}
+	file_dungeon_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_dungeon_proto_rawDesc), len(file_proto_dungeon_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dungeon_proto_rawDesc), len(file_dungeon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_proto_dungeon_proto_goTypes,
-		DependencyIndexes: file_proto_dungeon_proto_depIdxs,
-		MessageInfos:      file_proto_dungeon_proto_msgTypes,
+		GoTypes:           file_dungeon_proto_goTypes,
+		DependencyIndexes: file_dungeon_proto_depIdxs,
+		MessageInfos:      file_dungeon_proto_msgTypes,
 	}.Build()
-	File_proto_dungeon_proto = out.File
-	file_proto_dungeon_proto_goTypes = nil
-	file_proto_dungeon_proto_depIdxs = nil
+	File_dungeon_proto = out.File
+	file_dungeon_proto_goTypes = nil
+	file_dungeon_proto_depIdxs = nil
 }

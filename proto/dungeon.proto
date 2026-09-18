@@ -39,32 +39,101 @@ message DungeonCommandRelay {
   DungeonCommand command = 2;
 }
 
-message DungeonSnapshot {
-  uint32 slot = 1;
-  float x = 2;
-  float y = 3;
-  int32 hp = 4;
-  int32 max_hp = 5;
+message DungeonPresenceSnapshot {
+  optional uint32 slot = 1;
+  optional float x = 2;
+  optional float y = 3;
   string facing = 6;
   bool moving = 7;
   bool attacking = 8;
   bool dead = 9;
-  double last_attack_elapsed_ms = 10;
-  double last_contact_elapsed_ms = 11;
+  optional double last_attack_elapsed_ms = 10;
+  optional double last_contact_elapsed_ms = 11;
   map<string, double> skill_cooldown_remaining_ms = 12;
-  double haste_remaining_ms = 13;
-  int32 health_potions = 14;
-  // Durable state is kept as a JSON value because equipment and modifiers are
-  // extensible gameplay data. The envelope and transport remain protobuf.
-  string state_json = 15;
+}
+
+message DungeonStatSet {
+  optional double damage = 1;
+  optional double crit_chance = 2;
+  optional double speed = 3;
+  optional double max_hp = 4;
+}
+
+message DungeonModifierValue {
+  oneof value {
+    double number_value = 1;
+    string string_value = 2;
+    bool bool_value = 3;
+  }
+}
+
+message DungeonModifierEntry {
+  string key = 1;
+  DungeonModifierValue value = 2;
+}
+
+message DungeonModifierLayer {
+  string name = 1;
+  repeated DungeonModifierEntry values = 2;
+}
+
+message DungeonModifierSet {
+  repeated DungeonModifierLayer layers = 1;
+}
+
+message DungeonWeaponAffix {
+  string id = 1;
+  optional double value = 2;
+  optional int32 tier = 3;
+}
+
+message DungeonWeapon {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  string archetype = 4;
+  string rarity = 5;
+  optional double damage = 6;
+  string vfx_theme = 7;
+  optional int32 vfx_variant = 8;
+  repeated DungeonWeaponAffix affixes = 9;
+  optional int32 legendary_level = 10;
+  repeated string signature_affixes = 11;
+  optional double base_damage = 12;
+  optional bool boss_only = 13;
+  optional int32 min_floor = 14;
+  optional double legendary_base_damage = 15;
+  repeated DungeonWeaponAffix legendary_base_affixes = 16;
+  string signature = 17;
+  optional int32 sword_number = 18;
+}
+
+message DungeonEquipment {
+  DungeonWeapon weapon = 1;
+}
+
+message DungeonPlayerState {
+  optional int32 hp = 1;
+  optional int32 max_hp = 2;
+  optional double damage = 3;
+  optional double crit_chance = 4;
+  optional double speed = 5;
+  optional double crit_multiplier = 6;
+  DungeonStatSet base_stats = 7;
+  DungeonEquipment equipment = 8;
+  DungeonModifierSet modifiers = 9;
+  optional double haste_remaining_ms = 10;
+  optional int32 health_potions = 11;
 }
 
 message DungeonSnapshotRequest {
   string room_id = 1;
-  DungeonSnapshot snapshot = 2;
+  DungeonPresenceSnapshot snapshot = 2;
+  DungeonPlayerState player_state = 3;
 }
 
 message DungeonSnapshotRelay {
   string player_id = 1;
-  DungeonSnapshot snapshot = 2;
+  DungeonPresenceSnapshot snapshot = 2;
+  DungeonPlayerState player_state = 3;
 }

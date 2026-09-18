@@ -2,7 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createPlayerEntity } from './player-entity.js'
-import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
+import {
+  applyPlayerSnapshot,
+  playerStateSignature,
+  serializePlayerPresence,
+  serializePlayerSnapshot,
+  serializePlayerState,
+} from './player-snapshot.js'
 
 function state(x = 100) {
   return {
@@ -23,6 +29,14 @@ function state(x = 100) {
     modifiers: { equipment: { attackSpeed: 0.2 } },
   }
 }
+
+test('durable player state signatures are stable without JSON serialization', () => {
+  assert.equal(
+    playerStateSignature({ b: 2, a: { y: true, x: 'weapon' } }),
+    playerStateSignature({ a: { x: 'weapon', y: true }, b: 2 }),
+  )
+  assert.notEqual(playerStateSignature({ damage: 10 }), playerStateSignature({ damage: 11 }))
+})
 
 test('player snapshot contains only serializable network state', () => {
   const player = createPlayerEntity({ id: 'p2', state: state(), facing: 'left' })
@@ -66,6 +80,28 @@ test('player snapshot owns a deep copy of gameplay state and cooldowns', () => {
 
   assert.deepEqual(player.state.equipment.weapon.affixes, [{ id: 'crit', value: 0.2 }])
   assert.equal(player.runtime.skills.cooldowns.primary, 5000)
+})
+
+test('presence and durable player state can be serialized independently', () => {
+  const player = createPlayerEntity({ id: 'p2', state: state(), facing: 'left' })
+  player.moving = true
+  player.lastAttackAt = 1200
+
+  assert.deepEqual(serializePlayerPresence(player), {
+    id: 'p2',
+    state: { x: 100, y: 200 },
+    facing: 'left',
+    moving: true,
+    attacking: false,
+    dead: false,
+    lastAttackAt: 1200,
+    lastContactAt: 0,
+    skillCooldowns: {},
+  })
+  const durableState = state()
+  delete durableState.x
+  delete durableState.y
+  assert.deepEqual(serializePlayerState(player), durableState)
 })
 
 test('applying a snapshot preserves PlayerEntity state identity and local runtime objects', () => {

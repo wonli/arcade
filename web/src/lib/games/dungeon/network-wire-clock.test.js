@@ -89,7 +89,7 @@ test('snapshot wire payload never exposes the sender gameplay clock epoch', asyn
   assert.equal(snapshot.lastAttackElapsedMs, 400)
   assert.equal(snapshot.lastContactElapsedMs, 200)
   assert.deepEqual(snapshot.skillCooldownRemainingMs, { primary: 3000 })
-  assert.equal(snapshot.state.hasteRemainingMs, 1200)
+  assert.equal(socket.calls[0].params.playerState.state.hasteRemainingMs, 1200)
 })
 
 test('unknown peer bootstrap reanchors portable snapshot timers onto authority time', () => {

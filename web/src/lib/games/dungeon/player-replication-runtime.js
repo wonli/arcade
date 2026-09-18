@@ -1,4 +1,9 @@
-import { applyPlayerSnapshot, serializePlayerSnapshot } from './player-snapshot.js'
+import {
+  applyPlayerSnapshot,
+  serializePlayerPresence,
+  serializePlayerSnapshot,
+  serializePlayerState,
+} from './player-snapshot.js'
 import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
 
 function syncLocalPlayerPresentation(scene, player) {
@@ -38,6 +43,14 @@ export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayer
 
   function serializeLocal() {
     return serializePlayerSnapshot(localPlayer)
+  }
+
+  function serializeLocalPresence() {
+    return serializePlayerPresence(localPlayer)
+  }
+
+  function serializeLocalState() {
+    return serializePlayerState(localPlayer)
   }
 
   function serializePlayers() {
@@ -116,6 +129,8 @@ export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayer
 
   return {
     serializeLocal,
+    serializeLocalPresence,
+    serializeLocalState,
     serializePlayers,
     applyRemote,
     applyRemotePresence,

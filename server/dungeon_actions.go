@@ -42,8 +42,9 @@ func (a *Actions) dungeonSnapshot(c *ws.Context) {
 		return
 	}
 	a.sendDungeonToRoom(c, roomID, playerID, "dungeon.snapshot", &DungeonSnapshotRelay{
-		PlayerId: string(playerID),
-		Snapshot: req.GetSnapshot(),
+		PlayerId:   string(playerID),
+		Snapshot:   req.GetSnapshot(),
+		PlayerState: req.GetPlayerState(),
 	})
 	c.Send(ws.H{"ok": true})
 }

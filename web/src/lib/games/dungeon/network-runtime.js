@@ -3,6 +3,7 @@ import { installCoopLifecycleRuntime } from './coop-lifecycle-runtime.js'
 import { installCoopWorldSimulation } from './coop-world-runtime.js'
 import { executePlayerCommand } from './player-command-runtime.js'
 import { createPlayerReplicationRuntime } from './player-replication-runtime.js'
+import { playerStateSignature } from './player-snapshot.js'
 import { placePlayerAtRoomSpawn } from './room-anchors.js'
 import { acceptAuthorityEnvelope, createInitialAuthority, nextAuthorityEnvelope } from './session-authority.js'
 import { createDungeonSessionRuntime, createSessionCheckpoint } from './session-runtime.js'
@@ -189,6 +190,7 @@ export function createDungeonNetworkRuntime({
   let unsubscribe = () => {}
   let timer = null
   let snapshotInFlight = false
+  let lastSentPlayerStateSignature = null
   let started = false
   let previousPickupIntentHandler = null
   let previousChestIntentHandler = null
@@ -443,11 +445,24 @@ export function createDungeonNetworkRuntime({
     snapshotInFlight = true
     syncLocalPlayerLabel(localPlayer)
     try {
-      const snapshot = captureWirePlayerClockState(replicationRuntime.serializeLocal(), lifecycleClock())
-      await socket.request('dungeon.snapshot', {
+      const current = lifecycleClock()
+      const snapshot = captureWirePlayerClockState(replicationRuntime.serializeLocalPresence(), current)
+      const durableState = replicationRuntime.serializeLocalState()
+      const durableStateSignature = playerStateSignature(durableState)
+      const wireLocalState = captureWirePlayerClockState(replicationRuntime.serializeLocal(), current).state
+      const playerState = { ...wireLocalState }
+      delete playerState.x
+      delete playerState.y
+      const includePlayerState = durableStateSignature !== lastSentPlayerStateSignature
+      const params = {
         roomId: normalizedRoomId,
         snapshot,
+        ...(includePlayerState ? { playerState: { state: playerState } } : {}),
+      }
+      await socket.request('dungeon.snapshot', {
+        ...params,
       })
+      if (includePlayerState) lastSentPlayerStateSignature = durableStateSignature
       return true
     } catch (error) {
       reportError(error)
@@ -639,19 +654,11 @@ export function createDungeonNetworkRuntime({
     if (payload.type === 'dungeon.snapshot') {
       const snapshot = payload.snapshot
       if (!snapshot || typeof snapshot !== 'object') return null
-      if (isAuthority() && scene.players.has(sourcePlayerId)) {
-        return replicationRuntime.applyRemotePresence(sourcePlayerId, snapshot)
+      const materialized = materializeWirePlayerClockState(snapshot, lifecycleClock())
+      if (!snapshot.playerState && scene.players.has(sourcePlayerId)) {
+        return replicationRuntime.applyRemotePresence(sourcePlayerId, materialized)
       }
-      if (isAuthority()) {
-        return replicationRuntime.applyRemote(
-          sourcePlayerId,
-          materializeWirePlayerClockState(snapshot, lifecycleClock()),
-        )
-      }
-      return replicationRuntime.applyRemote(
-        sourcePlayerId,
-        materializeWirePlayerClockState(snapshot, lifecycleClock()),
-      )
+      return replicationRuntime.applyRemote(sourcePlayerId, materialized)
     }
 
     if (payload.type === 'dungeon.command') {

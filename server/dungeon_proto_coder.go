@@ -17,7 +17,7 @@ func NewDungeonProtoCoder() DungeonProtoCoder { return DungeonProtoCoder{} }
 
 func (DungeonProtoCoder) Decode(data []byte) (*ws.Request, error) {
 	var request DungeonRequest
-	if err := proto.Unmarshal(data, &request); err != nil {
+	if err := (proto.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, &request); err != nil {
 		return nil, fmt.Errorf("decode dungeon request: %w", err)
 	}
 	if request.GetAction() == "" {
@@ -35,7 +35,7 @@ func (DungeonProtoCoder) Bind(data []byte, value any) error {
 	if !ok {
 		return errors.New("dungeon binary payload must bind to a protobuf message")
 	}
-	if err := proto.Unmarshal(data, message); err != nil {
+	if err := (proto.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, message); err != nil {
 		return fmt.Errorf("decode dungeon payload: %w", err)
 	}
 	return nil

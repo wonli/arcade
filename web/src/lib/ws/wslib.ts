@@ -1,3 +1,5 @@
+import { matchesPendingResponse, nextRequestId } from './request-correlation.js'
+
 export interface WSResponse<T = any> {
   code: number;
   action: string;
@@ -74,12 +76,20 @@ interface ListenerItem {
   listener: WSMessageHandler;
 }
 
+interface PendingRequest {
+  id: string;
+  action: string;
+  resolve: (response: WSResponse) => void;
+  reject: (error: Error) => void;
+}
+
 class Ws {
   config: WSConfig;
   sending: boolean = false;
   queueMap: Record<string, boolean> = {};
   callback: WSDispatcher;
   multiCallback: Record<string, (WSMessageHandler | ListenerItem)[]> = {};
+  pendingRequests: Map<string, PendingRequest> = new Map();
   isConnected: boolean = false;
   isLogin: boolean = false;
   connect: WebSocket;
@@ -198,6 +208,13 @@ class Ws {
         return;
       }
 
+      const pending = receive.id ? this.pendingRequests.get(receive.id) : undefined;
+      const matchedPending = pending && matchesPendingResponse(receive, pending) ? pending : undefined;
+      if (matchedPending) {
+        this.pendingRequests.delete(matchedPending.id);
+        matchedPending.resolve(receive);
+      }
+
       // 处理单个回调
       let handler = this.callbackHandler(receive.action);
       if (handler) {
@@ -216,7 +233,7 @@ class Ws {
 
       // room pub/sub 消息可能在页面 teardown 取消监听后晚到一个包。
       // 这是正常的订阅竞态，不应该让全局 websocket onmessage 抛错。
-      if (!handler && (!multiHandlers || multiHandlers.length === 0)) {
+      if (!handler && (!multiHandlers || multiHandlers.length === 0) && !matchedPending) {
         if (receive.action?.startsWith('room:')) {
           return;
         }
@@ -237,6 +254,8 @@ class Ws {
     this.connect.onclose = (e: CloseEvent) => {
       //更新状态
       this.isConnected = false;
+
+      this.rejectPendingRequests(new Error('websocket connection closed'));
 
       //先执行用户回调
       this.config.onDisconnect(this, e);
@@ -309,25 +328,23 @@ class Ws {
    */
   async sendAsync(a: string, q?: any): Promise<WSResponse> {
     return new Promise((resolve, reject) => {
+      const id = nextRequestId(a.replace(/[^a-zA-Z0-9_-]/g, '-'));
       let standMsg = this.config.onRequest({
+        id,
         action: a,
         params: Object.assign({}, this.globalParams, q)
       }, this)
 
       if (!standMsg) {
+        reject(new Error(`request cancelled: ${a}`));
         return
       }
 
-      this.on(a, d => {
-        resolve(d)
-      })
+      const requestId = String(standMsg.id || id);
+      standMsg.id = requestId;
+      this.pendingRequests.set(requestId, { id: requestId, action: a, resolve, reject });
 
       if (webSocket?.connect?.readyState !== 1 || !webSocket.isConnected) {
-        if (this.queueMap[a]) {
-          return
-        }
-
-        this.queueMap[a] = true
         this.config.queue.unshift(standMsg)
       } else {
         this.config.queue.push(standMsg)
@@ -443,6 +460,12 @@ class Ws {
       typeof item === 'function' || item.id !== id
     );
     if (this.multiCallback[actions].length === 0) delete this.multiCallback[actions];
+  }
+
+  rejectPendingRequests(error: Error): void {
+    const pending = [...this.pendingRequests.values()];
+    this.pendingRequests.clear();
+    pending.forEach(request => request.reject(error));
   }
 
   /**

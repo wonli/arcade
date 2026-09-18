@@ -64,6 +64,12 @@ function fixed32Field(field, value) {
   return concat(varint((field << 3) | 5), bytes)
 }
 
+function fixed64Field(field, value) {
+  const bytes = new Uint8Array(8)
+  new DataView(bytes.buffer).setFloat64(0, value, true)
+  return concat(varint((field << 3) | 1), bytes)
+}
+
 function concat(...parts) {
   return Uint8Array.from(parts.flatMap((part) => [...part]))
 }
@@ -92,7 +98,7 @@ test('Dungeon binary responses decode direct snapshot actions without the room w
     playerId: 'guest',
     snapshot: {
       id: 'guest',
-      state: { x: 180, y: 42, hp: 75, maxHp: 100 },
+      state: { x: 180, y: 42 },
       facing: 'left',
       moving: true,
       attacking: false,
@@ -109,9 +115,14 @@ test('binary snapshots preserve durable player state needed by remote bootstrap'
       roomId: 'ABC123',
       snapshot: {
         id: 'guest',
+        state: { x: 120, y: 80 },
+        facing: 'up',
+        moving: false,
+        attacking: false,
+        dead: false,
+      },
+      playerState: {
         state: {
-          x: 120,
-          y: 80,
           hp: 90,
           maxHp: 140,
           damage: 31,
@@ -119,19 +130,22 @@ test('binary snapshots preserve durable player state needed by remote bootstrap'
           equipment: {
             weapon: {
               id: 'blood-reaver',
+              name: 'Blood Reaver',
               type: 'weapon.blood_reaver',
               archetype: 'greatsword',
+              rarity: 'legendary',
               damage: 13,
+              vfxTheme: 'blood',
+              vfxVariant: 1,
+              legendaryLevel: 2,
+              signatureAffixes: ['power', 'chain'],
               affixes: [{ id: 'power', value: 0.2 }],
             },
           },
-          modifiers: { equipment: { attackSpeed: 0.12 } },
+          modifiers: { equipment: { attackSpeed: 0.12, enabled: true, source: 'weapon' } },
+          hasteRemainingMs: 1200,
           healthPotions: 2,
         },
-        facing: 'up',
-        moving: false,
-        attacking: false,
-        dead: false,
       },
     },
   }
@@ -139,6 +153,36 @@ test('binary snapshots preserve durable player state needed by remote bootstrap'
   const decoded = decodeDungeonRequest(encodeDungeonRequest(request))
 
   assert.deepEqual(decoded.params.snapshot.state, request.params.snapshot.state)
+  assert.deepEqual(decoded.params.playerState, request.params.playerState)
+
+  const wireText = new TextDecoder().decode(encodeDungeonRequest(request))
+  assert.equal(wireText.includes('{'), false)
+  assert.equal(wireText.includes('state_json'), false)
+  assert.deepEqual([...arcade.dungeon.DungeonPlayerState.encode({ stateJson: '{"hp": 1}' }).finish()], [])
+})
+
+test('binary snapshots preserve explicitly encoded zero presence values', () => {
+  const snapshot = concat(
+    Uint8Array.from([0x08, 0x00]),
+    fixed32Field(2, 0),
+    fixed64Field(10, 0),
+    fixed64Field(11, 0),
+  )
+  const relay = concat(
+    bytesField(1, new TextEncoder().encode('guest')),
+    bytesField(2, snapshot),
+  )
+  const response = concat(
+    bytesField(2, new TextEncoder().encode('dungeon.snapshot')),
+    bytesField(5, relay),
+  )
+
+  const decoded = decodeDungeonMessage(response)
+
+  assert.equal(decoded.data.snapshot.slot, 0)
+  assert.equal(decoded.data.snapshot.state.x, 0)
+  assert.equal(decoded.data.snapshot.lastAttackElapsedMs, 0)
+  assert.equal(decoded.data.snapshot.lastContactElapsedMs, 0)
 })
 
 test('stationary binary snapshots clear a previously moving remote player', () => {

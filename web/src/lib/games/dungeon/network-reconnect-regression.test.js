@@ -225,7 +225,7 @@ test('fresh follower retries server checkpoint without publishing snapshots unti
   const snapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
   assert.equal(snapshots.length >= 1, true)
   assert.equal(snapshots.some((call) => call.params.snapshot.syncCheckpoint === true), false)
-  assert.equal(snapshots.at(-1).params.snapshot.state.equipment.weapon.type, 'weapon.spear')
+  assert.equal(snapshots.at(-1).params.playerState.state.equipment.weapon.type, 'weapon.spear')
   runtime.stop()
 })
 

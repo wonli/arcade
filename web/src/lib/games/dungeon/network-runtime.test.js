@@ -192,6 +192,47 @@ test('snapshot flush sends only the local serializable player state', async () =
   assert.equal('runtime' in socket.calls[0].params.snapshot, false)
 })
 
+test('snapshot flush sends durable player state only on first send and state changes', async () => {
+  const scene = sceneFixture('guest')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'guest', hostId: 'host' })
+
+  await runtime.flushSnapshot()
+  await runtime.flushSnapshot()
+  scene.localPlayer.state.equipment.weapon = { id: 'blood-reaver' }
+  await runtime.flushSnapshot()
+
+  const snapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
+  assert.equal(snapshots.length, 3)
+  assert.ok(snapshots[0].params.playerState)
+  assert.equal(snapshots[1].params.playerState, undefined)
+  assert.deepEqual(snapshots[2].params.playerState.state.equipment.weapon, { id: 'blood-reaver' })
+})
+
+test('snapshot flush does not resend durable state while a temporary haste timer counts down', async () => {
+  const scene = sceneFixture('guest')
+  scene.localPlayer.state.hasteUntil = 1200
+  const socket = socketFixture()
+  let currentNow = 1000
+  const runtime = createDungeonNetworkRuntime({
+    socket,
+    scene,
+    roomId: 'ABC123',
+    localPlayerId: 'guest',
+    hostId: 'host',
+    now: () => currentNow,
+  })
+
+  await runtime.flushSnapshot()
+  currentNow = 1050
+  await runtime.flushSnapshot()
+
+  const snapshots = socket.calls.filter((call) => call.action === 'dungeon.snapshot')
+  assert.equal(snapshots.length, 2)
+  assert.ok(snapshots[0].params.playerState)
+  assert.equal(snapshots[1].params.playerState, undefined)
+})
+
 test('fresh follower requests canonical session state from server without peer checkpoint snapshots', async () => {
   const scene = sceneFixture('guest')
   const socket = socketFixture({ sessionStates: [null] })
