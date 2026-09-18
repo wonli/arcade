@@ -37,6 +37,7 @@ export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, 
 
   return {
     sceneKey: sceneKey(normalizedProgress),
+    runSeed: normalizeRunSeed(scene?.__roomGeometry?.runSeed),
     player: {
       x: normalizeX(playerState.x),
       y: normalizeY(playerState.y),
@@ -84,6 +85,7 @@ function sanitizeState(state = {}) {
   const progress = normalizeProgress(state.progress)
   return {
     sceneKey: String(state.sceneKey ?? sceneKey(progress)).slice(0, 80),
+    runSeed: normalizeRunSeed(state.runSeed),
     player,
     enemies: (state.enemies ?? []).slice(0, 28).map((enemy, index) => ({
       id: String(enemy.id ?? `enemy-${index}`).slice(0, 80),
@@ -160,6 +162,11 @@ function replayDropId(drop, index) {
     int(item.damage ?? item.heal),
     index,
   ].join(':').slice(0, 100)
+}
+
+function normalizeRunSeed(value) {
+  const seed = String(value ?? '').trim().toUpperCase()
+  return seed ? seed.slice(0, 100) : null
 }
 
 function normalizeFacing(value) {
