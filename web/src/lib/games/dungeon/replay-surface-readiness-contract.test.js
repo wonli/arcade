@@ -4,33 +4,31 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const surfacePath = fileURLToPath(new URL('./DungeonReplaySurface.svelte', import.meta.url))
-const source = readFileSync(surfacePath, 'utf8')
+const scenePath = fileURLToPath(new URL('./scene.js', import.meta.url))
+const surface = readFileSync(surfacePath, 'utf8')
+const scene = readFileSync(scenePath, 'utf8')
 
-test('replay surface waits for Dungeon create before replacing live artifacts', () => {
-  const attach = source.match(/const\s+attach\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\n\s*requestAnimationFrame\(attach\)/)?.[1] ?? ''
+test('replay surface is a thin real-scene timeline host', () => {
+  assert.match(surface, /createDungeonGame\(/)
+  assert.match(surface, /mode:\s*['"]replay['"]/)
+  assert.match(surface, /createDungeonReplayDriver\(/)
+  assert.match(surface, /driver\.play\(\)/)
+  assert.doesNotMatch(surface, /createReplayEnemy|syncReplayEnemies|syncReplayPlayers|syncReplayDrops|makeActor|setFlipX|createHealthBar|ground-drop-presentation/)
+})
+
+test('replay mode waits for real Dungeon create and scene replay APIs before playback', () => {
+  const attach = surface.match(/const\s+attach\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\n\s*requestAnimationFrame\(attach\)/)?.[1] ?? ''
   assert.match(attach, /scene\?\.localPlayer\?\.actor/)
-
-  const readyIndex = attach.search(/scene\?\.localPlayer\?\.actor/)
-  const clearIndex = attach.indexOf('clearLiveArtifacts()')
-  const applyIndex = attach.indexOf('applyFrame(firstFrame)')
-  assert.ok(readyIndex >= 0 && clearIndex > readyIndex, 'scene readiness must be checked before clearing live artifacts')
-  assert.ok(applyIndex > clearIndex, 'the replay frame must be applied only after live artifacts are cleared')
+  assert.match(attach, /scene\.applyReplayState/)
+  assert.match(attach, /scene\.presentEvent/)
 })
 
-test('replay surface uses the same ground-drop presentation as live gameplay', () => {
-  assert.match(source, /import\s*\{[^}]*queueGroundDropArt[^}]*syncGroundDropPresentation[^}]*updateGroundDropPresentation[^}]*\}\s*from\s*['"]\.\/ground-drop-presentation\.js['"]/)
-  assert.doesNotMatch(source, /replay-drop-presentation\.js/)
-
-  const syncDrops = source.match(/function\s+syncReplayDrops\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ''
-  assert.match(syncDrops, /scene\.spawnDrop\?\.\(x,\s*y,\s*drop\.item\)/)
-  assert.match(syncDrops, /syncGroundDropPresentation\(scene,\s*spawned/)
-
-  assert.match(source, /const\s+queuedDropArt\s*=\s*queueGroundDropArt\(scene\)/)
-  assert.match(source, /queuedDropArt\s*>\s*0[\s\S]*?scene\.load\.once\(['"]complete['"],\s*finishAttach\)[\s\S]*?scene\.load\.start\(\)[\s\S]*?return/)
-})
-
-test('replay keeps Phaser presentation time alive while gameplay update is disabled', () => {
-  assert.doesNotMatch(source, /scene\.scene\?\.pause\?\.\(\)/)
-  assert.match(source, /scene\.update\s*=\s*\(time\)\s*=>\s*\{/)
-  assert.match(source, /updateGroundDropPresentation\(scene,\s*drop,\s*time\)/)
+test('real Dungeon scene owns replay state and presentation while simulation stays disabled', () => {
+  assert.match(scene, /mode\s*=\s*['"]live['"]/)
+  assert.match(scene, /const\s+replayMode\s*=\s*mode\s*===\s*['"]replay['"]/)
+  assert.match(scene, /this\.applyReplayState\s*=/)
+  assert.match(scene, /this\.resetReplayTransient\s*=/)
+  assert.match(scene, /installDungeonPresentationEvents\(this/)
+  assert.match(scene, /update\(time,\s*delta\)\s*\{\s*\n\s*if\s*\(replayMode\)\s*return/)
+  assert.doesNotMatch(surface, /scene\.scene\?\.pause|scene\.update\s*=/)
 })
