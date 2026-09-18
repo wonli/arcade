@@ -27,7 +27,10 @@ test('replay surface upgrades recorded weapon drops instead of leaving generic p
   assert.match(source, /const\s+queuedWeaponArt\s*=\s*queueReplayWeaponArt\(scene\)/)
   assert.match(source, /queuedWeaponArt\s*>\s*0[\s\S]*?scene\.load\.once\(['"]complete['"],\s*finishAttach\)[\s\S]*?scene\.load\.start\(\)[\s\S]*?return/)
 
-  const finishAttach = source.match(/const\s+finishAttach\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ''
+  const finishStart = source.indexOf('const finishAttach = () => {')
+  const queueStart = source.indexOf('const queuedWeaponArt = queueReplayWeaponArt(scene)')
+  assert.ok(finishStart >= 0 && queueStart > finishStart, 'replay attach finalizer must exist before the weapon-art loader')
+  const finishAttach = source.slice(finishStart, queueStart)
   assert.match(finishAttach, /scene\.scene\?\.pause\?\.\(\)/)
   assert.match(finishAttach, /applyFrame\(firstFrame\)/)
 })
