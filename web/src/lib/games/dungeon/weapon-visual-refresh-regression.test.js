@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { installPickupInteraction } from './pickup-runtime.js'
+import { queueReplayWeaponArt, syncReplayGroundWeaponPresentation } from './replay-drop-presentation.js'
 import { attachLegacyTestPlayer } from './test/player-fixture.js'
 
 function drawable(extra = {}) {
@@ -85,10 +86,7 @@ test('hydrated named ground weapon upgrades its procedural fallback after textur
   runtime.restore()
 })
 
-test('ground weapon presentation can upgrade a replay placeholder without installing pickup gameplay', async () => {
-  const pickupModule = await import('./pickup-runtime.js')
-  assert.equal(typeof pickupModule.syncGroundWeaponPresentation, 'function')
-
+test('replay ground weapon presentation upgrades a generic placeholder without pickup gameplay', () => {
   const placeholder = drawable({ kind: 'placeholder' })
   const scene = {
     textures: { exists: (key) => key === 'dungeon-named-weapon-087-base' },
@@ -110,26 +108,22 @@ test('ground weapon presentation can upgrade a replay placeholder without instal
       affixes: [],
     },
     visual: placeholder,
-    label: null,
   }
 
-  const visual = pickupModule.syncGroundWeaponPresentation(scene, drop, { x: 120, y: 80 })
+  const visual = syncReplayGroundWeaponPresentation(scene, drop, { x: 120, y: 80 })
   assert.equal(placeholder.destroyed, true)
   assert.equal(visual?.kind, 'texture')
   assert.equal(drop.visual?.textureKey, 'dungeon-named-weapon-087-base')
 })
 
-test('weapon art can be queued for replay without installing combat runtime', async () => {
-  const weaponModule = await import('./weapon-visual-runtime.js')
-  assert.equal(typeof weaponModule.queueDungeonWeaponArt, 'function')
-
+test('replay weapon art queue includes legacy and named base textures without selected gameplay art', () => {
   const queued = []
   const scene = {
     textures: { exists: () => false },
     load: { image(key, path) { queued.push([key, path]) } },
   }
 
-  const count = weaponModule.queueDungeonWeaponArt(scene, { includeSelected: false })
+  const count = queueReplayWeaponArt(scene)
   assert.equal(count, queued.length)
   assert.ok(queued.some(([key]) => key === 'dungeon-held-weapon-sword-common'))
   assert.ok(queued.some(([key]) => key === 'dungeon-named-weapon-087-base'))
