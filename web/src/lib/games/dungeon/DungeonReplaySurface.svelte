@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
   import { normalizeDungeonReplayPlayers } from './replay.js'
+  import { queueReplayWeaponArt, syncReplayGroundWeaponPresentation } from './replay-drop-presentation.js'
   import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
   import { setProceduralRunSeed } from './spatial.js'
   import { installDungeonSpatial } from './spatial-runtime.js'
@@ -181,7 +182,10 @@
     for (const drop of drops) {
       const x = Math.min(1, Math.max(0, Number(drop.x) || 0)) * 960
       const y = Math.min(1, Math.max(0, Number(drop.y) || 0)) * 600
+      const before = scene.drops?.length ?? 0
       scene.spawnDrop?.(x, y, drop.item)
+      const spawned = scene.drops?.[before] ?? scene.drops?.at?.(-1)
+      if (spawned) syncReplayGroundWeaponPresentation(scene, spawned, { x, y })
     }
   }
 
@@ -307,19 +311,30 @@
       }
 
       const firstFrame = $frameStore
-      replayProgress = normalizeProgress(firstFrame)
-      applyRunSeed(firstFrame)
-      clearLiveArtifacts()
-      spatialRuntime = installDungeonSpatial(scene, {
-        player: scene.localPlayer,
-        getProgress: () => replayProgress,
-        onEvent: () => {},
-        label: (key) => key,
-      })
-      scene.scene?.pause?.()
-      ready = true
-      activeSceneKey = ''
-      applyFrame(firstFrame)
+      const finishAttach = () => {
+        if (!game || !mount || !scene?.localPlayer?.actor) return
+        replayProgress = normalizeProgress(firstFrame)
+        applyRunSeed(firstFrame)
+        clearLiveArtifacts()
+        spatialRuntime = installDungeonSpatial(scene, {
+          player: scene.localPlayer,
+          getProgress: () => replayProgress,
+          onEvent: () => {},
+          label: (key) => key,
+        })
+        scene.scene?.pause?.()
+        ready = true
+        activeSceneKey = ''
+        applyFrame(firstFrame)
+      }
+
+      const queuedWeaponArt = queueReplayWeaponArt(scene)
+      if (queuedWeaponArt > 0 && scene.load?.once && scene.load?.start) {
+        scene.load.once('complete', finishAttach)
+        scene.load.start()
+        return
+      }
+      finishAttach()
     }
     requestAnimationFrame(attach)
   }
