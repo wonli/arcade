@@ -84,3 +84,54 @@ test('hydrated named ground weapon upgrades its procedural fallback after textur
   assert.equal(scene.drops[0].visual?.textureKey, 'dungeon-named-weapon-087-base')
   runtime.restore()
 })
+
+test('ground weapon presentation can upgrade a replay placeholder without installing pickup gameplay', async () => {
+  const pickupModule = await import('./pickup-runtime.js')
+  assert.equal(typeof pickupModule.syncGroundWeaponPresentation, 'function')
+
+  const placeholder = drawable({ kind: 'placeholder' })
+  const scene = {
+    textures: { exists: (key) => key === 'dungeon-named-weapon-087-base' },
+    add: {
+      image(x, y, textureKey) { return drawable({ kind: 'texture', x, y, textureKey }) },
+      rectangle() { return drawable() },
+      container(x, y, children) { return drawable({ kind: 'procedural', x, y, children }) },
+    },
+    tweens: { killTweensOf() {} },
+  }
+  const drop = {
+    x: 120,
+    y: 80,
+    item: {
+      type: 'weapon.storm_lance',
+      archetype: 'spear',
+      rarity: 'rare',
+      damage: 28,
+      affixes: [],
+    },
+    visual: placeholder,
+    label: null,
+  }
+
+  const visual = pickupModule.syncGroundWeaponPresentation(scene, drop, { x: 120, y: 80 })
+  assert.equal(placeholder.destroyed, true)
+  assert.equal(visual?.kind, 'texture')
+  assert.equal(drop.visual?.textureKey, 'dungeon-named-weapon-087-base')
+})
+
+test('weapon art can be queued for replay without installing combat runtime', async () => {
+  const weaponModule = await import('./weapon-visual-runtime.js')
+  assert.equal(typeof weaponModule.queueDungeonWeaponArt, 'function')
+
+  const queued = []
+  const scene = {
+    textures: { exists: () => false },
+    load: { image(key, path) { queued.push([key, path]) } },
+  }
+
+  const count = weaponModule.queueDungeonWeaponArt(scene, { includeSelected: false })
+  assert.equal(count, queued.length)
+  assert.ok(queued.some(([key]) => key === 'dungeon-held-weapon-sword-common'))
+  assert.ok(queued.some(([key]) => key === 'dungeon-named-weapon-087-base'))
+  assert.equal(queued.some(([key]) => key.endsWith('-selected')), false)
+})
