@@ -10,8 +10,10 @@
   let game = null
   let scene = null
   let spatialRuntime = null
-  let replayEnemies = []
-  let replayProgress = { floor: 1, room: 1, roomRole: 'combat' }
+  let replayEnemies = new Map()
+  let replayDropSignature = ''
+  let activeSceneKey = ''
+  let replayProgress = { floor: 1, chapter: 1, chapterFloor: 1, roomRole: 'combat' }
   let ready = $state(false)
 
   $effect(() => {
@@ -19,12 +21,19 @@
     if (scene && frame) applyFrame(frame)
   })
 
+  function destroyReplayEnemy(enemy) {
+    enemy?.visual?.destroy?.()
+    scene?.destroyHealthBar?.(enemy?.healthBar)
+  }
+
   function destroyReplayEnemies() {
-    for (const enemy of replayEnemies) {
-      enemy.visual?.destroy?.()
-      scene?.destroyHealthBar?.(enemy.healthBar)
-    }
-    replayEnemies = []
+    for (const enemy of replayEnemies.values()) destroyReplayEnemy(enemy)
+    replayEnemies.clear()
+  }
+
+  function clearReplayDrops() {
+    scene?.clearDrops?.()
+    replayDropSignature = ''
   }
 
   function clearLiveArtifacts() {
@@ -39,12 +48,33 @@
     }
   }
 
-  function rebuildArena(floor) {
-    const nextFloor = Math.max(1, Number(floor) || 1)
-    if (scene.floor === nextFloor && ready) return
-    scene.floor = nextFloor
+  function normalizeProgress(frame = {}) {
+    return {
+      floor: Math.max(1, Number(frame.progress?.floor) || 1),
+      chapter: Math.max(1, Number(frame.progress?.chapter) || 1),
+      chapterFloor: Math.max(1, Number(frame.progress?.chapterFloor ?? frame.progress?.room) || 1),
+      roomRole: frame.progress?.roomRole ?? 'combat',
+    }
+  }
+
+  function frameSceneKey(frame = {}) {
+    const progress = normalizeProgress(frame)
+    return String(frame.sceneKey || `${progress.floor}:${progress.chapter}:${progress.chapterFloor}`)
+  }
+
+  function rebuildSceneIfNeeded(frame = {}) {
+    const nextProgress = normalizeProgress(frame)
+    const nextSceneKey = frameSceneKey(frame)
+    replayProgress = nextProgress
+    if (activeSceneKey === nextSceneKey && ready) return false
+
+    activeSceneKey = nextSceneKey
+    destroyReplayEnemies()
+    clearReplayDrops()
+    scene.floor = nextProgress.floor
     if (spatialRuntime?.refreshRoom) spatialRuntime.refreshRoom()
     else scene.drawArena?.()
+    return true
   }
 
   function enemyType(enemy = {}) {
@@ -54,67 +84,107 @@
     return 'skeleton'
   }
 
-  function ensureReplayEnemies(frameEnemies = []) {
-    while (replayEnemies.length > frameEnemies.length) {
-      const enemy = replayEnemies.pop()
-      enemy.visual?.destroy?.()
-      scene?.destroyHealthBar?.(enemy.healthBar)
-    }
+  function enemyPresentationKey(source = {}) {
+    return `${enemyType(source)}:${source.boss ? 1 : 0}:${source.elite ? 1 : 0}`
+  }
 
-    while (replayEnemies.length < frameEnemies.length) {
-      const index = replayEnemies.length
-      const source = frameEnemies[index] ?? {}
-      const boss = !!source.boss || source.kind === 'boss'
-      const elite = !!source.elite || source.kind === 'elite'
-      const visual = scene.makeActor?.(0, 0, 'enemy', enemyType(source))
-      visual?.setDepth?.(boss || elite ? 12 : 10)
-      if (boss) visual?.setTint?.(0xff705c)
-      else if (elite) visual?.setTint?.(0xffd86b)
-      const width = boss ? 150 : enemyType(source) === 'brute' ? 46 : 36
-      const height = boss ? 11 : enemyType(source) === 'brute' ? 7 : 5
-      const offset = boss ? 58 : 30
-      replayEnemies.push({
-        visual,
-        boss,
-        elite,
-        barOffset: offset,
-        healthBar: scene.createHealthBar?.(0, -offset, width, height, boss ? 0xffc857 : 0xff5964),
-      })
+  function createReplayEnemy(source = {}) {
+    const boss = !!source.boss || source.kind === 'boss'
+    const elite = !!source.elite || source.kind === 'elite'
+    const type = enemyType(source)
+    const visual = scene.makeActor?.(0, 0, 'enemy', type)
+    visual?.setDepth?.(boss || elite ? 12 : 10)
+    if (boss) visual?.setTint?.(0xff705c)
+    else if (elite) visual?.setTint?.(0xffd86b)
+    const width = boss ? 150 : type === 'brute' ? 46 : 36
+    const height = boss ? 11 : type === 'brute' ? 7 : 5
+    const barOffset = boss ? 58 : 30
+    return {
+      visual,
+      presentationKey: enemyPresentationKey(source),
+      barOffset,
+      lastX: null,
+      healthBar: scene.createHealthBar?.(0, -barOffset, width, height, boss ? 0xffc857 : 0xff5964),
     }
   }
 
-  function applyFrame(frame = {}) {
-    if (!scene) return
-    replayProgress = {
-      floor: Math.max(1, Number(frame.progress?.floor) || 1),
-      room: Math.max(1, Number(frame.progress?.room) || 1),
-      roomRole: frame.progress?.roomRole ?? 'combat',
-    }
-    rebuildArena(replayProgress.floor)
-
+  function syncReplayEnemies(frameEnemies = []) {
     const width = 960
     const height = 600
-    const player = frame.player ?? {}
-    const px = Math.min(1, Math.max(0, Number(player.x) || 0)) * width
-    const py = Math.min(1, Math.max(0, Number(player.y) || 0)) * height
-    scene.localPlayer.state.x = px
-    scene.localPlayer.state.y = py
-    scene.localPlayer.state.hp = Number(frame.stats?.hp ?? scene.localPlayer.state.hp ?? 0)
-    scene.localPlayer.state.maxHp = Math.max(1, Number(frame.stats?.maxHp ?? scene.localPlayer.state.maxHp ?? 100))
-    scene.localPlayer.actor?.setPosition?.(px, py)
-    scene.updateHealthBar?.(scene.localPlayer.bar, px, py - 42, scene.localPlayer.state.hp, scene.localPlayer.state.maxHp)
+    const living = frameEnemies.filter((enemy) => enemy?.alive !== false)
+    const seen = new Set()
 
-    const enemies = (frame.enemies ?? []).filter((enemy) => enemy.alive !== false)
-    ensureReplayEnemies(enemies)
-    enemies.forEach((source, index) => {
-      const enemy = replayEnemies[index]
+    living.forEach((source, index) => {
+      const id = String(source.id || `enemy-${index}`)
+      seen.add(id)
+      let enemy = replayEnemies.get(id)
+      const presentationKey = enemyPresentationKey(source)
+      if (enemy && enemy.presentationKey !== presentationKey) {
+        destroyReplayEnemy(enemy)
+        replayEnemies.delete(id)
+        enemy = null
+      }
+      if (!enemy) {
+        enemy = createReplayEnemy(source)
+        replayEnemies.set(id, enemy)
+      }
+
       const x = Math.min(1, Math.max(0, Number(source.x) || 0)) * width
       const y = Math.min(1, Math.max(0, Number(source.y) || 0)) * height
       const hp = Math.max(0, Number(source.hp ?? source.maxHp ?? 1))
       const maxHp = Math.max(1, Number(source.maxHp ?? (hp || 1)))
+      if (enemy.lastX != null && Math.abs(x - enemy.lastX) > 0.5) enemy.visual?.setFlipX?.(x < enemy.lastX)
+      enemy.lastX = x
       enemy.visual?.setPosition?.(x, y)
       scene.updateHealthBar?.(enemy.healthBar, x, y - enemy.barOffset, hp, maxHp)
     })
+
+    for (const [id, enemy] of replayEnemies) {
+      if (seen.has(id)) continue
+      destroyReplayEnemy(enemy)
+      replayEnemies.delete(id)
+    }
+  }
+
+  function syncReplayDrops(frameDrops = []) {
+    const drops = frameDrops.filter((drop) => drop?.item)
+    const signature = JSON.stringify(drops.map((drop) => [drop.id, drop.x, drop.y, drop.item]))
+    if (signature === replayDropSignature) return
+
+    clearReplayDrops()
+    replayDropSignature = signature
+    for (const drop of drops) {
+      const x = Math.min(1, Math.max(0, Number(drop.x) || 0)) * 960
+      const y = Math.min(1, Math.max(0, Number(drop.y) || 0)) * 600
+      scene.spawnDrop?.(x, y, drop.item)
+    }
+  }
+
+  function syncReplayPlayer(frame = {}) {
+    const source = frame.player ?? {}
+    const player = scene.localPlayer
+    if (!player?.state) return
+
+    const x = Math.min(1, Math.max(0, Number(source.x) || 0)) * 960
+    const y = Math.min(1, Math.max(0, Number(source.y) || 0)) * 600
+    player.state.x = x
+    player.state.y = y
+    player.state.hp = Number(frame.stats?.hp ?? player.state.hp ?? 0)
+    player.state.maxHp = Math.max(1, Number(frame.stats?.maxHp ?? player.state.maxHp ?? 100))
+    player.facing = ['up', 'down', 'left', 'right'].includes(source.facing) ? source.facing : 'down'
+    player.moving = !!source.moving
+    player.attacking = !!source.attacking
+    player.actor?.setPosition?.(x, y)
+    scene.updateHealthBar?.(player.bar, x, y - 42, player.state.hp, player.state.maxHp)
+    scene.syncPlayerAnimation?.(player.attacking ? 'attack' : null, player)
+  }
+
+  function applyFrame(frame = {}) {
+    if (!scene) return
+    rebuildSceneIfNeeded(frame)
+    syncReplayPlayer(frame)
+    syncReplayEnemies(frame.enemies ?? [])
+    syncReplayDrops(frame.drops ?? [])
   }
 
   async function startReplay() {
@@ -144,12 +214,7 @@
       }
 
       const firstFrame = $frameStore
-      replayProgress = {
-        floor: Math.max(1, Number(firstFrame?.progress?.floor) || 1),
-        room: Math.max(1, Number(firstFrame?.progress?.room) || 1),
-        roomRole: firstFrame?.progress?.roomRole ?? 'combat',
-      }
-
+      replayProgress = normalizeProgress(firstFrame)
       clearLiveArtifacts()
       spatialRuntime = installDungeonSpatial(scene, {
         player: scene.localPlayer,
@@ -159,6 +224,7 @@
       })
       scene.scene?.pause?.()
       ready = true
+      activeSceneKey = ''
       applyFrame(firstFrame)
     }
     requestAnimationFrame(attach)
@@ -168,6 +234,7 @@
     startReplay().catch((error) => console.warn('Dungeon replay surface failed:', error))
     return () => {
       destroyReplayEnemies()
+      clearReplayDrops()
       game?.destroy?.(true)
       game = null
       scene = null
