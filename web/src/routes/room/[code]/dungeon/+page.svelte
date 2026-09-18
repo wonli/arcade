@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
+  import { goto, onNavigate } from '$app/navigation'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
@@ -149,6 +149,11 @@
     })
     return replayFinishPromise
   }
+
+  onNavigate(() => {
+    if (!replaySession) return
+    return finishDungeonReplay().then(() => {})
+  })
 
   async function returnHome(event) {
     event?.preventDefault?.()
@@ -350,7 +355,7 @@
     connection = 'live'
     await startGame()
     replayTimer = setInterval(() => {
-      if (ready && room?.status === 'playing' && !replayFinished) recordDungeonReplay()
+      if (ready && !replayFinished) recordDungeonReplay()
     }, 200)
   }
 
