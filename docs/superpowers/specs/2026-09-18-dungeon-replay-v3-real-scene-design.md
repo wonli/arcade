@@ -78,8 +78,6 @@ Replay v3 does not:
 
 A Dungeon v3 recording contains metadata, state frames, and semantic events.
 
-Conceptual shape:
-
 ```js
 {
   version: 3,
@@ -102,11 +100,17 @@ Conceptual shape:
 
 Timestamps are recording-relative milliseconds. The recorder assigns a monotonically increasing `seq` so events with the same timestamp have stable ordering.
 
+### Coordinate contract
+
+Replay v3 stores positions in **real Dungeon world coordinates**, currently a 960×600 world.
+
+It does not normalize coordinates to `0..1` as v2 does.
+
+`meta.width` and `meta.height` describe the coordinate space and are validated by the decoder. The real scene receives the same `x/y` values that live entities use, eliminating conversion logic from ReplaySurface and reducing divergence between live and replay.
+
 ### State frame contract
 
-Frames contain durable semantic state needed to reconstruct the visible world at an arbitrary point in the recording.
-
-A frame contains:
+The following field names are the v3 semantic contract:
 
 ```js
 {
@@ -118,7 +122,7 @@ A frame contains:
     sceneKey,
     runSeed,
     roomTemplate,
-    portal,
+    portal: null | { active, x, y },
   },
 
   players: [
@@ -133,8 +137,8 @@ A frame contains:
       moving,
       attacking,
       dead,
-      weapon,
-      effects,
+      weapon: null | CompactItem,
+      effects: string[],
     },
   ],
 
@@ -160,7 +164,7 @@ A frame contains:
       id,
       x,
       y,
-      item,
+      item: CompactItem,
     },
   ],
 
@@ -184,18 +188,20 @@ A frame contains:
 }
 ```
 
-Exact field names may follow existing Dungeon naming, but the semantic boundary is fixed.
+`CompactItem` uses the existing semantic item fields required to identify and present an item: `type`, `rarity`, optional `archetype`, `name`, `level`, `damage`, `heal`, and affixes.
+
+`effects` contains active semantic effect IDs whose presence changes durable player presentation. It does not contain Phaser/tween state or absolute runtime timer handles.
 
 ### What belongs in frames
 
 Frames contain values required to restore persistent visible state after seeking:
 
 - player identity, position, health, facing, movement/attack state, death state;
-- the player's currently equipped weapon and presentation-relevant durable effects;
+- the player's currently equipped weapon and presentation-relevant durable effect IDs;
 - enemy identity, position, health, archetype, elite/boss flags, phase, movement/facing/death state;
 - ground drops and their full semantic item identity;
 - currently active projectiles, including stable IDs and motion state;
-- current floor/room identity and enough procedural identity to rebuild the same arena;
+- current floor/room identity and procedural identity needed to rebuild the same arena;
 - portal state and summary stats used by the visible scene/HUD.
 
 Projectile state is included even though projectile spawn/hit also have events. This lets seek restore projectiles already in flight without replaying the entire history.
@@ -220,24 +226,37 @@ For example, record `facing: 'left'`, not `flipX: true`. The real scene remains 
 
 Events represent transient actions that a state frame alone cannot visibly reproduce.
 
-Initial v3 event kinds:
+Every event has the common envelope:
 
-- `player.attack`
-- `player.skill`
-- `enemy.attack`
-- `enemy.phase`
-- `hit`
-- `death`
-- `pickup`
-- `drop.spawn`
-- `projectile.spawn`
-- `projectile.hit`
-- `floor.start`
-- `floor.clear`
-- `portal.enter`
-- `run.complete`
+```js
+{
+  t,
+  seq,
+  type,
+  ...payload,
+}
+```
 
-Event payloads contain semantic inputs needed by the existing presentation path, not renderer configuration.
+The initial v3 event vocabulary and minimum payloads are:
+
+| Type | Required semantic payload |
+| --- | --- |
+| `player.attack` | `playerId`, `x`, `y`, `facing`, `weapon`, optional `targetId` |
+| `player.skill` | `playerId`, `skillId`, `x`, `y`, `facing`, optional `targetIds` |
+| `enemy.attack` | `enemyId`, `attackKind`, `x`, `y`, optional `targetId` |
+| `enemy.phase` | `enemyId`, `phase`, `x`, `y` |
+| `hit` | `sourceId`, `targetId`, `damage`, `crit`, `x`, `y` |
+| `death` | `entityId`, `entityKind`, `x`, `y` |
+| `pickup` | `playerId`, `dropId`, `item`, `x`, `y` |
+| `drop.spawn` | `dropId`, `item`, `x`, `y` |
+| `projectile.spawn` | `projectileId`, `kind`, `ownerId`, `x`, `y`, `vx`, `vy` |
+| `projectile.hit` | `projectileId`, optional `targetId`, `x`, `y` |
+| `floor.start` | `floor`, `chapter`, `chapterFloor`, `roomRole` |
+| `floor.clear` | `floor`, `chapter`, `chapterFloor`, `roomRole` |
+| `portal.enter` | `playerId`, `floor` |
+| `run.complete` | `floor`, `kills` |
+
+Additional fields are allowed only when they are semantic inputs to existing Dungeon presentation. Renderer configuration does not belong in event payloads.
 
 Example:
 
@@ -372,7 +391,7 @@ Responsibilities:
 
 It must be safe to call repeatedly and treat the supplied replay state as authoritative.
 
-For seeking, the driver may call:
+For seeking, the driver calls:
 
 ```js
 scene.applyReplayState(state, { resetTransient: true })
@@ -384,7 +403,7 @@ scene.applyReplayState(state, { resetTransient: true })
 
 Some current live creation functions mix two responsibilities: deciding/generated gameplay data and creating Phaser presentation.
 
-Replay v3 should separate those only where required.
+Replay v3 separates those only where required.
 
 Example target shape:
 
@@ -408,9 +427,9 @@ This is a focused extraction, not an ECS rewrite. Existing Dungeon modules remai
 
 Replay reconciliation requires stable IDs.
 
-Players and drops already have usable identity paths. Enemy IDs remain recorded.
+Players, enemies, and drops use stable IDs in the recorded state.
 
-Every active projectile that appears in a frame must also have a stable runtime ID. Live projectile creation therefore assigns an ID once at spawn time, and that ID is recorded in both projectile state and corresponding semantic events.
+Every active projectile that appears in a frame must also have a stable runtime ID. Live projectile creation assigns an ID once at spawn time, and that ID is recorded in both projectile state and corresponding semantic events.
 
 Replay never matches entities by array position.
 
@@ -421,7 +440,7 @@ Dungeon v3 uses a recorder containing two rolling timelines:
 1. state frames;
 2. semantic events.
 
-State sampling remains approximately the current cadence (`minIntervalMs` around 160 ms). The recorder may skip unchanged state frames as it does today.
+State sampling keeps the current approximately 160 ms minimum interval. The recorder may skip unchanged state frames as it does today.
 
 Events are never deduplicated by whole-event JSON equality. Every emitted semantic event is appended with recording-relative `t` and monotonic `seq`.
 
@@ -429,9 +448,9 @@ Both timelines use the same rolling time origin and the same retained window.
 
 ### Event capture
 
-The live Dungeon page attaches the replay recorder to the semantic event sink already emitted by the real scene/gameplay runtimes.
+The live Dungeon page attaches the replay recorder to the semantic event sink emitted by the real scene/gameplay runtimes.
 
-Recording an event must not require a Replay-specific VFX call site. The desired call structure is:
+Recording an event must not require a Replay-specific VFX call site. The required flow is logically equivalent to:
 
 ```js
 emitDungeonEvent(event) {
@@ -441,7 +460,7 @@ emitDungeonEvent(event) {
 }
 ```
 
-Equivalent structure is acceptable, but there must be one semantic event and one presentation path.
+There must be one semantic event and one presentation path.
 
 ## Payload size and compaction
 
@@ -471,7 +490,7 @@ Responsibilities:
 - loop;
 - map wall-clock time to recording time;
 - find surrounding state frames;
-- interpolate continuous fields where useful;
+- interpolate continuous fields;
 - call `scene.applyReplayState(...)`;
 - dispatch each semantic event exactly once while time moves forward;
 - perform coherent seek/reset behavior.
@@ -484,7 +503,7 @@ At normal playback, interpolate continuous positional fields between surrounding
 
 - player `x/y`;
 - enemy `x/y`;
-- projectile `x/y` where appropriate.
+- projectile `x/y`.
 
 Discrete fields use the most recent state at or before the current time:
 
@@ -493,6 +512,7 @@ Discrete fields use the most recent state at or before the current time:
 - attacking;
 - HP;
 - weapon;
+- effects;
 - archetype;
 - phase;
 - floor/room identity.
@@ -517,7 +537,7 @@ Looping uses the same seek/reset path back to zero, preventing stale transient e
 
 `DungeonReplaySurface.svelte` becomes a thin lifecycle wrapper.
 
-Target responsibility:
+Its complete responsibility is:
 
 ```text
 load Phaser/assets
@@ -576,7 +596,7 @@ If a v3 recording is malformed or has no usable frames, player creation fails cl
 
 Unknown event types are ignored by `presentEvent()` in replay mode after validation rather than crashing the timeline.
 
-Unknown durable entity fields are ignored by v3 sanitization. Required identity/type fields are validated before state application.
+Unknown durable entity fields are ignored by v3 sanitization. Entries missing required identity/type fields are rejected by sanitization before state application.
 
 A missing asset uses the same fallback behavior as the live Dungeon scene. Replay must not add a replay-only asset fallback.
 
@@ -587,49 +607,50 @@ Follow TDD. The architecture itself must be protected by tests so a second rende
 ### Recording/schema tests
 
 1. v3 records and round-trips both `frames` and `events`.
-2. event timestamps are recording-relative and `(t, seq)` ordering is stable.
-3. state sanitization preserves the semantic player/enemy/drop/projectile fields required by replay.
-4. presentation implementation details such as `flipX` and texture keys are not serialized.
-5. projectile IDs are stable across frame/event recording.
-6. a busy v3 recording compacts to <= 100 KiB while preserving a coherent newest interval.
-7. compaction never leaves an event earlier than the first retained frame.
-8. Dungeon v2 is not accepted as a v3 recording.
+2. v3 stores world coordinates directly rather than normalized coordinates.
+3. event timestamps are recording-relative and `(t, seq)` ordering is stable.
+4. state sanitization preserves the semantic player/enemy/drop/projectile fields required by replay.
+5. presentation implementation details such as `flipX`, texture keys, particle/tween values, and asset paths are not serialized.
+6. projectile IDs are stable across frame/event recording.
+7. a busy v3 recording compacts to <= 100 KiB while preserving a coherent newest interval.
+8. compaction never leaves an event earlier than the first retained frame.
+9. Dungeon v2 is not accepted as a v3 recording.
 
 ### Replay driver tests
 
-9. playback applies semantic state in timeline order.
-10. continuous positions interpolate between frames.
-11. discrete fields use the previous authoritative frame.
-12. events dispatch exactly once while moving forward.
-13. equal-time events dispatch by `seq`.
-14. pause/resume does not duplicate events.
-15. seek resets transient presentation, restores state, and replays only the short event interval needed to reach the target.
-16. loop reset does not leak events/effects from the previous loop.
+10. playback applies semantic state in timeline order.
+11. continuous positions interpolate between frames.
+12. discrete fields use the previous authoritative frame.
+13. events dispatch exactly once while moving forward.
+14. equal-time events dispatch by `seq`.
+15. pause/resume does not duplicate events.
+16. seek resets transient presentation, restores state, and replays only the short event interval needed to reach the target.
+17. loop reset does not leak events/effects from the previous loop.
 
 ### Real DungeonScene replay-mode tests/contracts
 
-17. replay mode does not auto-run `startFloor()` or generate a wave.
-18. replay mode does not execute player input, enemy AI, combat calculation, auto-attack, skills, random loot, or network simulation.
-19. Phaser presentation remains active; the scene itself is not paused.
-20. `applyReplayState()` reconciles real players by stable ID.
-21. `applyReplayState()` reconciles real enemies through the same entity/presentation construction path used by live gameplay.
-22. `applyReplayState()` reconciles drops through the same real drop presentation path used by live gameplay.
-23. `applyReplayState()` reconciles projectiles through the same real projectile presentation path used by live gameplay.
-24. player facing reaches the existing real player animation/orientation synchronizer; ReplaySurface contains no facing implementation.
-25. live and replay semantic events call the same `scene.presentEvent()` presentation path.
+18. replay mode does not auto-run `startFloor()` or generate a wave.
+19. replay mode does not execute player input, enemy AI, combat calculation, auto-attack, skills, random loot, or network simulation.
+20. Phaser presentation remains active; the scene itself is not paused.
+21. `applyReplayState()` reconciles real players by stable ID.
+22. `applyReplayState()` reconciles real enemies through the same entity/presentation construction path used by live gameplay.
+23. `applyReplayState()` reconciles drops through the same real drop presentation path used by live gameplay.
+24. `applyReplayState()` reconciles projectiles through the same real projectile presentation path used by live gameplay.
+25. player facing reaches the existing real player animation/orientation synchronizer; ReplaySurface contains no facing implementation.
+26. live and replay semantic events call the same `scene.presentEvent()` presentation path.
 
 ### ReplaySurface architectural contract
 
-26. `DungeonReplaySurface.svelte` creates `createDungeonGame({ mode: 'replay' })` and a replay driver.
-27. ReplaySurface does not define `createReplayEnemy`, `syncReplayEnemies`, `syncReplayPlayers`, `syncReplayDrops`, or direct `setFlipX`/health-bar/drop rendering code.
-28. ReplaySurface does not pause the Phaser scene to stop gameplay.
+27. `DungeonReplaySurface.svelte` creates `createDungeonGame({ mode: 'replay' })` and a replay driver.
+28. ReplaySurface does not define `createReplayEnemy`, `syncReplayEnemies`, `syncReplayPlayers`, `syncReplayDrops`, or direct `setFlipX`/health-bar/drop rendering code.
+29. ReplaySurface does not pause the Phaser scene to stop gameplay.
 
 ### Lifecycle regression tests
 
-29. short single-player Dungeon navigation finalizes and uploads replay.
-30. co-op host can record before the second player joins.
-31. a finalized run releases its lease so a second run can record immediately.
-32. final navigation waits for upload before home preview fetch wins the race.
+30. short single-player Dungeon navigation finalizes and uploads replay.
+31. co-op host can record before the second player joins.
+32. a finalized run releases its lease so a second run can record immediately.
+33. final navigation waits for upload before home preview fetch wins the race.
 
 Then run the existing Dungeon foundation contracts and the full frontend production build.
 
