@@ -129,16 +129,16 @@ test('busy lease leaves replay idle without failing gameplay', async () => {
   assert.equal(controller.getState().phase, 'idle')
 })
 
-test('failed initial lease returns to idle instead of fake REC and can retry after room starts', async () => {
+test('failed initial lease returns to idle instead of fake REC and can retry', async () => {
   const clock = fakeClock()
-  let roomStarted = false
+  let allowed = false
   let leases = 0
   const controller = subject({
     clock,
     encode: () => bytes('one'),
     acquireLease: async () => {
       leases += 1
-      if (!roomStarted) throw new Error('replay lease requires the started room host')
+      if (!allowed) throw new Error('replay lease requires the room host')
       return { token: 'lease' }
     },
     upload: async () => {},
@@ -149,7 +149,7 @@ test('failed initial lease returns to idle instead of fake REC and can retry aft
   await clock.advance(3_000)
   assert.equal(controller.getState().phase, 'idle')
 
-  roomStarted = true
+  allowed = true
   assert.equal(await controller.start(), true)
   assert.equal(controller.getState().phase, 'recording')
   assert.equal(leases, 2)
