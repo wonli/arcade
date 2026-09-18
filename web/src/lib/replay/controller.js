@@ -1,4 +1,8 @@
-import { acquireReplayLease as acquireLeaseRequest, uploadReplay } from './client.js'
+import {
+  acquireReplayLease as acquireLeaseRequest,
+  releaseReplayLease as releaseLeaseRequest,
+  uploadReplay,
+} from './client.js'
 import { setReplayStatus } from './status.js'
 
 export const MAX_REPLAY_BYTES = 100 << 10
@@ -13,6 +17,7 @@ export function createReplayController({
   recorder,
   encode,
   acquireLease = (request) => acquireLeaseRequest({ socket, ...request }),
+  releaseLease = (request) => releaseLeaseRequest({ socket, ...request }),
   upload = (payload) => uploadReplay(payload),
   hash = sha256Hex,
   now = () => Date.now(),
@@ -67,12 +72,24 @@ export function createReplayController({
     } catch (error) {
       if (/lease busy/i.test(error?.message ?? '')) {
         active = false
+        lease = null
         clearTimer()
         emit({ phase: 'idle', error: '' })
         return null
       }
       replayError(error)
       return null
+    }
+  }
+
+  async function releaseCurrentLease() {
+    const current = lease
+    lease = null
+    if (!current?.token) return false
+    try {
+      return await releaseLease({ game, lease: current.token })
+    } catch {
+      return false
     }
   }
 
@@ -148,6 +165,7 @@ export function createReplayController({
     clearTimer()
     const uploaded = await uploadCurrent({ final: true })
     active = false
+    await releaseCurrentLease()
     clearErrorTimer()
     if (!uploaded) emit({ phase: 'idle', error: '' })
     else {
@@ -164,6 +182,7 @@ export function createReplayController({
     active = false
     clearTimer()
     clearErrorTimer()
+    void releaseCurrentLease()
     emit({ phase: 'idle', error: '' })
     listeners.clear()
   }
