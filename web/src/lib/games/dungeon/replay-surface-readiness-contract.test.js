@@ -24,8 +24,10 @@ test('replay surface upgrades recorded weapon drops instead of leaving generic p
   assert.match(syncDrops, /scene\.spawnDrop\?\.\(x,\s*y,\s*drop\.item\)/)
   assert.match(syncDrops, /syncReplayGroundWeaponPresentation\(scene,\s*spawned/)
 
-  const attach = source.match(/const\s+attach\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\n\s*requestAnimationFrame\(attach\)/)?.[1] ?? ''
-  const queueIndex = attach.indexOf('queueReplayWeaponArt(scene)')
-  const pauseIndex = attach.indexOf('scene.scene?.pause?.()')
-  assert.ok(queueIndex >= 0 && pauseIndex > queueIndex, 'weapon textures must be queued before the replay scene is paused')
+  assert.match(source, /const\s+queuedWeaponArt\s*=\s*queueReplayWeaponArt\(scene\)/)
+  assert.match(source, /queuedWeaponArt\s*>\s*0[\s\S]*?scene\.load\.once\(['"]complete['"],\s*finishAttach\)[\s\S]*?scene\.load\.start\(\)[\s\S]*?return/)
+
+  const finishAttach = source.match(/const\s+finishAttach\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ''
+  assert.match(finishAttach, /scene\.scene\?\.pause\?\.\(\)/)
+  assert.match(finishAttach, /applyFrame\(firstFrame\)/)
 })
