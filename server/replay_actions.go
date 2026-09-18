@@ -53,7 +53,7 @@ func acquireReplayLease(service *arcade.Service, replays *gamereplay.Store, room
 		return replays.AcquireLease(gameName, holder)
 	}
 	if !service.ReplayHost(roomID, playerID, gameName) {
-		return gamereplay.Lease{}, errors.New("replay lease requires the started room host")
+		return gamereplay.Lease{}, errors.New("replay lease requires the room host")
 	}
 	holder := roomID + ":" + string(playerID)
 	return replays.AcquireLease(gameName, holder)
