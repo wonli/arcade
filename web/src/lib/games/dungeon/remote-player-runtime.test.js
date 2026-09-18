@@ -28,16 +28,34 @@ function sceneFixture() {
   const bars = []
   const syncs = []
   const weaponVisuals = []
+  const listeners = new Map()
   const scene = {
     textures: { exists() { return true } },
+    events: {
+      on(event, handler) {
+        const handlers = listeners.get(event) ?? new Set()
+        handlers.add(handler)
+        listeners.set(event, handlers)
+      },
+      off(event, handler) {
+        listeners.get(event)?.delete(handler)
+      },
+      emit(event, ...args) {
+        for (const handler of listeners.get(event) ?? []) handler(...args)
+      },
+    },
     add: {
       image(x, y, key) {
         const visual = {
           x, y, key,
+          originX: 0.5,
+          originY: 0.5,
+          scaleX: 1,
+          scaleY: 1,
           destroyed: false,
           visible: true,
-          setOrigin() { return this },
-          setScale() { return this },
+          setOrigin(originX, originY) { this.originX = originX; this.originY = originY; return this },
+          setScale(scaleX, scaleY = scaleX) { this.scaleX = scaleX; this.scaleY = scaleY; return this },
           setPosition(nextX, nextY) { this.x = nextX; this.y = nextY; return this },
           setAngle(angle) { this.angle = angle; return this },
           setFlipX(value) { this.flipX = value; return this },
@@ -161,6 +179,46 @@ test('remote equipped weapon creates and follows a weapon presentation', () => {
   assert.equal(remote.runtime.weaponVisuals?.visual?.(), weaponVisuals[0])
   assert.equal(weaponVisuals[0].destroyed, false)
   assert.notEqual(weaponVisuals[0].x, 320)
+})
+
+test('remote weapon reapplies presentation when the scene config arrives after spawn', () => {
+  const { scene, weaponVisuals } = sceneFixture()
+  const remote = spawnRemotePlayer(scene, snapshot('remote', weapon('weapon.sword', 'common')))
+  const visual = weaponVisuals[0]
+
+  scene.__dungeonWeaponPresentation = {
+    version: 1,
+    defaults: {
+      scale: 1,
+      grip: { x: 0.5, y: 0.78 },
+      poses: {
+        idle: {
+          left: { x: 73, y: -19, angle: 37 },
+        },
+      },
+    },
+    weapons: {
+      'weapon.sword': {
+        scale: 1.75,
+        grip: { x: 0.2, y: 0.35 },
+        poses: {
+          idle: {
+            left: { x: 91, y: -27, angle: 211 },
+          },
+        },
+      },
+    },
+  }
+  scene.events.emit('dungeon-weapon-presentation-ready')
+
+  assert.equal(remote.runtime.weaponVisuals.visual(), visual)
+  assert.equal(visual.x, 320 + 91)
+  assert.equal(visual.y, 240 - 27)
+  assert.equal(visual.angle, 211)
+  assert.equal(visual.originX, 0.2)
+  assert.equal(visual.originY, 0.35)
+  assert.equal(visual.scaleX, 1.75)
+  assert.equal(visual.scaleY, 1.75)
 })
 
 test('remote weapon change replaces the previous visual using the shared weapon art profile', () => {

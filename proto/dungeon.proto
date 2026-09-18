@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package arcade.dungeon;
+
+option go_package = "github.com/wonli/arcade/server;server";
+
+message DungeonRequest {
+  string id = 1;
+  string action = 2;
+  bytes params = 3;
+}
+
+message DungeonResponse {
+  int32 code = 1;
+  string action = 2;
+  string id = 3;
+  string msg = 4;
+  bytes data = 5;
+}
+
+message DungeonAck {
+  bool ok = 1;
+}
+
+message DungeonCommand {
+  string type = 1;
+  string skill_id = 2;
+  string drop_id = 3;
+  string chest_id = 4;
+}
+
+message DungeonCommandRequest {
+  string room_id = 1;
+  DungeonCommand command = 2;
+}
+
+message DungeonCommandRelay {
+  string player_id = 1;
+  DungeonCommand command = 2;
+}
+
+message DungeonSnapshot {
+  uint32 slot = 1;
+  float x = 2;
+  float y = 3;
+  int32 hp = 4;
+  int32 max_hp = 5;
+  string facing = 6;
+  bool moving = 7;
+  bool attacking = 8;
+  bool dead = 9;
+  double last_attack_elapsed_ms = 10;
+  double last_contact_elapsed_ms = 11;
+  map<string, double> skill_cooldown_remaining_ms = 12;
+  double haste_remaining_ms = 13;
+  int32 health_potions = 14;
+  // Durable state is kept as a JSON value because equipment and modifiers are
+  // extensible gameplay data. The envelope and transport remain protobuf.
+  string state_json = 15;
+}
+
+message DungeonSnapshotRequest {
+  string room_id = 1;
+  DungeonSnapshot snapshot = 2;
+}
+
+message DungeonSnapshotRelay {
+  string player_id = 1;
+  DungeonSnapshot snapshot = 2;
+}

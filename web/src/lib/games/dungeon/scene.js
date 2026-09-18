@@ -4,6 +4,7 @@ import { attachLocalPlayerEntity } from './player-entity.js'
 import { castPlayerSkill } from './player-skill-runtime.js'
 import { currentEffects, currentWeapon } from './player-loadout.js'
 import { affixSummary } from './affixes.js'
+import { createDefaultPlayerState } from './player-state.js'
 import {
   applyPickup,
   attackInterval,
@@ -22,8 +23,6 @@ import {
 const WIDTH = 960
 const HEIGHT = 600
 const TILE = 48
-const BASE_STATS = { damage: 10, critChance: 0.18, speed: 190, maxHp: 100 }
-
 function normalizeAssets(manifest = {}) {
   if (Array.isArray(manifest.assets)) return manifest.assets
   if (Array.isArray(manifest.png)) return manifest.png.map((path) => ({ path, frames: 1, frameWidth: 0, frameHeight: 0 }))
@@ -154,17 +153,10 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       super('Dungeon')
       attachLocalPlayerEntity(this, {
         id: 'local',
-        state: {
+        state: createDefaultPlayerState({
           x: WIDTH / 2,
           y: HEIGHT / 2,
-          hp: BASE_STATS.maxHp,
-          ...BASE_STATS,
-          baseStats: { ...BASE_STATS },
-          critMultiplier: 2,
-          equipment: { weapon: null },
-          modifiers: {},
-          hasteUntil: 0,
-        },
+        }),
         facing: 'down',
       })
       this.enemies = []

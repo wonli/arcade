@@ -56,6 +56,37 @@ test('remote snapshot trusts relay identity and updates an existing remote in pl
   assert.equal(first.moving, true)
 })
 
+test('slim bootstrap snapshot keeps canonical default combat state', () => {
+  const { scene, localPlayer } = sceneFixture('host')
+  const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'host' })
+
+  const guest = replication.applyRemote('guest', {
+    id: 'guest',
+    state: { x: 120, y: 40, hp: 100, maxHp: 100 },
+  })
+
+  assert.equal(guest.state.damage, 10)
+  assert.equal(guest.state.baseStats.damage, 10)
+  assert.deepEqual(guest.state.equipment, { weapon: null })
+  assert.deepEqual(guest.state.modifiers, {})
+})
+
+test('realtime snapshot merges slim state without dropping the remote loadout', () => {
+  const { scene, localPlayer } = sceneFixture('host')
+  const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'host' })
+  const guest = replication.applyRemote('guest', {
+    id: 'guest',
+    state: { ...state(100), equipment: { weapon: { id: 'blood-reaver' } } },
+  })
+
+  replication.applyRemote('guest', { id: 'spoofed', state: { x: 180, y: 40, hp: 75 } })
+
+  assert.equal(guest.state.x, 180)
+  assert.equal(guest.state.hp, 75)
+  assert.equal(guest.state.equipment.weapon.id, 'blood-reaver')
+  assert.equal(guest.state.maxHp, 100)
+})
+
 test('presence reconciliation moves an existing remote without accepting durable gameplay state', () => {
   const { scene, localPlayer } = sceneFixture('host')
   const replication = createPlayerReplicationRuntime({ scene, localPlayer, localPlayerId: 'host' })

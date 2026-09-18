@@ -6,13 +6,18 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "test": "node --test src/lib/*.test.js src/lib/games/**/*.test.js"
+    "generate:dungeon-proto": "node scripts/generate-dungeon-proto.mjs",
+    "test": "node --test src/lib/*.test.js src/lib/ws/*.test.js src/lib/games/**/*.test.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",
     "@sveltejs/kit": "latest",
     "@sveltejs/vite-plugin-svelte": "latest",
+    "protobufjs-cli": "^1.3.3",
     "svelte": "latest",
     "vite": "latest"
+  },
+  "dependencies": {
+    "protobufjs": "^7.6.6"
   }
 }

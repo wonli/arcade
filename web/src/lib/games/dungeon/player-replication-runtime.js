@@ -53,7 +53,16 @@ export function createPlayerReplicationRuntime({ scene, localPlayer, localPlayer
     const existing = scene.players.get(trustedSnapshot.id)
     if (!existing) return spawnRemotePlayer(scene, trustedSnapshot)
 
-    applyPlayerSnapshot(existing, trustedSnapshot)
+    const mergedSnapshot = {
+      ...trustedSnapshot,
+      state: {
+        ...existing.state,
+        ...trustedSnapshot.state,
+        equipment: trustedSnapshot.state?.equipment ?? existing.state?.equipment,
+        modifiers: trustedSnapshot.state?.modifiers ?? existing.state?.modifiers,
+      },
+    }
+    applyPlayerSnapshot(existing, mergedSnapshot)
     syncRemotePlayerPresentation(scene, existing)
     return existing
   }

@@ -1,4 +1,5 @@
 import Ws, { type WSResponse } from './wslib'
+import { decodeDungeonMessage, encodeDungeonRequest, isDungeonBinaryAction } from './dungeon-proto.js'
 
 type ConnectionListener = (state: 'live' | 'offline') => void
 type MessageListener = (message: WSResponse) => void
@@ -25,6 +26,12 @@ class ArcadeSocket {
       client = new Ws(wsURL(), {
         reconnect: false,
         logger: () => {},
+        pack: (request) => isDungeonBinaryAction(request.action)
+          ? encodeDungeonRequest(request)
+          : JSON.stringify(request),
+        unpack: (data) => typeof data === 'string'
+          ? JSON.parse(data)
+          : decodeDungeonMessage(data),
         dispatcher: () => ({}),
         onConnect: () => {
           opened = true

@@ -304,6 +304,7 @@ export function installDungeonWeaponVisuals(scene, { player = scene?.localPlayer
         if (!payload?.config || scene.__dungeonWeaponPresentation) return
         scene.__dungeonWeaponPresentation = payload.config
         sync()
+        scene.events?.emit?.('dungeon-weapon-presentation-ready')
       })
       .catch(() => {})
   }

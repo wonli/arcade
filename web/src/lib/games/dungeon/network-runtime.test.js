@@ -124,6 +124,21 @@ test('later remote snapshots update the existing player presentation', () => {
   assert.equal(guest.moving, true)
 })
 
+test('direct binary snapshot actions enter the same replication path as room messages', () => {
+  const scene = sceneFixture('host')
+  const socket = socketFixture()
+  const runtime = createDungeonNetworkRuntime({ socket, scene, roomId: 'ABC123', localPlayerId: 'host', hostId: 'host' })
+
+  runtime.handleMessage({
+    action: 'dungeon.snapshot',
+    data: { playerId: 'guest', snapshot: { id: 'spoofed', state: state(155), facing: 'up' } },
+  })
+
+  assert.equal(scene.players.has('spoofed'), false)
+  assert.equal(scene.players.get('guest')?.state.x, 155)
+  assert.equal(scene.players.get('guest')?.facing, 'up')
+})
+
 test('current authority executes guest semantic commands using relay identity and authority time', () => {
   const scene = sceneFixture('host')
   const socket = socketFixture()

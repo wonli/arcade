@@ -618,8 +618,19 @@ export function createDungeonNetworkRuntime({
   }
 
   function handleMessage(message) {
+    const directAction = message?.action === 'dungeon.snapshot' || message?.action === 'dungeon.command'
+    if (directAction) {
+      const directPayload = message?.data
+      if (!directPayload || typeof directPayload !== 'object') return null
+      return handlePayload({ ...directPayload, type: message.action })
+    }
+
     if (message?.data?.topicId && message.data.topicId !== topic) return null
     const payload = message?.data?.message
+    return handlePayload(payload)
+  }
+
+  function handlePayload(payload) {
     if (!payload || typeof payload !== 'object') return null
 
     const sourcePlayerId = String(payload.playerId ?? '').trim()
@@ -699,7 +710,14 @@ export function createDungeonNetworkRuntime({
     else syncRuntime.startFollowerHydration()
     installPickupIntentMirror()
     installChestMirrors()
-    unsubscribe = socket.subscribe(topic, handleMessage)
+    const unsubscribers = [
+      socket.subscribe(topic, handleMessage),
+      socket.subscribe('dungeon.snapshot', handleMessage),
+      socket.subscribe('dungeon.command', handleMessage),
+    ]
+    unsubscribe = () => {
+      for (const unsubscribe of unsubscribers) unsubscribe?.()
+    }
     timer = setIntervalImpl(() => {
       tickLifecycle()
       if (serverHydrationPending) {

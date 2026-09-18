@@ -38,6 +38,7 @@ export function stableWorldEntityId(runSeed, floor, kind, index = 0) {
 function syncPlayerPresentation(scene, player) {
   player?.actor?.setPosition?.(player.state.x, player.state.y)
   scene.updateHealthBar?.(player?.bar, player?.state?.x, (player?.state?.y ?? 0) - 42, player?.state?.hp, player?.state?.maxHp)
+  player?.runtime?.weaponVisuals?.sync?.()
   scene.syncPlayerAnimation?.(null, player)
 }
 
@@ -207,10 +208,9 @@ export function createDungeonWorldRuntime(scene, {
     removeDropById(drop.id, { player, reason: 'pickup' })
 
     scene.pickupBurst?.(x, y, drop.item, healed)
-    scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
-    if (player === scene.localPlayer) scene.emitStats?.()
-
     if (previous && drop.item?.type?.startsWith?.('weapon.')) loot.spawn(x, y, previous)
+    syncPlayerPresentation(scene, player)
+    if (player === scene.localPlayer) scene.emitStats?.()
     return { picked: true, dropId: drop.id, item: drop.item, healed }
   }
 

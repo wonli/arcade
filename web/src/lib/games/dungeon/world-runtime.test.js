@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { attachLocalPlayerEntity } from './player-entity.js'
+import { attachLocalPlayerEntity, attachPlayerEntity } from './player-entity.js'
 import { createDungeonWorldRuntime, stableWorldEntityId } from './world-runtime.js'
 
 function visual(type = 'skeleton') {
@@ -299,4 +299,62 @@ test('canonical world state restores an open portal on a refreshing follower', (
   assert.equal(guest.portal?.id, 'portal:ABC123:1:0')
   assert.equal(guest.portal?.x, 480)
   assert.equal(guest.portal?.y, 518)
+})
+
+test('replicated pickup refreshes the equipped weapon presentation immediately', () => {
+  const scene = sceneFixture()
+  let weaponSyncs = 0
+  scene.localPlayer.runtime.weaponVisuals = { sync() { weaponSyncs++ } }
+  scene.drops.push({ id: 'drop-1', x: 120, y: 100, item: { type: 'weapon.old' }, visual: visual('drop') })
+  const runtime = createDungeonWorldRuntime(scene, { runSeed: 'ABC123', isHost: false })
+  runtime.start()
+
+  runtime.applyFact({
+    type: 'drop.pickup',
+    entityId: 'drop-1',
+    playerId: 'local',
+    player: {
+      id: 'local',
+      state: {
+        x: 120,
+        y: 100,
+        hp: 100,
+        maxHp: 100,
+        equipment: { weapon: { type: 'weapon.iron_fang', archetype: 'sword', rarity: 'rare' } },
+        modifiers: {},
+      },
+      facing: 'left',
+    },
+  })
+
+  assert.equal(weaponSyncs, 1)
+})
+
+test('authoritative pickup refreshes a remote player weapon presentation immediately', () => {
+  const scene = sceneFixture()
+  const remote = attachPlayerEntity(scene, {
+    id: 'remote',
+    state: {
+      x: 100,
+      y: 100,
+      hp: 100,
+      maxHp: 100,
+      equipment: { weapon: null },
+      modifiers: {},
+    },
+  })
+  let weaponSyncs = 0
+  remote.runtime.weaponVisuals = { sync() { weaponSyncs++ } }
+  scene.drops.push({ id: 'drop-1', x: 100, y: 100, item: { type: 'weapon.iron_fang', rarity: 'rare' }, visual: visual('drop') })
+  const runtime = createDungeonWorldRuntime(scene, {
+    runSeed: 'ABC123',
+    isHost: true,
+    publishFact() {},
+  })
+  runtime.start()
+
+  const result = runtime.pickupById(remote, 'drop-1')
+
+  assert.equal(result.picked, true)
+  assert.equal(weaponSyncs, 1)
 })

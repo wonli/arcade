@@ -61,8 +61,8 @@ export interface WSConfig {
   onHeartbeat: (ws: Ws) => void;
   dispatcher: () => WSDispatcher;
   logger: (log: any) => void;
-  pack: (data: WSRequest) => string;
-  unpack: (data: string) => WSResponse | undefined;
+  pack: (data: WSRequest) => string | ArrayBuffer | Uint8Array;
+  unpack: (data: string | ArrayBuffer | Uint8Array) => WSResponse | undefined;
   webSocketMessage: (event: MessageEvent) => void;
 }
 
@@ -139,7 +139,8 @@ class Ws {
 
       return res
     },
-    unpack (res: string) {
+    unpack (res: string | ArrayBuffer | Uint8Array) {
+      if (typeof res !== 'string') throw new Error('binary websocket payload requires a custom unpacker')
       return JSON.parse(res)
     },
     webSocketMessage (event: MessageEvent) {
@@ -150,6 +151,7 @@ class Ws {
     this.callback = Object.assign(this.config.callback, this.config.dispatcher());
     //连接服务器
     this.connect = new WebSocket(server);
+    this.connect.binaryType = 'arraybuffer';
 
     /**
      * 创建连接

@@ -2,6 +2,8 @@ import { attachPlayerEntity, detachPlayerEntity } from './player-entity.js'
 import { currentWeapon } from './player-loadout.js'
 import { applyPlayerSnapshot } from './player-snapshot.js'
 import { createWeaponVisual, weaponPose, weaponVisualProfile } from './weapon-visual-runtime.js'
+import { DEFAULT_WEAPON_PRESENTATION, resolveWeaponPresentation } from './weapon-presentation.js'
+import { createDefaultPlayerState } from './player-state.js'
 
 function restorePlayerRuntime(player) {
   const restored = new Set()
@@ -65,11 +67,19 @@ function installRemoteWeaponPresentation(scene, player) {
     }
     if (!visual) return null
 
+    const presentation = resolveWeaponPresentation(
+      scene.__dungeonWeaponPresentation ?? DEFAULT_WEAPON_PRESENTATION,
+      item,
+      player.facing,
+      { attacking: Boolean(player.attacking) },
+    )
     const pose = weaponPose(player.state, player.facing, {
       attacking: Boolean(player.attacking),
       presentationConfig: scene.__dungeonWeaponPresentation ?? null,
       item,
     })
+    visual.setOrigin?.(presentation.grip.x, presentation.grip.y)
+    visual.setScale?.(profile.scale * presentation.scale)
     visual.setPosition?.(pose.x, pose.y)
     visual.setAngle?.(pose.angle)
     visual.setFlipX?.(pose.flipX)
@@ -77,8 +87,12 @@ function installRemoteWeaponPresentation(scene, player) {
     return visual
   }
 
+  const onPresentationReady = () => sync()
+  scene.events?.on?.('dungeon-weapon-presentation-ready', onPresentationReady)
+
   let api = null
   const restore = () => {
+    scene.events?.off?.('dungeon-weapon-presentation-ready', onPresentationReady)
     destroyVisual()
     if (player.runtime?.weaponVisuals === api) delete player.runtime.weaponVisuals
   }
@@ -130,8 +144,15 @@ export function spawnRemotePlayer(scene, snapshot) {
     throw new Error(`Remote player ${id} conflicts with local player`)
   }
 
-  const player = attachPlayerEntity(scene, { id, state: snapshot.state ?? {} })
-  applyPlayerSnapshot(player, snapshot)
+  const normalizedSnapshot = {
+    ...snapshot,
+    state: createDefaultPlayerState(snapshot.state ?? {}),
+  }
+  const player = attachPlayerEntity(scene, {
+    id,
+    state: normalizedSnapshot.state,
+  })
+  applyPlayerSnapshot(player, normalizedSnapshot)
 
   player.actor = createRemoteActor(scene, player.state.x, player.state.y)
   player.actor?.setDepth?.(20)

@@ -5,23 +5,15 @@ import (
 	"strings"
 
 	"github.com/wonli/aqi/ws"
+	"github.com/wonli/arcade/arcade"
 	"github.com/wonli/arcade/game"
 )
 
 func (a *Actions) RegisterDungeon(router ws.IRouter) {
-	router.Add("dungeon.snapshot", a.dungeonSnapshot)
-	router.Add("dungeon.command", a.dungeonCommand)
+	binary := router.Coder(NewDungeonProtoCoder())
+	binary.Add("dungeon.snapshot", a.dungeonSnapshot)
+	binary.Add("dungeon.command", a.dungeonCommand)
 	router.Add("dungeon.fact", a.dungeonFact)
-}
-
-type dungeonSnapshotRequest struct {
-	RoomID   string          `json:"roomId"`
-	Snapshot json.RawMessage `json:"snapshot"`
-}
-
-type dungeonCommandRequest struct {
-	RoomID  string          `json:"roomId"`
-	Command json.RawMessage `json:"command"`
 }
 
 type dungeonFactRequest struct {
@@ -39,20 +31,19 @@ func (a *Actions) dungeonSnapshot(c *ws.Context) {
 		c.SendCode(401, "guest login required")
 		return
 	}
-	var req dungeonSnapshotRequest
-	if err := c.BindingJson(&req); err != nil || dungeonRoomID(req.RoomID) == "" || len(req.Snapshot) == 0 {
+	var req DungeonSnapshotRequest
+	if err := c.Bind(&req); err != nil || dungeonRoomID(req.GetRoomId()) == "" || req.GetSnapshot() == nil {
 		c.SendCode(400, "invalid dungeon snapshot")
 		return
 	}
-	roomID := dungeonRoomID(req.RoomID)
+	roomID := dungeonRoomID(req.GetRoomId())
 	if _, member := a.service.DungeonPeer(roomID, playerID); !member {
 		c.SendCode(403, "dungeon room membership required")
 		return
 	}
-	c.Pub(roomTopic(roomID), ws.H{
-		"type":     "dungeon.snapshot",
-		"playerId": playerID,
-		"snapshot": req.Snapshot,
+	a.sendDungeonToRoom(c, roomID, playerID, "dungeon.snapshot", &DungeonSnapshotRelay{
+		PlayerId: string(playerID),
+		Snapshot: req.GetSnapshot(),
 	})
 	c.Send(ws.H{"ok": true})
 }
@@ -63,22 +54,34 @@ func (a *Actions) dungeonCommand(c *ws.Context) {
 		c.SendCode(401, "guest login required")
 		return
 	}
-	var req dungeonCommandRequest
-	if err := c.BindingJson(&req); err != nil || dungeonRoomID(req.RoomID) == "" || len(req.Command) == 0 {
+	var req DungeonCommandRequest
+	if err := c.Bind(&req); err != nil || dungeonRoomID(req.GetRoomId()) == "" || req.GetCommand() == nil {
 		c.SendCode(400, "invalid dungeon command")
 		return
 	}
-	roomID := dungeonRoomID(req.RoomID)
+	roomID := dungeonRoomID(req.GetRoomId())
 	if _, member := a.service.DungeonPeer(roomID, playerID); !member {
 		c.SendCode(403, "dungeon room membership required")
 		return
 	}
-	c.Pub(roomTopic(roomID), ws.H{
-		"type":     "dungeon.command",
-		"playerId": playerID,
-		"command":  req.Command,
+	a.sendDungeonToRoom(c, roomID, playerID, "dungeon.command", &DungeonCommandRelay{
+		PlayerId: string(playerID),
+		Command:  req.GetCommand(),
 	})
 	c.Send(ws.H{"ok": true})
+}
+
+func (a *Actions) sendDungeonToRoom(c *ws.Context, roomID string, sender game.PlayerID, action string, data any) {
+	room, ok := a.service.Get(roomID)
+	if !ok {
+		return
+	}
+	for _, player := range room.Players {
+		if player.ID == sender {
+			continue
+		}
+		c.SendTo(arcade.GuestUID(string(player.ID)), action, data)
+	}
 }
 
 func (a *Actions) dungeonFactRelayAllowed(roomID string, playerID game.PlayerID) bool {
