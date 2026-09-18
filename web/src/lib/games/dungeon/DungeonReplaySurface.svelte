@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
+  import { normalizeDungeonReplayPlayers } from './replay.js'
+  import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
   import { setProceduralRunSeed } from './spatial.js'
   import { installDungeonSpatial } from './spatial-runtime.js'
   import { loadPhaser } from './phaser.js'
@@ -31,6 +33,13 @@
   function destroyReplayEnemies() {
     for (const enemy of replayEnemies.values()) destroyReplayEnemy(enemy)
     replayEnemies.clear()
+  }
+
+  function destroyReplayPlayers() {
+    if (!(scene?.players instanceof Map)) return
+    for (const player of [...scene.players.values()]) {
+      if (player !== scene.localPlayer) despawnRemotePlayer(scene, player)
+    }
   }
 
   function clearReplayDrops() {
@@ -176,29 +185,97 @@
     }
   }
 
-  function syncReplayPlayer(frame = {}) {
-    const source = frame.player ?? {}
-    const player = scene.localPlayer
-    if (!player?.state) return
+  function bindReplayLocalPlayer(source) {
+    const player = scene?.localPlayer
+    if (!player?.state) return null
+    const id = String(source?.id || 'player-0')
+    if (String(player.id) === id) return player
 
+    if (scene.players instanceof Map) {
+      if (scene.players.get(player.id) === player) scene.players.delete(player.id)
+      const conflict = scene.players.get(id)
+      if (conflict && conflict !== player) despawnRemotePlayer(scene, conflict)
+      player.id = id
+      scene.players.set(id, player)
+    } else {
+      player.id = id
+    }
+    return player
+  }
+
+  function replayPlayerSnapshot(source) {
     const x = Math.min(1, Math.max(0, Number(source.x) || 0)) * 960
     const y = Math.min(1, Math.max(0, Number(source.y) || 0)) * 600
-    player.state.x = x
-    player.state.y = y
-    player.state.hp = Number(frame.stats?.hp ?? player.state.hp ?? 0)
-    player.state.maxHp = Math.max(1, Number(frame.stats?.maxHp ?? player.state.maxHp ?? 100))
-    player.facing = ['up', 'down', 'left', 'right'].includes(source.facing) ? source.facing : 'down'
-    player.moving = !!source.moving
-    player.attacking = !!source.attacking
-    player.actor?.setPosition?.(x, y)
-    scene.updateHealthBar?.(player.bar, x, y - 42, player.state.hp, player.state.maxHp)
-    scene.syncPlayerAnimation?.(player.attacking ? 'attack' : null, player)
+    return {
+      id: String(source.id || 'player-0'),
+      slot: Number.isInteger(source.slot) ? source.slot : null,
+      state: {
+        x,
+        y,
+        hp: Math.max(0, Number(source.hp) || 0),
+        maxHp: Math.max(1, Number(source.maxHp) || 100),
+      },
+      facing: ['up', 'down', 'left', 'right'].includes(source.facing) ? source.facing : 'down',
+      moving: !!source.moving,
+      attacking: !!source.attacking,
+      dead: !!source.dead,
+    }
+  }
+
+  function applyReplayPlayer(player, snapshot, local = false) {
+    if (!player?.state) return null
+    player.slot = Number.isInteger(snapshot.slot) ? snapshot.slot : player.slot ?? null
+    player.state.x = snapshot.state.x
+    player.state.y = snapshot.state.y
+    player.state.hp = snapshot.state.hp
+    player.state.maxHp = snapshot.state.maxHp
+    player.facing = snapshot.facing
+    player.moving = snapshot.moving
+    player.attacking = snapshot.attacking
+    player.dead = snapshot.dead
+
+    if (local) {
+      player.actor?.setPosition?.(player.state.x, player.state.y)
+      scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
+      scene.syncPlayerAnimation?.(player.attacking ? 'attack' : null, player)
+    } else {
+      syncRemotePlayerPresentation(scene, player)
+    }
+    return player
+  }
+
+  function syncReplayPlayers(frame = {}) {
+    const sources = normalizeDungeonReplayPlayers(frame)
+    if (!sources.length) return
+
+    const localSource = sources[0]
+    const localPlayer = bindReplayLocalPlayer(localSource)
+    const seen = new Set()
+
+    for (const source of sources) {
+      const snapshot = replayPlayerSnapshot(source)
+      seen.add(snapshot.id)
+      if (snapshot.id === String(localPlayer?.id)) {
+        applyReplayPlayer(localPlayer, snapshot, true)
+        continue
+      }
+
+      let player = scene.players instanceof Map ? scene.players.get(snapshot.id) : null
+      if (!player) player = spawnRemotePlayer(scene, snapshot)
+      applyReplayPlayer(player, snapshot, false)
+    }
+
+    if (!(scene.players instanceof Map)) return
+    for (const player of [...scene.players.values()]) {
+      if (player === localPlayer || seen.has(String(player.id))) continue
+      despawnRemotePlayer(scene, player)
+    }
   }
 
   function applyFrame(frame = {}) {
     if (!scene) return
     rebuildSceneIfNeeded(frame)
-    syncReplayPlayer(frame)
+    syncReplayPlayers(frame)
     syncReplayEnemies(frame.enemies ?? [])
     syncReplayDrops(frame.drops ?? [])
   }
@@ -250,6 +327,7 @@
   onMount(() => {
     startReplay().catch((error) => console.warn('Dungeon replay surface failed:', error))
     return () => {
+      destroyReplayPlayers()
       destroyReplayEnemies()
       clearReplayDrops()
       game?.destroy?.(true)

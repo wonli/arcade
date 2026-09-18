@@ -8,7 +8,22 @@ on:
       - 'arcade/**'
       - 'server/**'
       - 'web/src/lib/games/dungeon/**'
+      - 'web/src/lib/replay/**'
       - 'web/src/routes/room/[code]/dungeon/+page.svelte'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - '.github/workflows/dungeon-foundation.yml'
+      - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
+      - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
+  pull_request:
+    paths:
+      - 'arcade/**'
+      - 'server/**'
+      - 'web/src/lib/games/dungeon/**'
+      - 'web/src/lib/replay/**'
+      - 'web/src/routes/room/[code]/dungeon/+page.svelte'
+      - 'web/package.json'
+      - 'web/package-lock.json'
       - '.github/workflows/dungeon-foundation.yml'
       - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
       - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
@@ -38,11 +53,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
 
       - name: Run focused Dungeon foundation contracts
         working-directory: web
         run: |
           node --test \
+            src/lib/games/dungeon/replay.test.js \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/checkpoint-clock-state.test.js \
             src/lib/games/dungeon/session-gameplay-clock.test.js \
@@ -84,3 +106,7 @@ jobs:
             src/lib/games/dungeon/network-reconnect-regression.test.js \
             src/lib/games/dungeon/coop-session-command-regression.test.js \
             src/lib/games/dungeon/network-runtime.test.js
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build

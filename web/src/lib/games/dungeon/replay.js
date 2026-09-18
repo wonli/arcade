@@ -7,7 +7,8 @@ const PLAYER_DIRECTIONS = new Set(['up', 'down', 'left', 'right'])
 
 export const replay = Object.freeze({
   id: 'dungeon',
-  version: 1,
+  version: 2,
+  normalizePlayers: normalizeDungeonReplayPlayers,
   createRecorder({ now } = {}) {
     return createSnapshotRecorder({ windowMs: 20_000, minIntervalMs: 160, sanitize: sanitizeState, now })
   },
@@ -24,27 +25,27 @@ export const replay = Object.freeze({
 })
 
 export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, progress = {}, width = DUNGEON_WIDTH, height = DUNGEON_HEIGHT } = {}) {
-  const playerEntity = player ?? scene?.localPlayer
-  const playerState = playerEntity?.state
-  if (!playerState) return null
-
-  const liveProgress = scene?.__infiniteDungeon?.getProgress?.() ?? progress ?? {}
-  const normalizedProgress = normalizeProgress(liveProgress, scene)
   const normalizedWidth = Math.max(1, Number(width) || DUNGEON_WIDTH)
   const normalizedHeight = Math.max(1, Number(height) || DUNGEON_HEIGHT)
   const normalizeX = (value) => clamp01(Number(value ?? 0) / normalizedWidth)
   const normalizeY = (value) => clamp01(Number(value ?? 0) / normalizedHeight)
+  const playerEntities = replayPlayerEntities(scene, player)
+  if (!playerEntities.length) return null
+
+  const players = playerEntities
+    .map((entity, index) => liveReplayPlayer(entity, index, normalizeX, normalizeY))
+    .filter(Boolean)
+    .sort(compareReplayPlayers)
+  if (!players.length) return null
+
+  const localState = scene?.localPlayer?.state ?? playerEntities[0]?.state ?? {}
+  const liveProgress = scene?.__infiniteDungeon?.getProgress?.() ?? progress ?? {}
+  const normalizedProgress = normalizeProgress(liveProgress, scene)
 
   return {
     sceneKey: sceneKey(normalizedProgress),
     runSeed: normalizeRunSeed(scene?.__roomGeometry?.runSeed),
-    player: {
-      x: normalizeX(playerState.x),
-      y: normalizeY(playerState.y),
-      facing: normalizeFacing(playerEntity?.facing),
-      moving: !!playerEntity?.moving,
-      attacking: !!playerEntity?.attacking,
-    },
+    players,
     enemies: (scene?.enemies ?? []).map((enemy, index) => ({
       id: String(enemy?.id ?? `enemy-${index}`).slice(0, 80),
       x: normalizeX(enemy?.x),
@@ -64,29 +65,92 @@ export function createDungeonReplaySnapshot({ scene, player = null, stats = {}, 
       item: compactItem(drop?.item),
     })).filter((drop) => drop.item),
     stats: {
-      hp: stats?.hp ?? playerState.hp ?? 0,
-      maxHp: stats?.maxHp ?? playerState.maxHp ?? 100,
+      hp: stats?.hp ?? localState.hp ?? 0,
+      maxHp: stats?.maxHp ?? localState.maxHp ?? 100,
       kills: stats?.kills ?? scene?.kills ?? 0,
     },
     progress: normalizedProgress,
   }
 }
 
+export function normalizeDungeonReplayPlayers(state = {}) {
+  const source = Array.isArray(state.players) && state.players.length
+    ? state.players
+    : state.player
+      ? [{
+          id: 'player-0',
+          slot: 0,
+          ...state.player,
+          hp: state.player.hp ?? state.stats?.hp,
+          maxHp: state.player.maxHp ?? state.stats?.maxHp,
+          dead: state.player.dead ?? false,
+        }]
+      : []
+
+  return source
+    .slice(0, 8)
+    .map((entry, index) => sanitizeReplayPlayer(entry, index))
+    .filter(Boolean)
+    .sort(compareReplayPlayers)
+}
+
+function replayPlayerEntities(scene, explicitPlayer) {
+  if (explicitPlayer?.state) return [explicitPlayer]
+  if (scene?.players instanceof Map && scene.players.size) {
+    return [...scene.players.values()].filter((entity) => entity?.state)
+  }
+  return scene?.localPlayer?.state ? [scene.localPlayer] : []
+}
+
+function liveReplayPlayer(entity, index, normalizeX, normalizeY) {
+  const state = entity?.state
+  if (!state) return null
+  return {
+    id: String(entity.id ?? `player-${index}`).slice(0, 80),
+    slot: Number.isInteger(entity.slot) ? entity.slot : index,
+    x: normalizeX(state.x),
+    y: normalizeY(state.y),
+    hp: Math.max(0, int(state.hp)),
+    maxHp: Math.max(1, int(state.maxHp) || 100),
+    facing: normalizeFacing(entity.facing),
+    moving: !!entity.moving,
+    attacking: !!entity.attacking,
+    dead: !!entity.dead,
+  }
+}
+
+function sanitizeReplayPlayer(player, index) {
+  if (!player || typeof player !== 'object') return null
+  return {
+    id: String(player.id ?? `player-${index}`).slice(0, 80),
+    slot: Number.isInteger(player.slot) ? player.slot : index,
+    x: round(player.x),
+    y: round(player.y),
+    hp: Math.max(0, int(player.hp)),
+    maxHp: Math.max(1, int(player.maxHp) || 100),
+    facing: normalizeFacing(player.facing),
+    moving: !!player.moving,
+    attacking: !!player.attacking,
+    dead: !!player.dead,
+  }
+}
+
+function compareReplayPlayers(left, right) {
+  const leftSlot = Number.isInteger(left?.slot) ? left.slot : Number.MAX_SAFE_INTEGER
+  const rightSlot = Number.isInteger(right?.slot) ? right.slot : Number.MAX_SAFE_INTEGER
+  if (leftSlot !== rightSlot) return leftSlot - rightSlot
+  return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
+}
+
 function sanitizeState(state = {}) {
-  const player = state.player ? {
-    x: round(state.player.x),
-    y: round(state.player.y),
-    facing: normalizeFacing(state.player.facing),
-    moving: !!state.player.moving,
-    attacking: !!state.player.attacking,
-  } : null
-  if (!player) return null
+  const players = normalizeDungeonReplayPlayers(state)
+  if (!players.length) return null
 
   const progress = normalizeProgress(state.progress)
   return {
     sceneKey: String(state.sceneKey ?? sceneKey(progress)).slice(0, 80),
     runSeed: normalizeRunSeed(state.runSeed),
-    player,
+    players,
     enemies: (state.enemies ?? []).slice(0, 28).map((enemy, index) => ({
       id: String(enemy.id ?? `enemy-${index}`).slice(0, 80),
       x: round(enemy.x),
