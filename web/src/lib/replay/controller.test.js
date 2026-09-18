@@ -154,3 +154,18 @@ test('failed initial lease returns to idle instead of fake REC and can retry', a
   assert.equal(controller.getState().phase, 'recording')
   assert.equal(leases, 2)
 })
+
+test('controller forwards semantic events only when recorder supports them', () => {
+  const events = []
+  const recorder = {
+    recordEvent(event, at) { events.push([event, at]); return true },
+    snapshot: () => ({ durationMs: 1, frames: [{ t: 0, state: {} }] }),
+    reset() {},
+  }
+  const controller = createReplayController({ game: 'dungeon', recorder, encode: () => bytes('one') })
+  assert.equal(controller.recordEvent({ type: 'hit' }, 42), true)
+  assert.deepEqual(events, [[{ type: 'hit' }, 42]])
+
+  const legacy = createReplayController({ game: 'snake', recorder: { record() {} }, encode: () => bytes('one') })
+  assert.equal(legacy.recordEvent({ type: 'hit' }, 42), false)
+})
