@@ -2,6 +2,7 @@ import { ensureDungeonEnemyRuntime } from './enemy-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { ensureDungeonLootRuntime } from './loot-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
+import { installDungeonProjectilePresentation } from './projectile-presentation-runtime.js'
 import { applyEquipmentState } from './player-loadout.js'
 import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
 
@@ -12,6 +13,7 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
   const enemyPresentation = dependencies.enemyPresentation ?? installEnemyPresentationRuntime(scene)
   const loot = dependencies.loot ?? ensureDungeonLootRuntime(scene)
   const portalPresentation = dependencies.portalPresentation ?? installPortalPresentationRuntime(scene)
+  const projectilePresentation = dependencies.projectilePresentation ?? installDungeonProjectilePresentation(scene)
   const spawnRemote = dependencies.spawnRemote ?? spawnRemotePlayer
   const syncRemote = dependencies.syncRemote ?? syncRemotePlayerPresentation
   const despawnRemote = dependencies.despawnRemote ?? despawnRemotePlayer
@@ -187,28 +189,8 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
 
   function applyProjectiles(values) {
     const snapshots = Array.isArray(values) ? values.filter(Boolean) : []
-    const existing = new Map((scene.enemyProjectiles ?? []).map((projectile) => [String(projectile?.id ?? ''), projectile]))
-    const next = []
-    for (let index = 0; index < snapshots.length; index++) {
-      const snapshot = snapshots[index]
-      const id = String(snapshot.id ?? `projectile:${index}`)
-      const projectile = existing.get(id) ?? { id, kind: snapshot.kind ?? 'enemy', ownerId: snapshot.ownerId ?? '' }
-      projectile.x = finiteNumber(snapshot.x, projectile.x)
-      projectile.y = finiteNumber(snapshot.y, projectile.y)
-      projectile.vx = finiteNumber(snapshot.vx, projectile.vx)
-      projectile.vy = finiteNumber(snapshot.vy, projectile.vy)
-      projectile.kind = snapshot.kind ?? projectile.kind ?? 'enemy'
-      projectile.ownerId = String(snapshot.ownerId ?? projectile.ownerId ?? '')
-      projectile.visual?.setPosition?.(projectile.x, projectile.y)
-      projectile.glow?.setPosition?.(projectile.x, projectile.y)
-      next.push(projectile)
-      existing.delete(id)
-    }
-    for (const projectile of existing.values()) {
-      projectile.visual?.destroy?.()
-      projectile.glow?.destroy?.()
-    }
-    scene.enemyProjectiles = next
+    const materialized = projectilePresentation?.reconcile?.(snapshots) ?? []
+    scene.enemyProjectiles = materialized
   }
 
   function resetTransient() {
@@ -218,10 +200,7 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
     enemyPresentation?.clearAll?.()
     loot?.clear?.()
     portalPresentation?.remove?.()
-    for (const projectile of scene.enemyProjectiles ?? []) {
-      projectile.visual?.destroy?.()
-      projectile.glow?.destroy?.()
-    }
+    projectilePresentation?.clear?.()
     scene.enemyProjectiles = []
   }
 
