@@ -80,10 +80,10 @@ export function createReplayController({
     const message = error?.message || 'replay error'
     emit({ phase: 'error', error: message })
     clearErrorTimer()
-    if (active && !destroyed) {
+    if (!destroyed) {
       errorTimer = setTimeoutFn(() => {
         errorTimer = null
-        if (active && !destroyed) emit({ phase: 'recording', error: '' })
+        if (!destroyed) emit({ phase: active ? 'recording' : 'idle', error: '' })
       }, errorDisplayMs)
     }
   }
@@ -133,7 +133,11 @@ export function createReplayController({
     lastHash = ''
     recorder?.reset?.()
     const currentLease = await ensureLease()
-    if (!currentLease?.token) return false
+    if (!currentLease?.token) {
+      active = false
+      lease = null
+      return false
+    }
     emit({ phase: 'recording', error: '' })
     schedule(firstUploadMs)
     return true
