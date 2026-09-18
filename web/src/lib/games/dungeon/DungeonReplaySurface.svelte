@@ -2,7 +2,12 @@
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
   import { normalizeDungeonReplayPlayers } from './replay.js'
-  import { queueReplayWeaponArt, syncReplayGroundWeaponPresentation } from './replay-drop-presentation.js'
+  import {
+    cleanupGroundDropPresentation,
+    queueGroundDropArt,
+    syncGroundDropPresentation,
+    updateGroundDropPresentation,
+  } from './ground-drop-presentation.js'
   import { despawnRemotePlayer, spawnRemotePlayer, syncRemotePlayerPresentation } from './remote-player-runtime.js'
   import { setProceduralRunSeed } from './spatial.js'
   import { installDungeonSpatial } from './spatial-runtime.js'
@@ -44,6 +49,7 @@
   }
 
   function clearReplayDrops() {
+    for (const drop of scene?.drops ?? []) cleanupGroundDropPresentation(scene, drop)
     scene?.clearDrops?.()
     replayDropSignature = ''
   }
@@ -185,7 +191,7 @@
       const before = scene.drops?.length ?? 0
       scene.spawnDrop?.(x, y, drop.item)
       const spawned = scene.drops?.[before] ?? scene.drops?.at?.(-1)
-      if (spawned) syncReplayGroundWeaponPresentation(scene, spawned, { x, y })
+      if (spawned) syncGroundDropPresentation(scene, spawned, { x, y, now: scene.time?.now ?? 0 })
     }
   }
 
@@ -322,14 +328,16 @@
           onEvent: () => {},
           label: (key) => key,
         })
-        scene.scene?.pause?.()
+        scene.update = (time) => {
+          for (const drop of scene.drops ?? []) updateGroundDropPresentation(scene, drop, time)
+        }
         ready = true
         activeSceneKey = ''
         applyFrame(firstFrame)
       }
 
-      const queuedWeaponArt = queueReplayWeaponArt(scene)
-      if (queuedWeaponArt > 0 && scene.load?.once && scene.load?.start) {
+      const queuedDropArt = queueGroundDropArt(scene)
+      if (queuedDropArt > 0 && scene.load?.once && scene.load?.start) {
         scene.load.once('complete', finishAttach)
         scene.load.start()
         return
