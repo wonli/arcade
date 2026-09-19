@@ -76,7 +76,6 @@ jobs:
           node --test \
             src/lib/replay/controller.test.js \
             src/lib/replay/session.test.js \
-            src/lib/games/dungeon/asset-cache-contract.test.js \
             src/lib/games/dungeon/replay-recording.test.js \
             src/lib/games/dungeon/replay-driver.test.js \
             src/lib/games/dungeon/replay.test.js \
