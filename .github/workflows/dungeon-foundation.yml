@@ -76,6 +76,7 @@ jobs:
             src/lib/games/dungeon/world-state-materializer.test.js \
             src/lib/games/dungeon/presentation-events.test.js \
             src/lib/games/dungeon/remote-player-runtime.test.js \
+            src/lib/games/dungeon/coop-replay-weapon-regression.test.js \
             src/lib/games/dungeon/replay-combat-event-flow.test.js \
             src/lib/games/dungeon/replay-world-event-flow.test.js \
             src/lib/games/dungeon/dungeon-replay-architecture-contract.test.js \
