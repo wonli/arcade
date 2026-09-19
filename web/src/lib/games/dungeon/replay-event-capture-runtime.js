@@ -103,13 +103,57 @@ export function installDungeonReplayEventCapture(scene) {
 
   wrap('spawnDrop', (original, x, y, item) => {
     const result = original(x, y, item)
-    scene.captureDungeonEvent?.({ type: 'drop.spawn', x: Number(x) || 0, y: Number(y) || 0, item: clone(item) })
+    const drop = result && typeof result === 'object'
+      ? result
+      : (scene.drops ?? []).at?.(-1) ?? null
+    scene.captureDungeonEvent?.({
+      type: 'drop.spawn',
+      entityId: String(drop?.id ?? ''),
+      x: Number(drop?.x ?? x) || 0,
+      y: Number(drop?.y ?? y) || 0,
+      item: clone(drop?.item ?? item),
+    })
     return result
   })
 
   wrap('pickupBurst', (original, x, y, item, healed = 0) => {
     const result = original(x, y, item, healed)
     scene.captureDungeonEvent?.({ type: 'pickup', x: Number(x) || 0, y: Number(y) || 0, item: clone(item), healed: Number(healed) || 0 })
+    return result
+  })
+
+  wrap('startFloor', (original, initial = false, player = scene.localPlayer) => {
+    const result = original(initial, player)
+    const progress = scene.__infiniteDungeon?.getProgress?.() ?? {}
+    scene.captureDungeonEvent?.({
+      type: 'floor.start',
+      floor: Number(progress.floor ?? scene.floor) || 1,
+      chapter: Number(progress.chapter) || 1,
+      chapterFloor: Number(progress.chapterFloor ?? progress.room) || 1,
+      roomRole: progress.roomRole ?? 'combat',
+      playerId: String(player?.id ?? ''),
+      x: Number(player?.state?.x) || 0,
+      y: Number(player?.state?.y) || 0,
+    })
+    return result
+  })
+
+  wrap('checkFloorClear', (original, player = scene.localPlayer) => {
+    const wasCleared = Boolean(scene.floorCleared)
+    const result = original(player)
+    if (!wasCleared && scene.floorCleared) {
+      const progress = scene.__infiniteDungeon?.getProgress?.() ?? {}
+      scene.captureDungeonEvent?.({
+        type: 'floor.clear',
+        floor: Number(progress.floor ?? scene.floor) || 1,
+        chapter: Number(progress.chapter) || 1,
+        chapterFloor: Number(progress.chapterFloor ?? progress.room) || 1,
+        roomRole: progress.roomRole ?? 'combat',
+        playerId: String(player?.id ?? ''),
+        x: Number(player?.state?.x) || 0,
+        y: Number(player?.state?.y) || 0,
+      })
+    }
     return result
   })
 
@@ -171,10 +215,11 @@ export function installDungeonReplayEventCapture(scene) {
 
   function wrap(name, wrapper) {
     if (typeof scene[name] !== 'function') return
-    const original = scene[name].bind(scene)
+    const originalMethod = scene[name]
+    const original = originalMethod.bind(scene)
     const wrapped = (...args) => wrapper(original, ...args)
     scene[name] = wrapped
-    restore.push(() => { if (scene[name] === wrapped) scene[name] = original })
+    restore.push(() => { if (scene[name] === wrapped) scene[name] = originalMethod })
   }
 
   function destroy() {
