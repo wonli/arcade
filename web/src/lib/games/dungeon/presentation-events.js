@@ -1,3 +1,5 @@
+import { presentDungeonPlayerSkill } from './player-skill-presentation.js'
+
 function playerById(scene, id) {
   const normalized = String(id ?? '')
   if (!normalized) return scene?.localPlayer ?? null
@@ -47,17 +49,15 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
     return false
   }
 
-  // Use emit when the semantic event owns presentation. It is the preferred path
-  // for new gameplay code: present once, then publish the exact event for recording.
   function emit(event) {
     if (!event || typeof event !== 'object' || !event.type) return false
     present(event)
+    const capture = scene.captureDungeonEvent
+    if (typeof capture === 'function' && capture !== captureDefault) return capture(event)
     return forward(onEvent, event)
   }
 
-  // Existing live paths that already presented an effect can be instrumented with
-  // capture while they migrate to emit. Replay still uses the single present entry.
-  function capture(event) {
+  function captureDefault(event) {
     if (!event || typeof event !== 'object' || !event.type) return false
     return forward(onEvent, event)
   }
@@ -80,10 +80,7 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
     const weaponVisuals = player.runtime?.weaponVisuals
       ?? (player === scene.localPlayer ? scene.__dungeonWeaponVisuals : null)
     const attackOrigin = weaponVisuals?.swing?.() ?? from
-    if (scene.__dungeonVfx?.slash) {
-      scene.__dungeonVfx.slash(attackOrigin, target, Boolean(event.critical))
-      return true
-    }
+    scene.__dungeonVfx?.slash?.(attackOrigin, target, Boolean(event.critical))
 
     const dx = target.x - from.x
     const dy = target.y - from.y
@@ -106,26 +103,23 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
       origin.x = Number(player.state.x) || 0
       origin.y = Number(player.state.y) || 0
     }
-    const radius = Math.max(20, Number(event.radius) || 120)
-    const ring = scene.add?.circle?.(origin.x, origin.y, 20, 0xc1ff56, 0.1)
-    ring?.setStrokeStyle?.(4, 0xc1ff56, 0.9)
-    if (ring) scene.tweens?.add?.({ targets: ring, radius, alpha: 0, duration: 320, onComplete: () => ring.destroy?.() })
-    scene.cameras?.main?.shake?.(100, 0.006)
-    return true
+    return presentDungeonPlayerSkill(scene, {
+      x: origin.x,
+      y: origin.y,
+      radius: Math.max(20, Number(event.radius) || 120),
+    })
+  }
+
+  function feedback() {
+    return scene.__dungeonEnemyFeedbackPresentation ?? scene.__dungeonEnemyFeedback ?? null
   }
 
   function presentEnemyAttack(event) {
     const enemy = enemyById(scene, event.enemyId ?? event.sourceId)
     if (!enemy) return false
     const target = playerById(scene, event.targetId) ?? scene.localPlayer
-    if (event.attack === 'charge') {
-      scene.__dungeonEnemyFeedback?.charge?.(enemy, target)
-      return true
-    }
-    if (event.attack === 'shockwave') {
-      scene.__dungeonEnemyFeedback?.shockwave?.(enemy, target)
-      return true
-    }
+    if (event.attack === 'charge') return feedback()?.charge?.(enemy, target) ?? false
+    if (event.attack === 'shockwave') return feedback()?.shockwave?.(enemy, target) ?? false
     enemy.visual?.setTintFill?.(0xffffff)
     scene.time?.delayedCall?.(70, () => enemy.visual?.clearTint?.())
     return true
@@ -133,7 +127,7 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
 
   function presentEnemyPhase(event) {
     const enemy = enemyById(scene, event.enemyId ?? event.entityId)
-    if (enemy) scene.__dungeonEnemyFeedback?.phaseTwo?.(enemy)
+    if (enemy) feedback()?.phaseTwo?.(enemy)
     if (enemy?.visual && event.color != null) enemy.visual.setTint?.(event.color)
     scene.showBanner?.(event.label ?? 'BOSS PHASE II', event.cssColor ?? '#ff705c', 28)
     scene.cameras?.main?.shake?.(180, 0.008)
@@ -148,7 +142,7 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
 
     if (targetPlayer) {
       scene.flashPlayer?.(targetPlayer)
-      scene.__dungeonEnemyFeedback?.playerHit?.({ boss: Boolean(event.boss), damage: Number(event.damage) || 0 })
+      feedback()?.playerHit?.({ boss: Boolean(event.boss), damage: Number(event.damage) || 0 })
     }
     if (targetEnemy) {
       scene.__dungeonVfx?.impact?.(location.x, location.y, {
@@ -163,7 +157,7 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
       if (event.source === 'corpse_burst') {
         scene.__dungeonVfx?.smoke?.(location.x, location.y, { seed: `${event.targetId ?? ''}:corpse` })
       }
-      if (!event.killed) scene.__dungeonEnemyFeedback?.hit?.(targetEnemy, sourcePlayer?.state ?? point(event, 'source'), event)
+      if (!event.killed) feedback()?.hit?.(targetEnemy, sourcePlayer?.state ?? point(event, 'source'), event)
     }
 
     if (Number(event.damage) > 0) scene.damageText?.(location.x, location.y - 16, Number(event.damage), Boolean(event.critical))
@@ -181,7 +175,7 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
 
   function presentDeath(event) {
     const enemy = enemyById(scene, event.entityId ?? event.targetId)
-    if (enemy) scene.__dungeonEnemyFeedback?.death?.(enemy, event)
+    if (enemy) feedback()?.death?.(enemy, event)
     const location = point(event)
     scene.deathBurst?.(location.x, location.y, event.color)
     return true
@@ -194,18 +188,24 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
   }
 
   function presentProjectileSpawn(event) {
-    const location = point(event)
-    const color = event.color ?? 0x70f2ce
-    const flash = scene.add?.circle?.(location.x, location.y, 11, color, 0.22)
-    if (flash) scene.tweens?.add?.({ targets: flash, alpha: 0, scale: 1.6, duration: 120, onComplete: () => flash.destroy?.() })
-    return true
+    const id = String(event.projectileId ?? event.id ?? '')
+    if (!id) return false
+    return Boolean(scene.__dungeonProjectilePresentation?.ensure?.({
+      id,
+      kind: event.kind ?? 'enemy',
+      ownerId: String(event.ownerId ?? ''),
+      x: Number(event.x) || 0,
+      y: Number(event.y) || 0,
+      vx: Number(event.vx) || 0,
+      vy: Number(event.vy) || 0,
+      color: event.color,
+    }))
   }
 
   function presentProjectileHit(event) {
-    const location = point(event)
-    const color = event.color ?? 0x70f2ce
-    const flash = scene.add?.circle?.(location.x, location.y, 14, color, 0.28)
-    if (flash) scene.tweens?.add?.({ targets: flash, alpha: 0, scale: 1.8, duration: 150, onComplete: () => flash.destroy?.() })
+    const id = String(event.projectileId ?? event.id ?? '')
+    if (!id) return true
+    scene.__dungeonProjectilePresentation?.remove?.(id)
     return true
   }
 
@@ -234,10 +234,10 @@ export function installDungeonPresentationEvents(scene, { onEvent = () => {} } =
     return true
   }
 
-  const api = { present, emit, capture }
+  const api = { present, emit, capture: captureDefault }
   scene.presentEvent = present
   scene.emitDungeonEvent = emit
-  scene.captureDungeonEvent = capture
+  scene.captureDungeonEvent = captureDefault
   scene.__dungeonPresentationEvents = api
   return api
 }
