@@ -33,12 +33,9 @@
 
   async function startReplay() {
     const [Phaser, bundle] = await Promise.all([loadPhaser(), loadDungeonAssetBundle()])
-    if (!mount || stopped) {
-      bundle.dispose()
-      return
-    }
     assetBundle = bundle
     const vfxManifest = bundle.vfxManifest
+    if (!mount || stopped) return
 
     const firstFrame = stateAt(recording, 0)
     applyRunSeed(firstFrame)

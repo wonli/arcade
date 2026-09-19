@@ -36,7 +36,6 @@
   let roomCode = String(data?.code ?? '').toUpperCase()
   let room = null
   let mount
-  let stopped = false
   let game = null
   let scene = null
   let touchInput = null
@@ -183,10 +182,6 @@
       loadPhaser(),
       loadDungeonAssetBundle({ onProgress: (next) => { assetProgress = next } }),
     ])
-    if (stopped) {
-      bundle.dispose()
-      return null
-    }
     resources = { Phaser, assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset), vfxManifest: bundle.vfxManifest, assetManifest: bundle.manifest, resolveAsset: bundle.resolveAsset, dispose: bundle.dispose }
     return resources
   }
@@ -247,9 +242,8 @@
   }
 
   async function startGame() {
-    const loaded = await loadResources()
-    if (!loaded || !mount) return
-    const { Phaser, assets, vfxManifest, assetManifest, resolveAsset } = loaded
+    const { Phaser, assets, vfxManifest, assetManifest, resolveAsset } = await loadResources()
+    if (!mount) return
 
     replayFinished = false
     replayFinishPromise = null
@@ -402,7 +396,6 @@
   }
 
   onMount(() => {
-    stopped = false
     unsubscribeLocale = subscribeLocale(applyLocale)
     unsubscribeConnection = socket.onConnection((state) => { connection = state })
     bootstrap().catch((cause) => {
@@ -412,7 +405,6 @@
     })
 
     return () => {
-      stopped = true
       if (replayTimer) clearInterval(replayTimer)
       const session = replaySession
       replaySession = null
