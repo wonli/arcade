@@ -109,7 +109,9 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
     if (Number.isInteger(snapshot.slot)) player.slot = snapshot.slot
     player.facing = snapshot.facing ?? player.facing ?? 'down'
     player.moving = Boolean(snapshot.moving)
-    player.attacking = Boolean(snapshot.attacking)
+    const animation = player.actor?.anims
+    const attackPresentationPlaying = Boolean(animation?.isPlaying && animation?.currentAnim?.key?.endsWith('-attack'))
+    player.attacking = Boolean(snapshot.attacking) || attackPresentationPlaying
     player.dead = Boolean(snapshot.dead)
     return player
   }
@@ -118,7 +120,7 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
     player.actor?.setPosition?.(player.state.x, player.state.y)
     scene.updateHealthBar?.(player.bar, player.state.x, player.state.y - 42, player.state.hp, player.state.maxHp)
     player.runtime?.weaponVisuals?.sync?.()
-    scene.syncPlayerAnimation?.(null, player)
+    scene.syncPlayerAnimation?.(player.attacking ? 'attack' : null, player)
   }
 
   function semanticPlayerSnapshot(snapshot) {
