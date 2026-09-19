@@ -55,7 +55,7 @@ test('Dungeon surfaces dispose a bundle that finishes loading after teardown', (
   const editor = readFileSync(editorPath, 'utf8')
 
   assert.match(solo, /async function loadGameResources\(\)[\s\S]*?if\s*\(!mounted\)\s*\{\s*bundle\.dispose\(\)\s*return null\s*\}/)
-  assert.match(coop, /async function loadResources\(\)[\s\S]*?if\s*\(stopped\)\s*\{\s*bundle\.dispose\(\)\s*return null\s*\}/)
+  assert.match(coop, /async function loadResources\(\)[\s\S]*?if\s*\(!mounted\)\s*\{\s*bundle\.dispose\(\)\s*return null\s*\}/)
   assert.match(replay, /if\s*\(!mount\s*\|\|\s*stopped\)\s*\{\s*bundle\.dispose\(\)\s*return\s*\}/)
   assert.match(editor, /if\s*\(!mounted\)\s*\{\s*loaded\.dispose\(\)\s*return\s*\}/)
 })
