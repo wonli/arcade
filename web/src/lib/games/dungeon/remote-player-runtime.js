@@ -88,11 +88,14 @@ function installRemoteWeaponPresentation(scene, player) {
   }
 
   const onPresentationReady = () => sync()
+  const onWeaponArtReady = () => sync()
   scene.events?.on?.('dungeon-weapon-presentation-ready', onPresentationReady)
+  scene.load?.on?.('complete', onWeaponArtReady)
 
   let api = null
   const restore = () => {
     scene.events?.off?.('dungeon-weapon-presentation-ready', onPresentationReady)
+    scene.load?.off?.('complete', onWeaponArtReady)
     destroyVisual()
     if (player.runtime?.weaponVisuals === api) delete player.runtime.weaponVisuals
   }
