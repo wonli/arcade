@@ -7,10 +7,10 @@
   import { createReplaySession, finalizeReplaySession } from '$lib/replay/session.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
-  import { createDungeonReplaySnapshot, replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
+  import { captureDungeonReplayState, replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
+  import { installDungeonReplayEventCapture } from '$lib/games/dungeon/replay-event-capture-runtime.js'
+  import { installDungeonPresentationStack } from '$lib/games/dungeon/presentation-stack.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
-  import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
-  import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { createComparisonCard } from '$lib/games/dungeon/comparison-runtime.js'
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
@@ -127,13 +127,23 @@
     }
   }
 
-  function dungeonReplaySnapshot() {
-    return createDungeonReplaySnapshot({ scene, stats, progress })
+  function dungeonReplayState() {
+    return captureDungeonReplayState({ scene, stats, progress })
   }
 
   function recordDungeonReplay(force = false) {
-    const snapshot = dungeonReplaySnapshot()
-    if (snapshot) replaySession?.record(snapshot, { force })
+    const state = dungeonReplayState()
+    if (state) replaySession?.record(state, { force })
+  }
+
+  function recordDungeonReplayEvent(event) {
+    return replaySession?.recordEvent(event) ?? false
+  }
+
+  function refreshReplayEventCapture() {
+    if (!scene) return null
+    scene.__dungeonReplayEventCapture?.destroy?.()
+    return installDungeonReplayEventCapture(scene)
   }
 
   function finishDungeonReplay() {
@@ -141,9 +151,9 @@
     if (replayFinished) return Promise.resolve(false)
     replayFinished = true
     const session = replaySession
-    const snapshot = dungeonReplaySnapshot()
-    if (!session || !snapshot) return Promise.resolve(false)
-    replayFinishPromise = session.finish(snapshot).catch((cause) => {
+    const state = dungeonReplayState()
+    if (!session || !state) return Promise.resolve(false)
+    replayFinishPromise = session.finish(state).catch((cause) => {
       console.warn('Dungeon replay final upload failed:', cause)
       return false
     })
@@ -173,6 +183,7 @@
     resources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
     return resources
   }
+
   function onEvent(event) {
     if (!event?.type) return
     if (event.type === 'floorstart') eventText = t('floorStart', { floor: event.floor })
@@ -211,6 +222,7 @@
     })
     networkRuntime.start()
     networkRuntime.updatePeers(room?.players ?? [])
+    refreshReplayEventCapture()
   }
 
   function subscribeRoomState() {
@@ -223,7 +235,7 @@
       room = payload
       ensureNetwork()
       networkRuntime?.updatePeers(room?.players ?? [])
-      if (room.status === 'playing') recordDungeonReplay(true)
+      recordDungeonReplay(true)
     })
   }
 
@@ -263,8 +275,8 @@
       }
 
       scene = nextScene
-      installAffixVisuals(scene)
-      installDungeonVfx(scene, vfxManifest)
+      scene.captureDungeonEvent = recordDungeonReplayEvent
+      installDungeonPresentationStack(scene, { vfxManifest })
 
       if (!scene.__comparisonCard) {
         scene.__comparisonCard = createComparisonCard(scene, {
@@ -317,6 +329,7 @@
           hudRuntime?.update()
         },
       })
+      refreshReplayEventCapture()
       touchInput = installDungeonTouchInput(scene)
       hudRuntime = installDungeonHud(scene, {
         getStats: () => stats,
@@ -395,9 +408,9 @@
         if (replayFinishPromise) {
           void replayFinishPromise.finally(() => session.destroy())
         } else if (!replayFinished) {
-          const snapshot = dungeonReplaySnapshot()
+          const state = dungeonReplayState()
           replayFinished = true
-          if (snapshot) void finalizeReplaySession(session, snapshot).catch(() => false)
+          if (state) void finalizeReplaySession(session, state).catch(() => false)
           else session.destroy()
         } else {
           session.destroy()
