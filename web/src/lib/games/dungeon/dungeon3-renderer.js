@@ -143,14 +143,14 @@ export function buildDungeon3TilePlan(geometry) {
   return tiles
 }
 
-export function queueDungeon3Textures(scene) {
+export function queueDungeon3Textures(scene, resolveAsset = scene?.__dungeonAssetResolver ?? ((path) => path)) {
   const base = '/assets/dungeon-tileset/dungeon-pixel-tileset-for-rpg-and-roguelike-game/Tiled_files/'
   const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire', 'Water_detilazation', 'plate_trap', 'dragon_trap', 'Spikes']
   let queued = false
   for (const name of used) {
     const set = rules.tilesets[name], key = dungeon3TextureKey(name)
     if (!set || scene.textures.exists(key)) continue
-    scene.load.spritesheet(key, base + set.image, { frameWidth: set.tileWidth, frameHeight: set.tileHeight })
+    scene.load.spritesheet(key, resolveAsset(base + set.image), { frameWidth: set.tileWidth, frameHeight: set.tileHeight })
     queued = true
   }
   return queued

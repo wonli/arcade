@@ -18,6 +18,7 @@
     "vite": "latest"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "protobufjs": "^7.6.6"
   }
 }

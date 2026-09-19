@@ -6,6 +6,7 @@
   import { setProceduralRunSeed } from './spatial.js'
   import { installDungeonSpatial } from './spatial-runtime.js'
   import { loadPhaser } from './phaser.js'
+  import { loadDungeonAssetBundle } from './asset-bundle.js'
 
   let { recording } = $props()
 
@@ -13,6 +14,7 @@
   let game = null
   let driver = null
   let stopped = false
+  let assetBundle = null
 
   function progressFromState(state = {}) {
     const value = state?.scene ?? state ?? {}
@@ -30,14 +32,13 @@
   }
 
   async function startReplay() {
-    const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
-      loadPhaser(),
-      fetch('/assets/debts/manifest.json').catch(() => null),
-      fetch('/assets/vfx/manifest.json').catch(() => null),
-    ])
-    const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
-    const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
-    if (!mount || stopped) return
+    const [Phaser, bundle] = await Promise.all([loadPhaser(), loadDungeonAssetBundle()])
+    if (!mount || stopped) {
+      bundle.dispose()
+      return
+    }
+    assetBundle = bundle
+    const vfxManifest = bundle.vfxManifest
 
     const firstFrame = stateAt(recording, 0)
     applyRunSeed(firstFrame)
@@ -45,7 +46,9 @@
     game = createDungeonGame({
       Phaser,
       parent: mount,
-      assets: chooseDungeonAssets(manifest),
+      assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset),
+      assetManifest: bundle.manifest,
+      resolveAsset: bundle.resolveAsset,
       labels: {},
       onStats: () => {},
       onEvent: () => {},
@@ -84,6 +87,8 @@
       driver = null
       game?.destroy?.(true)
       game = null
+      assetBundle?.dispose?.()
+      assetBundle = null
       setProceduralRunSeed(null)
     }
   })

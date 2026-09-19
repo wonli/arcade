@@ -47,6 +47,14 @@ export function vfxCatalog(manifest) {
   return Object.fromEntries(KINDS.map((kind) => [kind, sortedCandidates(manifest, kind)]))
 }
 
+export function vfxPreloadCatalog(manifest) {
+  const catalog = vfxCatalog(manifest)
+  return Object.fromEntries(KINDS.map((kind) => {
+    const best = catalog[kind]?.[0]
+    return [kind, best ? [best] : []]
+  }))
+}
+
 function stableHash(value) {
   const text = String(value ?? 0)
   let hash = 2166136261
@@ -215,10 +223,10 @@ function playPoint(scene, catalog, kind, x, y, options = {}) {
   })
 }
 
-export function installDungeonVfx(scene, manifest = {}) {
+export function installDungeonVfx(scene, manifest = {}, resolveAsset = scene?.__dungeonAssetResolver ?? ((path) => path)) {
   if (!scene) return null
   if (scene.__dungeonVfx) return scene.__dungeonVfx
-  const catalog = vfxCatalog(manifest)
+  const catalog = resolveAssetPaths(vfxPreloadCatalog(manifest), resolveAsset)
   let ready = false
   const api = {
     catalog,
@@ -246,4 +254,10 @@ export function installDungeonVfx(scene, manifest = {}) {
   scene.__dungeonVfx = api
   loadCatalog(scene, catalog, () => { ready = true })
   return api
+}
+
+function resolveAssetPaths(value, resolveAsset) {
+  if (Array.isArray(value)) return value.map((entry) => resolveAssetPaths(entry, resolveAsset))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, key === 'path' ? resolveAsset(entry) : resolveAssetPaths(entry, resolveAsset)]))
 }

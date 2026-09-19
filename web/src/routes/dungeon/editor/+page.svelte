@@ -13,6 +13,7 @@
   import { materializeBossLegendary } from '$lib/games/dungeon/legendary-weapons.js'
   import { materializeLegendary } from '$lib/games/dungeon/legendary-growth.js'
   import { weaponVisualProfile } from '$lib/games/dungeon/weapon-visual-runtime.js'
+  import { loadDungeonAssetBundle } from '$lib/games/dungeon/asset-bundle.js'
 
   const PREVIEW_WIDTH = 360
   const PREVIEW_HEIGHT = 310
@@ -312,20 +313,17 @@
   }
 
   async function loadResources() {
-    const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
-      loadPhaser(),
-      fetch('/assets/debts/manifest.json').catch(() => null),
-      fetch('/assets/vfx/manifest.json').catch(() => null),
-    ])
-    const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
-    const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
-    return { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
+    const [Phaser, bundle] = await Promise.all([loadPhaser(), loadDungeonAssetBundle()])
+    return { Phaser, assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset), vfxManifest: bundle.vfxManifest, assetManifest: bundle.manifest, resolveAsset: bundle.resolveAsset, dispose: bundle.dispose }
   }
 
   async function startEditor() {
     try {
       const [configResult, loaded] = await Promise.all([configClient.load(), loadResources()])
-      if (!mounted) return
+      if (!mounted) {
+        loaded.dispose()
+        return
+      }
       configSource = configResult.source
       workingConfig = normalizeWeaponPresentationConfig(configResult.config)
       resources = loaded
@@ -333,6 +331,8 @@
         Phaser: loaded.Phaser,
         parent: mount,
         assets: loaded.assets,
+        assetManifest: loaded.assetManifest,
+        resolveAsset: loaded.resolveAsset,
         labels: { floor: () => 'SANDBOX', floorClear: () => '' },
       })
 
@@ -377,6 +377,7 @@
       game?.canvas?.removeEventListener?.('pointerdown', handleCanvasPointer)
       editorRuntime?.restore?.()
       game?.destroy?.(true)
+      resources?.dispose?.()
     }
   })
 </script>

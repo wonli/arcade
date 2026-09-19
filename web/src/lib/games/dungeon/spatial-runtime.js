@@ -408,10 +408,14 @@ async function loadEnvironmentTextures(scene) {
   if (typeof fetch !== 'function' || scene.__environmentLoadStarted) return false
   scene.__environmentLoadStarted = true
   try {
-    const response = await fetch('/assets/debts/manifest.json')
-    if (!response.ok) return false
-    const manifest = await response.json()
-    const selected = chooseEnvironmentAssets(manifest)
+    let manifest = scene.__dungeonAssetManifest
+    if (!manifest) {
+      const response = await fetch('/assets/debts/manifest.json')
+      if (!response.ok) return false
+      manifest = await response.json()
+    }
+    const resolveAsset = scene.__dungeonAssetResolver ?? ((path) => path)
+    const selected = resolveAssetPaths(chooseEnvironmentAssets(manifest), resolveAsset)
     const complete = selected.floor && selected.wall && selected.water && selected.obstacle && selected.torch && selected.chest
     if (complete) {
       scene.__dungeonEnvironmentFrames = Object.fromEntries(Object.entries(selected).map(([kind, asset]) => [kind, asset?.frame ?? 0]))
@@ -432,19 +436,25 @@ async function loadEnvironmentTextures(scene) {
         ['dungeon-tileset-coffin', selected.coffin], ['dungeon-tileset-object', selected.objectDecoration], ['dungeon-tileset-trap-plate', selected.trapPlate],
         ['dungeon-tileset-trap-spikes', selected.trapSpikes], ['dungeon-tileset-candles', selected.candles], ['dungeon-tileset-arches', selected.arches],
       ]
-      const gridQueued = queueDungeon3Textures(scene)
+      const gridQueued = queueDungeon3Textures(scene, resolveAsset)
       const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean) || gridQueued
       if (!queued) return true
       await new Promise((resolve) => { scene.load.once('complete', resolve); scene.load.start() })
       return true
     }
-    const fallback = selectDebtsEnvironmentAssets(manifest)
+    const fallback = resolveAssetPaths(selectDebtsEnvironmentAssets(manifest), resolveAsset)
     const queue = [['dungeon-obstacle', fallback.obstacle], ['dungeon-torch', fallback.torch], ['dungeon-chest', fallback.chest]]
     const queued = queue.map(([key, asset]) => queueEnvironmentTexture(scene, key, asset)).some(Boolean)
     if (!queued) return false
     await new Promise((resolve) => { scene.load.once('complete', resolve); scene.load.start() })
     return true
   } catch { return false }
+}
+
+function resolveAssetPaths(value, resolveAsset) {
+  if (Array.isArray(value)) return value.map((entry) => resolveAssetPaths(entry, resolveAsset))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, key === 'path' ? resolveAsset(entry) : resolveAssetPaths(entry, resolveAsset)]))
 }
 
 function enemyIsFlying(enemy) {

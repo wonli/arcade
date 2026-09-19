@@ -43,6 +43,12 @@ function chooseRpgAnimation(assets, direction, action) {
   return assets.find((asset) => asset.source === 'rpg-main-character' && asset.direction === direction && asset.action === action) || null
 }
 
+function resolveAssetPaths(value, resolveAsset) {
+  if (Array.isArray(value)) return value.map((entry) => resolveAssetPaths(entry, resolveAsset))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, key === 'path' ? resolveAsset(entry) : resolveAssetPaths(entry, resolveAsset)]))
+}
+
 export function directionFromInput(dx, dy, current = 'down') {
   if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
   if (dy < 0) return 'up'
@@ -110,7 +116,7 @@ function roomDescriptor(floor) {
   }
 }
 
-export function chooseDungeonAssets(manifest = {}) {
+export function chooseDungeonAssets(manifest = {}, resolveAsset = (path) => path) {
   const all = normalizeAssets(manifest)
   const rpgAssets = all.filter((asset) => asset.source === 'rpg-main-character')
   const oldAssets = all.filter((asset) => asset.source !== 'rpg-main-character')
@@ -130,17 +136,17 @@ export function chooseDungeonAssets(manifest = {}) {
     ranged: chooseAsset(oldAssets, [/wizard/i, /mage/i, /caster/i, /archer/i, /bow/i]) || genericEnemy,
   }
 
-  return {
+  return resolveAssetPaths({
     player,
     enemy: enemies.skeleton || genericEnemy,
     enemies,
     floor: chooseAsset(oldAssets, [/floor/i, /ground/i, /brick/i, /stone/i, /tile/i], (asset) => asset.frames === 1),
     wall: chooseAsset(oldAssets, [/wall/i, /brick/i, /stone/i, /brimstone/i], (asset) => asset.frames === 1),
     weapon: chooseAsset(oldAssets, [/sword/i, /blade/i, /weapon/i, /axe/i, /staff/i, /bow/i, /item/i]),
-  }
+  }, resolveAsset)
 }
 
-export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, onStats = () => {}, onEvent = () => {}, mode = 'live' }) {
+export function createDungeonGame({ Phaser, parent, assets = {}, assetManifest = null, resolveAsset = (path) => path, labels = {}, onStats = () => {}, onEvent = () => {}, mode = 'live' }) {
   const replayMode = mode === 'replay'
   const text = {
     floor: (value) => typeof labels.floor === 'function' ? labels.floor(value) : `FLOOR ${value}`,
@@ -155,6 +161,8 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
     constructor() {
       super('Dungeon')
       this.mode = replayMode ? 'replay' : 'live'
+      this.__dungeonAssetManifest = assetManifest
+      this.__dungeonAssetResolver = resolveAsset
       attachLocalPlayerEntity(this, {
         id: 'local',
         state: createDefaultPlayerState({
@@ -175,7 +183,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, labels = {}, on
       this.floor = 1
       this.floorCleared = false
       this.runComplete = false
-      this.ambient = createDungeonAmbient()
+      this.ambient = createDungeonAmbient({ resolveAsset })
     }
 
     preload() {
