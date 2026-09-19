@@ -246,6 +246,20 @@ test('remote unequip removes its weapon presentation', () => {
   assert.equal(remote.runtime.weaponVisuals.visual(), null)
 })
 
+test('remote replay sync keeps attack presentation while attacking', () => {
+  const { scene, syncs } = sceneFixture()
+  const remote = spawnRemotePlayer(scene, snapshot())
+  syncs.length = 0
+  remote.attacking = true
+
+  syncRemotePlayerPresentation(scene, remote)
+  assert.equal(syncs.at(-1)?.action, 'attack')
+
+  remote.attacking = false
+  syncRemotePlayerPresentation(scene, remote)
+  assert.equal(syncs.at(-1)?.action, null)
+})
+
 test('spawning rejects the local player id and duplicate remote ids', () => {
   const { scene } = sceneFixture()
 
