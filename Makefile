@@ -29,14 +29,17 @@ LDFLAGS := -X '$(FLAGS_PKG).BuildDate=$(BUILD_DATE)' \
 
 GO_FLAGS := -trimpath -tags netgo -ldflags "$(LDFLAGS)"
 
-.PHONY: help setup deps frontend web-dev backend dev build start test clean dungeon-assets game-assets
+.PHONY: help setup deps frontend web-dev backend dev build darwin linux windows ali start test clean dungeon-assets game-assets
 
 help:
 	@echo "AQI Arcade"
 	@echo ""
 	@echo "  make start          Install/build everything and run one embedded Go binary"
 	@echo "  make dev            Rebuild frontend, then run the Go server on :8080"
-	@echo "  make build          Build frontend and dist/arcade single binary"
+	@echo "  make build          Build the local binary and all platform release binaries"
+	@echo "  make darwin         Build dist/arcade-darwin-arm64-latest"
+	@echo "  make linux          Build dist/arcade-linux-amd64-latest"
+	@echo "  make windows        Build dist/arcade-windows-amd64-latest.exe"
 	@echo "  make test           Run frontend tests/build and all Go tests"
 	@echo "  make setup          Resolve Go modules and install locked frontend dependencies"
 	@echo "  make frontend       Install locked frontend dependencies and build embedded assets"
@@ -72,13 +75,36 @@ dev: frontend
 	$(GO) mod tidy
 	$(GO) run $(APP_PATH)
 
-build: frontend
-	$(GO) mod tidy
+define build_binary
 	mkdir -p $(BUILD_PATH)
-	CGO_ENABLED=0 $(GO) build $(GO_FLAGS) -o $(BUILD_PATH)/$(APP_NAME) $(APP_PATH)
+	$(1)CGO_ENABLED=0 $(GO) build $(GO_FLAGS) -o $(BUILD_PATH)/$(2) $(APP_PATH)
+endef
+
+build: darwin linux windows
+	$(GO) mod tidy
+	$(call build_binary,,$(APP_NAME))
 	@echo ""
-	@echo "Build complete: $(BUILD_PATH)/$(APP_NAME)"
-	@echo "Frontend is embedded in the binary."
+	@echo "Build complete: local and platform release binaries are in $(BUILD_PATH)/"
+
+darwin: frontend
+	$(call build_binary,GOOS=darwin GOARCH=arm64 ,$(APP_NAME)-darwin-arm64-latest)
+
+linux: frontend
+	$(call build_binary,GOOS=linux GOARCH=amd64 ,$(APP_NAME)-linux-amd64-latest)
+
+windows: frontend
+	$(call build_binary,GOOS=windows GOARCH=amd64 ,$(APP_NAME)-windows-amd64-latest.exe)
+
+ali: linux
+	@echo "Uploading to server.."
+	scp -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+		$(BUILD_PATH)/$(APP_NAME)-linux-amd64-latest \
+		ali:/data/aqi-arcade/.arcade-latest.next
+	ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ali 'set -e; \
+		cd /data/aqi-arcade; \
+		chmod 755 .arcade-latest.next; \
+		mv -f .arcade-latest.next arcade-latest; \
+		sudo systemctl restart arcade.service'
 
 start: build
 	./$(BUILD_PATH)/$(APP_NAME)

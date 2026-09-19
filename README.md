@@ -52,7 +52,7 @@ Useful commands:
 ```text
 make start       Build everything and run dist/arcade
 make dev         Rebuild frontend and run the Go server on :8080
-make build       Build frontend + dist/arcade
+make build       Build the local binary and all platform release binaries
 make test        Build frontend and run all Go + frontend engine tests
 make setup       Resolve Go modules + install frontend dependencies
 make frontend    Build SvelteKit output into the Go embed directory
@@ -69,6 +69,19 @@ internal/frontend/dist/
         ↓ go:embed
 dist/arcade
 ```
+
+The unified `make build` command embeds the frontend into the local binary and
+all platform release binaries written to `dist/`:
+
+```text
+dist/arcade-darwin-arm64-latest
+dist/arcade-linux-amd64-latest
+dist/arcade-windows-amd64-latest.exe
+```
+
+Run `make ali` to build the Linux binary and publish it through the configured
+`ali` SSH host. The target uploads a temporary file under `/data/aqi-arcade`,
+atomically replaces `arcade-latest`, and restarts `arcade.service`.
 
 The landing page `/` is prerendered to static HTML. Room codes are created at runtime, so `/room/:code/:game` uses SvelteKit's static fallback document and client routing. Go only allows that fallback for room routes; missing `_app/*` assets and unrelated unknown routes return a real 404.
 
