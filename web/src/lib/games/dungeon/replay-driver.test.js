@@ -26,6 +26,28 @@ test('stateAt interpolates only matching entity positions and keeps discrete sta
   assert.equal(state.enemies.length, 1)
 })
 
+test('stateAt never interpolates entity positions across a room transition', () => {
+  const roomTransition = {
+    version: 3,
+    durationMs: 400,
+    frames: [
+      { t: 0, state: { scene: { floor: 1, sceneKey: '1:1:1' }, players: [{ id: 'p1', x: 820, y: 300, hp: 100 }], enemies: [], drops: [], projectiles: [] } },
+      { t: 200, state: { scene: { floor: 2, sceneKey: '2:1:2' }, players: [{ id: 'p1', x: 120, y: 300, hp: 100 }], enemies: [], drops: [], projectiles: [] } },
+    ],
+    events: [],
+  }
+
+  const beforeCut = stateAt(roomTransition, 199)
+  assert.equal(beforeCut.scene.sceneKey, '1:1:1')
+  assert.equal(beforeCut.players[0].x, 820)
+  assert.equal(beforeCut.players[0].y, 300)
+
+  const afterCut = stateAt(roomTransition, 200)
+  assert.equal(afterCut.scene.sceneKey, '2:1:2')
+  assert.equal(afterCut.players[0].x, 120)
+  assert.equal(afterCut.players[0].y, 300)
+})
+
 test('eventsBetween preserves timestamp and seq ordering without duplication', () => {
   assert.deepEqual(eventsBetween(recording, 0, 200).map((event) => event.type), ['player.attack', 'hit'])
   assert.deepEqual(eventsBetween(recording, 200, 900).map((event) => event.type), ['death'])
