@@ -4,7 +4,7 @@
   import GamePreview from '$lib/components/GamePreview.svelte'
   import LauncherHelp from '$lib/components/LauncherHelp.svelte'
   import { gameCopy, difficultyLabel } from '$lib/home/game-copy.js'
-  import { getLauncherMetadata } from '$lib/games/launcher-registry.js'
+  import { GAME_ENTRIES, getLauncherMetadata } from '$lib/games/registry.js'
   import { DEFAULT_SNAKE_SPEED, snakeSpeedLabel } from '$lib/games/snake/speed.js'
   import { createTranslator } from '$lib/i18n.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
@@ -21,14 +21,7 @@
   const copy = $derived(gameCopy({ game, players, chessDifficulty, locale }, t))
   const launcherMetadata = $derived(getLauncherMetadata(game))
 
-  const games = [
-    { id: 'gomoku', number: '01' },
-    { id: 'chess', number: '02' },
-    { id: 'tetris', number: '03' },
-    { id: 'snake', number: '04' },
-    { id: 'drawguess', number: '05' },
-    { id: 'dungeon', number: '06' },
-  ]
+  const games = GAME_ENTRIES.map(({ id }, index) => ({ id, number: String(index + 1).padStart(2, '0') }))
 
   function selectGame(value) {
     game = value
