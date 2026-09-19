@@ -48,7 +48,7 @@ export function captureDungeonReplayState({ scene, player = null, stats = {}, pr
     .sort(compareReplayPlayers)
   if (!players.length) return null
 
-  const localState = scene?.localPlayer?.state ?? playerEntities[0]?.state ?? {}
+  const localState = playerEntities[0]?.state ?? {}
   const liveProgress = scene?.__infiniteDungeon?.getProgress?.() ?? progress ?? {}
   const normalizedProgress = normalizeProgress(liveProgress, scene)
   const roomGeometry = scene?.__roomGeometry ?? {}
@@ -95,7 +95,7 @@ function replayPlayerEntities(scene, explicitPlayer) {
   if (scene?.players instanceof Map && scene.players.size) {
     return [...scene.players.values()].filter((entity) => entity?.state)
   }
-  return scene?.localPlayer?.state ? [scene.localPlayer] : []
+  return []
 }
 
 function liveReplayPlayer(entity, index) {
