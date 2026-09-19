@@ -147,6 +147,29 @@ test('materializer rebuilds the spatial room atomically when sceneKey changes', 
   assert.equal(scene.localPlayer.state.y, 304)
 })
 
+test('materializer does not cancel an in-flight attack animation when the next frame is non-attacking', () => {
+  const scene = sceneFixture()
+  const { deps } = dependencies(scene)
+  const materializer = createDungeonWorldStateMaterializer(scene, deps)
+  const next = state()
+  next.players = [
+    { ...next.players[0], attacking: false, moving: true },
+  ]
+
+  scene.localPlayer.attacking = true
+  scene.localPlayer.actor.anims = {
+    currentAnim: { key: 'dungeon-player-side-attack' },
+    isPlaying: true,
+  }
+
+  materializer.apply(next)
+  assert.equal(scene.localPlayer.attacking, true)
+
+  scene.localPlayer.actor.anims.isPlaying = false
+  materializer.apply(next)
+  assert.equal(scene.localPlayer.attacking, false)
+})
+
 test('materializer removes entities absent from the next canonical frame', () => {
   const scene = sceneFixture()
   const { deps, remoteDestroyed, enemiesDestroyed } = dependencies(scene)
