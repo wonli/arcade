@@ -1,19 +1,14 @@
 import { skillProfile } from './combat.js'
 import { getPlayerSkillReadyAt, startPlayerSkillCooldown } from './player-entity.js'
+import { presentDungeonPlayerSkill } from './player-skill-presentation.js'
 
 function castPrimarySkill(scene, player) {
   const profile = skillProfile(player.state)
-  const ring = scene.add?.circle?.(player.state.x, player.state.y, 20, 0xc1ff56, 0.1)
-  ring?.setStrokeStyle?.(4, 0xc1ff56, 0.9)
-  if (ring) {
-    scene.tweens?.add?.({
-      targets: ring,
-      radius: profile.radius,
-      alpha: 0,
-      duration: 320,
-      onComplete: () => ring.destroy?.(),
-    })
-  }
+  presentDungeonPlayerSkill(scene, {
+    x: player.state.x,
+    y: player.state.y,
+    radius: profile.radius,
+  })
 
   let hits = 0
   for (const enemy of scene.enemies ?? []) {
@@ -30,7 +25,6 @@ function castPrimarySkill(scene, player) {
     hits++
   }
 
-  scene.cameras?.main?.shake?.(100, 0.006)
   return { hits, profile }
 }
 
