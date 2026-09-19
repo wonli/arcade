@@ -249,6 +249,33 @@ func (s *Store) ValidateLease(game, token string) bool {
 	return entry.Token == token
 }
 
+func (s *Store) ReleaseLease(game, token string) bool {
+	game, err := normalizeGame(game)
+	if err != nil {
+		return false
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+
+	s.leaseMu.Lock()
+	defer s.leaseMu.Unlock()
+	entry, ok := s.leases[game]
+	if !ok {
+		return false
+	}
+	if !entry.ExpiresAt.After(s.now().UTC()) {
+		delete(s.leases, game)
+		return false
+	}
+	if entry.Token != token {
+		return false
+	}
+	delete(s.leases, game)
+	return true
+}
+
 func validateSaveInput(input SaveInput) error {
 	if input.Version <= 0 {
 		return errors.New("replay version must be positive")

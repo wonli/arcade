@@ -31,17 +31,17 @@ function fakeClock() {
     current = target
     await flush()
   }
-  return { now, setTimeoutFn, clearTimeoutFn, advance }
+  return { now, setTimeoutFn, clearTimeoutFn, advance, flush }
 }
 
 function bytes(text) { return new TextEncoder().encode(text) }
 
-function subject({ isHost = true, clock, encode, acquireLease, upload }) {
+function subject({ isHost = true, clock, encode, acquireLease, releaseLease, upload }) {
   const recorder = { snapshot: () => ({ durationMs: Math.max(1, clock.now()), frames: [1] }), reset() {} }
   return createReplayController({
     game: 'tetris', roomId: 'ABC123', players: () => 2, isHost: () => isHost,
     version: 1, recorder, encode,
-    acquireLease, upload,
+    acquireLease, releaseLease, upload,
     hash: async (data) => `hash:${new TextDecoder().decode(data)}`,
     now: clock.now, setTimeoutFn: clock.setTimeoutFn, clearTimeoutFn: clock.clearTimeoutFn,
     firstUploadMs: 20_000, refreshMs: 180_000,
@@ -74,15 +74,39 @@ test('host uploads first replay after twenty seconds then no sooner than three m
   assert.equal(uploads, 2)
 })
 
-test('finish forces upload and identical hash skips duplicate upload', async () => {
+test('finish forces upload, skips identical data, and releases the active lease', async () => {
   const clock = fakeClock()
   let uploads = 0
-  const controller = subject({ clock, encode: () => bytes('same'), acquireLease: async () => ({ token: 'lease' }), upload: async () => { uploads += 1 } })
+  const releases = []
+  const controller = subject({
+    clock,
+    encode: () => bytes('same'),
+    acquireLease: async () => ({ token: 'lease' }),
+    releaseLease: async (request) => { releases.push(request) },
+    upload: async () => { uploads += 1 },
+  })
   await controller.start()
   await clock.advance(20_000)
   assert.equal(uploads, 1)
   await controller.finish()
   assert.equal(uploads, 1)
+  assert.deepEqual(releases, [{ game: 'tetris', lease: 'lease' }])
+})
+
+test('destroy best-effort releases an acquired lease', async () => {
+  const clock = fakeClock()
+  const releases = []
+  const controller = subject({
+    clock,
+    encode: () => bytes('one'),
+    acquireLease: async () => ({ token: 'lease' }),
+    releaseLease: async (request) => { releases.push(request) },
+    upload: async () => {},
+  })
+  await controller.start()
+  controller.destroy()
+  await clock.flush()
+  assert.deepEqual(releases, [{ game: 'tetris', lease: 'lease' }])
 })
 
 test('oversized replay is rejected locally and gameplay-facing calls do not throw', async () => {
@@ -103,4 +127,45 @@ test('busy lease leaves replay idle without failing gameplay', async () => {
   assert.equal(controller.getState().phase, 'idle')
   await clock.advance(30_000)
   assert.equal(controller.getState().phase, 'idle')
+})
+
+test('failed initial lease returns to idle instead of fake REC and can retry', async () => {
+  const clock = fakeClock()
+  let allowed = false
+  let leases = 0
+  const controller = subject({
+    clock,
+    encode: () => bytes('one'),
+    acquireLease: async () => {
+      leases += 1
+      if (!allowed) throw new Error('replay lease requires the room host')
+      return { token: 'lease' }
+    },
+    upload: async () => {},
+  })
+
+  assert.equal(await controller.start(), false)
+  assert.equal(controller.getState().phase, 'error')
+  await clock.advance(3_000)
+  assert.equal(controller.getState().phase, 'idle')
+
+  allowed = true
+  assert.equal(await controller.start(), true)
+  assert.equal(controller.getState().phase, 'recording')
+  assert.equal(leases, 2)
+})
+
+test('controller forwards semantic events only when recorder supports them', () => {
+  const events = []
+  const recorder = {
+    recordEvent(event, at) { events.push([event, at]); return true },
+    snapshot: () => ({ durationMs: 1, frames: [{ t: 0, state: {} }] }),
+    reset() {},
+  }
+  const controller = createReplayController({ game: 'dungeon', recorder, encode: () => bytes('one') })
+  assert.equal(controller.recordEvent({ type: 'hit' }, 42), true)
+  assert.deepEqual(events, [[{ type: 'hit' }, 42]])
+
+  const legacy = createReplayController({ game: 'snake', recorder: { record() {} }, encode: () => bytes('one') })
+  assert.equal(legacy.recordEvent({ type: 'hit' }, 42), false)
 })

@@ -1,44 +1,27 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createDungeonReplaySnapshot, replay } from './replay.js'
-import { roomGeometry, setProceduralRunSeed } from './spatial.js'
+import { captureDungeonReplayState, replay } from './replay.js'
 
-test('dungeon replay keeps compact visible multiplayer scene facts only', () => {
-  let now = 0
-  const recorder = replay.createRecorder({ now: () => now })
-  recorder.record({
-    sceneKey: '3:4',
-    runSeed: 'RUN-42',
-    players: [
-      { id: 'host', slot: 0, x: 0.25, y: 0.5, hp: 72, maxHp: 100, facing: 'left', moving: true, attacking: false, dead: false },
-      { id: 'guest', slot: 1, x: 0.75, y: 0.5, hp: 88, maxHp: 100, facing: 'right', moving: false, attacking: true, dead: false },
-    ],
-    enemies: [{ id: 'enemy-1', x: 0.4, y: 0.45, kind: 'elite' }],
-    drops: [{ id: 'drop-1', x: 0.32, y: 0.26, item: { type: 'weapon.dungeon_blade', rarity: 'rare', damage: 8 } }],
-    stats: { hp: 72, maxHp: 100, kills: 12 },
-    progress: { floor: 3, chapter: 1, chapterFloor: 3, roomRole: 'combat' },
-    internalRuntime: { giant: 'must-not-leak' },
-  })
-  const bytes = replay.encode(recorder.snapshot())
-  const text = new TextDecoder().decode(bytes)
-  assert.equal(text.includes('must-not-leak'), false)
-  const decoded = replay.decode(bytes)
-  assert.equal(decoded.frames[0].state.progress.floor, 3)
-  assert.equal(decoded.frames[0].state.runSeed, 'RUN-42')
-  assert.equal(decoded.frames[0].state.enemies.length, 1)
-  assert.equal(decoded.frames[0].state.enemies[0].id, 'enemy-1')
-  assert.equal(decoded.frames[0].state.drops[0].id, 'drop-1')
-  assert.equal(decoded.frames[0].state.players.length, 2)
-  assert.equal(decoded.frames[0].state.players[0].id, 'host')
-  assert.equal(decoded.frames[0].state.players[1].attacking, true)
-})
-
-test('standalone dungeon snapshot captures every live player for replay', () => {
+test('Dungeon replay v3 captures semantic world state in real coordinates', () => {
+  const weapon = {
+    type: 'weapon.dungeon_blade',
+    archetype: 'katana',
+    rarity: 'epic',
+    damage: 12,
+    affixes: [{ id: 'critical_power', value: 0.2, tier: 2 }],
+  }
   const host = {
     id: 'host',
     slot: 0,
-    state: { x: 480, y: 300, hp: 64, maxHp: 120 },
-    facing: 'right',
+    state: {
+      x: 480,
+      y: 300,
+      hp: 64,
+      maxHp: 120,
+      equipment: { weapon },
+      modifiers: { equipment: { damage: 12 }, haste: { haste: 0.2 } },
+    },
+    facing: 'left',
     moving: true,
     attacking: false,
     dead: false,
@@ -47,7 +30,7 @@ test('standalone dungeon snapshot captures every live player for replay', () => 
     id: 'guest',
     slot: 1,
     state: { x: 240, y: 150, hp: 80, maxHp: 100 },
-    facing: 'left',
+    facing: 'right',
     moving: false,
     attacking: true,
     dead: false,
@@ -55,121 +38,73 @@ test('standalone dungeon snapshot captures every live player for replay', () => 
   const scene = {
     localPlayer: host,
     players: new Map([['host', host], ['guest', guest]]),
-    enemies: [
-      { id: 'boss-1', x: 960, y: 0, hp: 20, maxHp: 80, boss: true, archetype: 'brute' },
-      { id: 'elite-1', x: 240, y: 150, hp: 0, maxHp: 40, elite: true, archetype: 'fast' },
-    ],
-    drops: [
-      {
-        id: 'drop-weapon-1',
-        x: 720,
-        y: 450,
-        item: {
-          type: 'weapon.dungeon_blade',
-          archetype: 'katana',
-          rarity: 'epic',
-          damage: 12,
-          affixes: [{ id: 'critical_power', value: 0.2, tier: 2 }],
-        },
-      },
-    ],
+    enemies: [{
+      id: 'enemy-1', x: 413.5, y: 220.25, hp: 20, maxHp: 80,
+      archetype: 'brute', elite: true, boss: false, phase: 'charge',
+      facing: 'right', moving: true,
+      actor: { visual: 'must-not-leak' },
+    }],
+    drops: [{ id: 'drop-1', x: 720, y: 450, item: weapon }],
+    enemyProjectiles: [{
+      id: 'enemy-projectile:1', kind: 'enemy', ownerId: 'enemy-1',
+      x: 320, y: 220, vx: 120, vy: 0, visual: {}, glow: {},
+    }],
     kills: 7,
-    floor: 4,
-    __roomGeometry: { runSeed: 'LIVE-RUN-88' },
+    floor: 6,
+    portal: { x: 820, y: 300, open: true, visual: {} },
+    __roomGeometry: { runSeed: 'LIVE-RUN-88', templateId: 'broken-hall' },
     __infiniteDungeon: {
       getProgress: () => ({ floor: 6, chapter: 2, chapterFloor: 1, roomRole: 'elite' }),
     },
   }
-  const snapshot = createDungeonReplaySnapshot({
-    scene,
-    stats: { hp: 63, maxHp: 120, kills: 8 },
-    progress: { floor: 5, chapter: 1, chapterFloor: 5, roomRole: 'boss' },
-  })
 
-  assert.deepEqual(snapshot.players, [
-    {
-      id: 'host', slot: 0, x: 0.5, y: 0.5, hp: 64, maxHp: 120,
-      facing: 'right', moving: true, attacking: false, dead: false,
-    },
-    {
-      id: 'guest', slot: 1, x: 0.25, y: 0.25, hp: 80, maxHp: 100,
-      facing: 'left', moving: false, attacking: true, dead: false,
-    },
-  ])
-  assert.equal(snapshot.sceneKey, '6:2:1')
-  assert.equal(snapshot.runSeed, 'LIVE-RUN-88')
-  assert.equal(snapshot.enemies[0].id, 'boss-1')
-  assert.equal(snapshot.enemies[0].x, 1)
-  assert.equal(snapshot.enemies[0].y, 0)
-  assert.equal(snapshot.enemies[0].kind, 'boss')
-  assert.equal(snapshot.enemies[0].boss, true)
-  assert.equal(snapshot.enemies[0].hp, 20)
-  assert.equal(snapshot.enemies[0].alive, true)
-  assert.equal(snapshot.enemies[1].alive, false)
-  assert.deepEqual(snapshot.drops, [
-    {
-      id: 'drop-weapon-1',
-      x: 0.75,
-      y: 0.75,
-      item: {
-        type: 'weapon.dungeon_blade',
-        archetype: 'katana',
-        rarity: 'epic',
-        damage: 12,
-        affixes: [{ id: 'critical_power', value: 0.2, tier: 2 }],
-      },
-    },
-  ])
-  assert.deepEqual(snapshot.stats, { hp: 63, maxHp: 120, kills: 8 })
-  assert.deepEqual(snapshot.progress, { floor: 6, chapter: 2, chapterFloor: 1, roomRole: 'elite' })
+  const state = captureDungeonReplayState({ scene, stats: { hp: 63, maxHp: 120, kills: 8 } })
+
+  assert.equal(replay.version, 3)
+  assert.equal(state.players[0].x, 480)
+  assert.equal(state.players[0].y, 300)
+  assert.equal(state.players[0].facing, 'left')
+  assert.deepEqual(state.players[0].weapon, weapon)
+  assert.deepEqual(state.players[0].effects, { damage: 12, haste: 0.2 })
+  assert.equal('flipX' in state.players[0], false)
+  assert.equal(state.players[1].x, 240)
+  assert.equal(state.enemies[0].x, 413.5)
+  assert.equal(state.enemies[0].phase, 'charge')
+  assert.equal('visual' in state.enemies[0], false)
+  assert.equal(state.drops[0].x, 720)
+  assert.equal(state.scene.floor, 6)
+  assert.equal(state.scene.chapter, 2)
+  assert.equal(state.scene.chapterFloor, 1)
+  assert.equal(state.scene.roomRole, 'elite')
+  assert.equal(state.scene.sceneKey, '6:2:1')
+  assert.equal(state.scene.runSeed, 'LIVE-RUN-88')
+  assert.equal(state.scene.roomTemplate, 'broken-hall')
+  assert.deepEqual(state.projectiles[0], {
+    id: 'enemy-projectile:1',
+    kind: 'enemy',
+    ownerId: 'enemy-1',
+    x: 320,
+    y: 220,
+    vx: 120,
+    vy: 0,
+  })
 })
 
-test('replay recorder adds a new frame when only the remote player moves', () => {
+test('v3 replay recorder records remote-only movement and semantic events', () => {
   let now = 0
   const host = { id: 'host', slot: 0, state: { x: 100, y: 100, hp: 100, maxHp: 100 }, facing: 'down' }
   const guest = { id: 'guest', slot: 1, state: { x: 200, y: 100, hp: 100, maxHp: 100 }, facing: 'left' }
-  const scene = {
-    localPlayer: host,
-    players: new Map([['host', host], ['guest', guest]]),
-    enemies: [], drops: [], kills: 0, floor: 1,
-  }
+  const scene = { localPlayer: host, players: new Map([['host', host], ['guest', guest]]), enemies: [], drops: [], enemyProjectiles: [], floor: 1 }
   const recorder = replay.createRecorder({ now: () => now })
 
-  assert.equal(recorder.record(createDungeonReplaySnapshot({ scene })), true)
+  assert.equal(recorder.record(captureDungeonReplayState({ scene }), now, { force: true }), true)
   now = 200
   guest.state.x = 320
-  assert.equal(recorder.record(createDungeonReplaySnapshot({ scene })), true)
-  assert.equal(recorder.snapshot().frames.length, 2)
-})
-
-test('replay v2 rejects the legacy singular player shape', () => {
-  assert.equal(replay.version, 2)
-  assert.equal(typeof replay.normalizePlayers, 'function')
-  assert.deepEqual(replay.normalizePlayers({
-    player: { x: 0.5, y: 0.25, facing: 'up', moving: true, attacking: false },
-    stats: { hp: 77, maxHp: 120 },
-  }), [])
-})
-
-test('procedural dungeon geometry exposes the run seed used by replay', () => {
-  setProceduralRunSeed('replay-map-42')
-  try {
-    const geometry = roomGeometry(null, 2)
-    assert.equal(geometry.runSeed, 'REPLAY-MAP-42')
-
-    const scene = {
-      localPlayer: { id: 'host', state: { x: 480, y: 300, hp: 100, maxHp: 100 }, facing: 'down' },
-      enemies: [],
-      drops: [],
-      __roomGeometry: geometry,
-      __infiniteDungeon: {
-        getProgress: () => ({ floor: 2, chapter: 1, chapterFloor: 2, roomRole: 'combat' }),
-      },
-    }
-    const snapshot = createDungeonReplaySnapshot({ scene })
-    assert.equal(snapshot.runSeed, 'REPLAY-MAP-42')
-    assert.equal(snapshot.players.length, 1)
-  } finally {
-    setProceduralRunSeed(null)
-  }
+  assert.equal(recorder.record(captureDungeonReplayState({ scene }), now), true)
+  recorder.recordEvent({ type: 'player.attack', playerId: 'guest' }, now + 1)
+  const decoded = replay.decode(replay.encode(recorder.snapshot()))
+  assert.equal(decoded.version, 3)
+  assert.equal(decoded.frames.length, 2)
+  assert.equal(decoded.frames[1].state.players[1].x, 320)
+  assert.deepEqual(decoded.events.map((event) => event.type), ['player.attack'])
 })

@@ -3,7 +3,7 @@ import { hitFeedback, knockbackTarget } from './hit-feedback.js'
 import { hitSoundProfile } from './combat-feel.js'
 import { secondaryTarget } from './combat.js'
 import { ensureDungeonCombatRuntime, installDungeonCombatSceneBridge } from './combat-runtime.js'
-import { currentEffects } from './player-loadout.js'
+import { currentEffects, currentWeapon } from './player-loadout.js'
 import { installDungeonSfx } from './sfx-runtime.js'
 import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
@@ -106,6 +106,18 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
       if (weaponProfile(attacker.state).attackMode !== 'ranged') {
         scene.__dungeonVfx?.slash?.(attackOrigin, target, false)
       }
+      scene.captureDungeonEvent?.({
+        type: 'player.attack',
+        playerId: String(attacker.id ?? ''),
+        x: Number(attacker.state?.x) || 0,
+        y: Number(attacker.state?.y) || 0,
+        targetId: String(target.id ?? ''),
+        targetX: Number(target.x) || 0,
+        targetY: Number(target.y) || 0,
+        facing: attacker.facing ?? 'down',
+        attackMode: weaponProfile(attacker.state).attackMode,
+        weapon: currentWeapon(attacker.state),
+      })
       return coreSlash?.(target, attacker)
     } finally {
       attacker.state.damage = previousDamage
@@ -134,6 +146,38 @@ export function installDungeonAttackRuntime(scene, { random = Math.random, playe
     const elite = Boolean(enemy.elite || enemy.boss)
     const feedback = hitFeedback({ critical, boss: enemy.boss, damage })
     const corpseBurst = context?.source === 'corpse_burst'
+
+    scene.captureDungeonEvent?.({
+      type: 'hit',
+      sourceId: String(attacker.id ?? ''),
+      targetId: String(enemy.id ?? ''),
+      sourceX: Number(attacker.state?.x) || 0,
+      sourceY: Number(attacker.state?.y) || 0,
+      x: impactX,
+      y: impactY,
+      damage: Number(damage) || 0,
+      critical: Boolean(critical),
+      direct: Boolean(context?.direct),
+      source: context?.source ?? 'effect',
+      beforeHp,
+      afterHp: Number(enemy.hp) || 0,
+      killed,
+      elite: Boolean(enemy.elite),
+      boss: Boolean(enemy.boss),
+    })
+    if (killed) {
+      scene.captureDungeonEvent?.({
+        type: 'death',
+        entityId: String(enemy.id ?? ''),
+        sourceId: String(attacker.id ?? ''),
+        x: impactX,
+        y: impactY,
+        archetype: enemy.archetype ?? 'skeleton',
+        elite: Boolean(enemy.elite),
+        boss: Boolean(enemy.boss),
+        source: context?.source ?? 'effect',
+      })
+    }
 
     scene.__dungeonVfx?.impact?.(impactX, impactY, {
       explosion: corpseBurst,

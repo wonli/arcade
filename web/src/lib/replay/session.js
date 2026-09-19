@@ -1,5 +1,7 @@
 import { createReplayController } from './controller.js'
 
+const MAX_PENDING_EVENTS = 128
+
 export function createReplaySession({
   adapter,
   roomCode,
@@ -11,6 +13,7 @@ export function createReplaySession({
   if (!adapter?.id || !adapter?.createRecorder || !adapter?.encode) throw new Error('replay adapter is required')
 
   const recorder = adapter.createRecorder({ now })
+  const supportsEvents = typeof recorder?.recordEvent === 'function'
   const isHost = () => room()?.hostId === identity?.sessionId
   const controller = createReplayController({
     game: adapter.id,
@@ -27,10 +30,28 @@ export function createReplaySession({
   let started = false
   let starting = null
   let pending = null
+  let pendingEvents = []
 
   function write(sample) {
     if (!sample) return false
     return controller.record(sample.value, sample.at, sample.options)
+  }
+
+  function writeEvent(sample) {
+    if (!sample || !supportsEvents) return false
+    return controller.recordEvent(sample.event, sample.at)
+  }
+
+  function flushPending() {
+    if (pending) {
+      const sample = pending
+      pending = null
+      write(sample)
+    }
+    if (!pendingEvents.length) return
+    const events = pendingEvents
+    pendingEvents = []
+    for (const sample of events) writeEvent(sample)
   }
 
   async function ensureStarted() {
@@ -39,11 +60,8 @@ export function createReplaySession({
     if (starting) return starting
     starting = controller.start().then((ok) => {
       started = !!ok
-      if (started && pending) {
-        const sample = pending
-        pending = null
-        write(sample)
-      }
+      if (started) flushPending()
+      else pendingEvents = []
       return started
     }).finally(() => { starting = null })
     return starting
@@ -58,18 +76,25 @@ export function createReplaySession({
     return true
   }
 
+  function recordEvent(event, { at = now() } = {}) {
+    if (!isHost() || !supportsEvents || event == null) return false
+    const sample = { event, at }
+    if (started) return writeEvent(sample)
+    pendingEvents.push(sample)
+    if (pendingEvents.length > MAX_PENDING_EVENTS) pendingEvents.splice(0, pendingEvents.length - MAX_PENDING_EVENTS)
+    void ensureStarted()
+    return true
+  }
+
   async function finish(value = null) {
     if (!isHost()) return false
     if (value != null) pending = { value, at: now(), options: { force: true } }
     const active = await ensureStarted()
     if (!active) return false
-    if (pending) {
-      const sample = pending
-      pending = null
-      write(sample)
-    }
+    flushPending()
     const uploaded = await controller.finish()
     started = false
+    pendingEvents = []
     return uploaded
   }
 
@@ -79,18 +104,21 @@ export function createReplaySession({
     if (started) await controller.finish()
     started = false
     pending = value == null ? null : { value, at: now(), options: { force: true } }
+    pendingEvents = []
     recorder.reset?.()
     return ensureStarted()
   }
 
   function destroy() {
     pending = null
+    pendingEvents = []
     started = false
     controller.destroy()
   }
 
   return {
     record,
+    recordEvent,
     finish,
     restart,
     destroy,

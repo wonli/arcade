@@ -1,21 +1,22 @@
 <script>
   import { onMount } from 'svelte'
+  import { onNavigate } from '$app/navigation'
   import VirtualJoystick from '$lib/components/VirtualJoystick.svelte'
   import { getIdentity } from '$lib/identity.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
-  import { createReplaySession } from '$lib/replay/session.js'
+  import { createReplaySession, finalizeReplaySession } from '$lib/replay/session.js'
   import { socket } from '$lib/ws/arcade'
   import { createDungeonGame, chooseDungeonAssets } from '$lib/games/dungeon/scene.js'
-  import { replay as dungeonReplay, createDungeonReplaySnapshot } from '$lib/games/dungeon/replay.js'
+  import { captureDungeonReplayState, replay as dungeonReplay } from '$lib/games/dungeon/replay.js'
+  import { installDungeonReplayEventCapture } from '$lib/games/dungeon/replay-event-capture-runtime.js'
+  import { installDungeonPresentationStack } from '$lib/games/dungeon/presentation-stack.js'
   import { formatAffixLabel, gameOverSummary, weaponHudModel, weaponIdentityLabel } from '$lib/games/dungeon/presentation.js'
-  import { installAffixVisuals } from '$lib/games/dungeon/visuals.js'
   import { installPickupInteraction } from '$lib/games/dungeon/pickup-runtime.js'
   import { createComparisonCard } from '$lib/games/dungeon/comparison-runtime.js'
   import { installInfiniteDungeon } from '$lib/games/dungeon/infinite-runtime.js'
   import { installDungeonSpatial } from '$lib/games/dungeon/spatial-runtime.js'
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
   import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
-  import { installDungeonVfx } from '$lib/games/dungeon/vfx-runtime.js'
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
   import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
@@ -42,6 +43,7 @@
   let stats = initialDungeonStats(), progress = initialDungeonProgress()
   let viewportFrame = 0
   let replaySession = null, replayTimer = null, replayFinished = false
+  let replayFinishPromise = null
   let unsubscribeLocale = () => {}
 
   const t = (key, values = {}) => { let text = messages[locale]?.[key] ?? messages.en[key] ?? key; for (const [name,value] of Object.entries(values)) text = text.replace(`{${name}}`, value); return text }
@@ -56,21 +58,37 @@
 
   function dungeonScene() { return game?.scene?.getScene?.('Dungeon') }
 
-  function dungeonReplaySnapshot() {
-    return createDungeonReplaySnapshot({ scene: dungeonScene(), stats, progress })
+  function dungeonReplayState() {
+    return captureDungeonReplayState({ scene: dungeonScene(), stats, progress })
   }
 
   function recordDungeonReplay(force = false) {
-    const snapshot = dungeonReplaySnapshot()
-    if (snapshot) replaySession?.record(snapshot, { force })
+    const state = dungeonReplayState()
+    if (state) replaySession?.record(state, { force })
+  }
+
+  function recordDungeonReplayEvent(event) {
+    return replaySession?.recordEvent(event) ?? false
   }
 
   function finishDungeonReplay() {
-    if (replayFinished) return
+    if (replayFinishPromise) return replayFinishPromise
+    if (replayFinished) return Promise.resolve(false)
     replayFinished = true
-    const snapshot = dungeonReplaySnapshot()
-    if (snapshot) void replaySession?.finish(snapshot)
+    const session = replaySession
+    const state = dungeonReplayState()
+    if (!session || !state) return Promise.resolve(false)
+    replayFinishPromise = session.finish(state).catch((cause) => {
+      console.warn('Dungeon replay final upload failed:', cause)
+      return false
+    })
+    return replayFinishPromise
   }
+
+  onNavigate(() => {
+    if (!replaySession) return
+    return finishDungeonReplay().then(() => {})
+  })
 
   async function setupDungeonReplay() {
     try {
@@ -141,7 +159,7 @@
     const identityLabel = weaponIdentityLabel(event.item, locale) || t('dungeonBlade')
     if (event.type === 'pickup') eventText = potion ? t('pickupPotion', { heal: event.healed ?? 0 }) : t('pickupWeapon', { rarity: rarityName(event.item?.rarity), identity: identityLabel, damage: event.item?.damage ?? 0 })
     if (event.type === 'drop') eventText = potion ? t('dropPotion') : t('dropWeapon', { rarity: rarityName(event.item?.rarity), identity: identityLabel })
-    if (event.type === 'gameover') { eventText = t('gameover'); gameOver = true; panelOpen = false; touchInput?.stopMove(); finishDungeonReplay() }
+    if (event.type === 'gameover') { eventText = t('gameover'); gameOver = true; panelOpen = false; touchInput?.stopMove(); void finishDungeonReplay() }
     if (event.type === 'skill') eventText = t('skill', { hits: event.hits })
     if (event.type === 'floorstart') eventText = `${t('floorStart', { floor: event.floor })} · ${roomName(event.roomRole)}`
     if (event.type === 'floorclear') eventText = t('floorClear')
@@ -164,6 +182,11 @@
   }
 
   async function startDungeon() {
+    if (replayFinishPromise) await replayFinishPromise
+    if (replaySession && replayFinished) await replaySession?.restart?.()
+    replayFinished = false
+    replayFinishPromise = null
+
     const previousGame = game
     game = null
     hudRuntime = null
@@ -178,7 +201,6 @@
     progress = initialDungeonProgress()
     eventText = ''
     gameOver = false
-    replayFinished = false
     ready = false
     error = ''
 
@@ -203,8 +225,8 @@
         const scene = runGame.scene?.getScene?.('Dungeon')
         if (!scene) { if (attempts++ < 60) requestAnimationFrame(installRuntime); return }
 
-        installAffixVisuals(scene)
-        installDungeonVfx(scene, vfxManifest)
+        scene.captureDungeonEvent = recordDungeonReplayEvent
+        installDungeonPresentationStack(scene, { vfxManifest })
 
         if (!scene.__comparisonCard) {
           scene.__comparisonCard = createComparisonCard(scene, { getLocale:()=>locale, label:(key)=>t(({ground:'ground',current:'current',dungeonBlade:'dungeonBlade',emptyWeapon:'emptyWeapon',equip:'equip'})[key]??key), rarityName })
@@ -224,14 +246,15 @@
         installDungeonSpatial(scene, { getProgress:()=>scene.__infiniteDungeon?.getProgress?.()??progress, onEvent, label:(key)=>t(key) })
         installDungeonAttackRuntime(scene)
         installDungeonBacktracking(scene, { onProgress(next) { progress = next; hudRuntime?.update() } })
+        installDungeonReplayEventCapture(scene)
         touchInput = installDungeonTouchInput(scene)
         hudRuntime = installDungeonHud(scene, { getStats:()=>stats, getProgress:()=>progress, getLabels:hudLabels, onPotion:()=>usePotion(), onDetails:()=>togglePanel() })
         syncGameViewport()
+        ready = true
         recordDungeonReplay(true)
       }
 
       installRuntime()
-      ready = true
     } catch (cause) {
       console.error(cause)
       error = cause?.message || 'Failed to start dungeon'
@@ -246,12 +269,25 @@
     if (stageShell) observer.observe(stageShell)
     window.addEventListener('resize', syncGameViewport)
     void setupDungeonReplay()
-    startDungeon()
+    void startDungeon()
 
     return () => {
       mounted = false
       if (replayTimer) clearInterval(replayTimer)
-      replaySession?.destroy()
+      const session = replaySession
+      replaySession = null
+      if (session) {
+        if (replayFinishPromise) {
+          void replayFinishPromise.finally(() => session.destroy())
+        } else if (!replayFinished) {
+          const state = dungeonReplayState()
+          replayFinished = true
+          if (state) void finalizeReplaySession(session, state).catch(() => false)
+          else session.destroy()
+        } else {
+          session.destroy()
+        }
+      }
       cancelAnimationFrame(viewportFrame)
       observer.disconnect()
       window.removeEventListener('resize', syncGameViewport)

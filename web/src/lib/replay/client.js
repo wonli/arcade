@@ -12,6 +12,12 @@ export async function acquireReplayLease({ socket, roomId, game }) {
   return socket.request('replay.lease', { roomId, game })
 }
 
+export async function releaseReplayLease({ socket, game, lease }) {
+  if (!lease) return false
+  const response = await socket.request('replay.release', { game, lease })
+  return response?.released === true
+}
+
 export async function uploadReplay({ game, lease, version, durationMs, players, hash, bytes, fetchFn = fetch }) {
   const response = await fetchFn(`/api/game-replays/${encodeURIComponent(game)}`, {
     method: 'POST',

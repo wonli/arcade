@@ -1,12 +1,18 @@
 import { nearestConfirmableDrop, pickupIntent } from './pickup.js'
-import { lootMotion } from './combat-feel.js'
 import { pickupHealthPotion, shouldAutoUseHealthPotion, useStoredHealthPotion } from './inventory.js'
 import { ensureDungeonLootRuntime, installDungeonLootSceneBridge } from './loot-runtime.js'
 import { currentWeapon as currentPlayerWeapon } from './player-loadout.js'
 import { circleHitsSolid } from './spatial.js'
 import { buildNavGrid, findPath } from './pathfinding.js'
 import { weaponIdentityLabel } from './presentation.js'
-import { createWeaponVisual, setWeaponVisualSelected } from './weapon-visual-runtime.js'
+import {
+  cleanupGroundDropPresentation,
+  reconcileGroundDropPresentation,
+  setGroundDropSelected,
+  syncGroundDropLabel,
+  syncGroundDropPresentation,
+  updateGroundDropPresentation,
+} from './ground-drop-presentation.js'
 
 const DAMAGE_RANGES = {
   common: [3, 6],
@@ -117,36 +123,6 @@ function currentWeapon(player) {
   return equipped ? { ...equipped, affixes: [...(equipped.affixes ?? [])] } : null
 }
 
-function killTween(scene, target) {
-  if (target) scene?.tweens?.killTweensOf?.(target)
-}
-
-function killDropTweens(scene, drop) {
-  if (!drop) return
-  killTween(scene, drop.visual)
-  killTween(scene, drop.glow)
-  killTween(scene, drop.label)
-  for (const sparkle of drop.sparkles ?? []) killTween(scene, sparkle)
-}
-
-function syncGroundWeaponVisual(scene, drop, position) {
-  const visual = createWeaponVisual(scene, drop?.item, position.x, position.y)
-  if (!visual) return null
-  visual?.setDepth?.(15)
-  killTween(scene, drop.visual)
-  drop.visual?.destroy?.()
-  drop.visual = visual
-  return visual
-}
-
-function syncGroundWeaponLabel(drop, locale) {
-  if (!drop?.item?.type?.startsWith?.('weapon.') || !drop.label?.setText) return
-  const identity = groundWeaponLabel(drop.item, locale)
-  if (!identity) return
-  drop.__weaponDetailText ??= drop.label.text ?? ''
-  drop.label.setText(drop.__weaponDetailText ? `${identity}\n${drop.__weaponDetailText}` : identity)
-}
-
 export function installPlayerInventoryRuntime(scene, player, { emitStats = () => {} } = {}) {
   if (!scene || !player) return null
   player.runtime ??= {}
@@ -231,8 +207,7 @@ export function installPickupInteraction(scene, {
   }
 
   const applySelectionArt = (drop, active) => {
-    if (!drop?.visual || !drop?.item?.type?.startsWith?.('weapon.')) return
-    setWeaponVisualSelected(scene, drop.visual, drop.item, active)
+    setGroundDropSelected(scene, drop, active)
   }
 
   const publish = (next) => {
@@ -251,7 +226,7 @@ export function installPickupInteraction(scene, {
   const removeOwner = (drop, coreRemove) => {
     if (!drop) return null
     if (selectedKey && selectionKey(drop) === selectedKey) publish(null)
-    killDropTweens(scene, drop)
+    cleanupGroundDropPresentation(scene, drop)
     coreRemove?.(drop)
     return drop
   }
@@ -270,15 +245,12 @@ export function installPickupInteraction(scene, {
       : request.item
     const drop = coreSpawn({ ...request, x: position.x, y: position.y, item: preparedItem })
     if (!drop) return null
-    syncGroundWeaponVisual(scene, drop, position)
-    syncGroundWeaponLabel(drop, getLocale())
-    drop.spawnedAt = scene.time?.now ?? 0
-    drop.groundY = position.y
-    drop.baseScaleX = drop.visual?.scaleX ?? 1
-    drop.baseScaleY = drop.visual?.scaleY ?? 1
-    drop.visual?.setY?.(position.y - 72)
-    drop.visual?.setScale?.(drop.baseScaleX * 0.82, drop.baseScaleY * 0.82)
-    drop.glow?.setAlpha?.(0)
+    syncGroundDropPresentation(scene, drop, {
+      x: position.x,
+      y: position.y,
+      now: scene.time?.now ?? 0,
+      locale: getLocale(),
+    })
     return drop
   }
 
@@ -286,18 +258,12 @@ export function installPickupInteraction(scene, {
     let created = 0
     const now = scene.time?.now ?? 0
     for (const drop of scene.drops ?? []) {
-      if (!drop?.item?.type?.startsWith?.('weapon.') || (drop.visual && !force)) continue
-      const x = Number(drop.x) || 0
-      const groundY = Number(drop.groundY ?? drop.y) || 0
-      const visual = syncGroundWeaponVisual(scene, drop, { x, y: groundY })
-      if (!visual) continue
-      drop.baseScaleX = visual.scaleX ?? 1
-      drop.baseScaleY = visual.scaleY ?? 1
-      const motion = lootMotion(now - (drop.spawnedAt ?? now), groundY, 72)
-      visual.setY?.(motion.y)
-      visual.setScale?.(drop.baseScaleX * motion.scale, drop.baseScaleY * motion.scale)
-      if (selectedKey && selectionKey(drop) === selectedKey) applySelectionArt(drop, true)
-      created++
+      if (reconcileGroundDropPresentation(scene, drop, {
+        now,
+        locale: getLocale(),
+        force,
+        selected: Boolean(selectedKey && selectionKey(drop) === selectedKey),
+      })) created++
     }
     return created
   }
@@ -336,13 +302,7 @@ export function installPickupInteraction(scene, {
 
     scene.drops = (scene.drops ?? []).filter(Boolean)
     const now = scene.time?.now ?? 0
-    for (const drop of scene.drops) {
-      if (drop.spawnedAt == null || !drop.visual) continue
-      const motion = lootMotion(now - drop.spawnedAt, drop.groundY ?? drop.y, 72)
-      drop.visual.setY?.(motion.y)
-      drop.visual.setScale?.((drop.baseScaleX ?? 1) * motion.scale, (drop.baseScaleY ?? 1) * motion.scale)
-      if (drop.glow && now - drop.spawnedAt < 420) drop.glow.setAlpha?.(Math.min(0.75, (now - drop.spawnedAt) / 420 * 0.65))
-    }
+    for (const drop of scene.drops) updateGroundDropPresentation(scene, drop, now)
 
     const allDrops = [...scene.drops]
     const confirmDrops = allDrops.filter((drop) => pickupIntent(drop.item) === 'confirm')
@@ -424,7 +384,7 @@ export function installPickupInteraction(scene, {
       return previous
     },
     refreshLabels() {
-      for (const drop of scene.drops ?? []) syncGroundWeaponLabel(drop, getLocale())
+      for (const drop of scene.drops ?? []) syncGroundDropLabel(drop, getLocale())
     },
     getHealthPotions: () => inventory?.getHealthPotions?.() ?? 0,
     restore,

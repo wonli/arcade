@@ -6,10 +6,10 @@ const source = await readFile(new URL('./DungeonReplaySurface.svelte', import.me
 
 test('dungeon replay pins recorded run seed before spatial map installation', () => {
   assert.match(source, /setProceduralRunSeed/)
-  const firstFrame = source.indexOf('const firstFrame = $frameStore')
+  const firstFrame = source.indexOf('const firstFrame = stateAt(recording, 0)')
   const seed = source.indexOf('applyRunSeed(firstFrame)', firstFrame)
   const spatial = source.indexOf('installDungeonSpatial(scene', firstFrame)
-  assert.ok(firstFrame >= 0, 'replay should read its first recorded frame')
+  assert.ok(firstFrame >= 0, 'replay should read its first recorded v3 state')
   assert.ok(seed > firstFrame, 'replay should pin the recorded run seed')
   assert.ok(spatial > seed, 'run seed must be pinned before the spatial map is generated')
 })
