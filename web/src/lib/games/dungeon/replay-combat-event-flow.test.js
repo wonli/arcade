@@ -21,7 +21,7 @@ test('real Dungeon scene presentation owns combat event playback', () => {
   }
   assert.match(presentation, /__dungeonVfx\?\.slash/)
   assert.match(presentation, /__dungeonVfx\?\.impact/)
-  assert.match(presentation, /__dungeonEnemyFeedback\?\.death/)
+  assert.match(presentation, /feedback\(\)\?\.death/)
 })
 
 test('ReplaySurface contains no combat or VFX implementation', () => {
