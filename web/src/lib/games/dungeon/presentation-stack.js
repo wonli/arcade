@@ -6,8 +6,13 @@ import { installDungeonPlayerFacing } from './player-facing-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
 import { installDungeonProjectilePresentation } from './projectile-presentation-runtime.js'
+import { installGroundDropPresentationRuntime } from './ground-drop-presentation-runtime.js'
 
-export function installDungeonPresentationStack(scene, { vfxManifest = { assets: [] }, player = scene?.localPlayer } = {}) {
+export function installDungeonPresentationStack(scene, {
+  vfxManifest = { assets: [] },
+  player = scene?.localPlayer,
+  getLocale = () => 'en',
+} = {}) {
   if (!scene || !player) return null
   if (scene.__dungeonPresentationStack) return scene.__dungeonPresentationStack
 
@@ -19,8 +24,9 @@ export function installDungeonPresentationStack(scene, { vfxManifest = { assets:
   const enemies = installEnemyPresentationRuntime(scene)
   const portal = installPortalPresentationRuntime(scene)
   const projectiles = installDungeonProjectilePresentation(scene)
+  const groundDrops = installGroundDropPresentationRuntime(scene, { getLocale })
 
-  const api = { worldVfx, weaponVisuals, facing, enemies, portal, projectiles }
+  const api = { worldVfx, weaponVisuals, facing, enemies, portal, projectiles, groundDrops }
   scene.__dungeonPresentationStack = api
   return api
 }
