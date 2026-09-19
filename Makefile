@@ -29,7 +29,7 @@ LDFLAGS := -X '$(FLAGS_PKG).BuildDate=$(BUILD_DATE)' \
 
 GO_FLAGS := -trimpath -tags netgo -ldflags "$(LDFLAGS)"
 
-.PHONY: help setup deps frontend web-dev backend dev build darwin linux windows ali start test clean dungeon-assets game-assets
+.PHONY: help setup deps web-deps frontend web-dev backend dev build darwin linux windows ali start test clean dungeon-assets game-assets
 
 help:
 	@echo "AQI Arcade"
@@ -47,26 +47,26 @@ help:
 	@echo "  make backend        Rebuild frontend, then run only the Go server"
 	@echo "  make clean          Remove generated build output"
 
-setup:
-	$(GO) mod tidy
+web-deps:
 	cd $(WEB_DIR) && $(NPM) ci
+
+setup: web-deps
+	$(GO) mod tidy
 
 deps: setup
 
-dungeon-assets:
+dungeon-assets: web-deps
 	node ./scripts/prepare-dungeon-assets.mjs
 	node ./scripts/prepare-dungeon-runtime-bundle.mjs
 
 game-assets: dungeon-assets
 
 frontend: game-assets
-	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) run build
 	@touch $(EMBED_DIR)/.gitkeep
 
 # Optional frontend-only workflow. The default project workflow does not need Vite.
 web-dev: game-assets
-	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) run dev -- --host 0.0.0.0
 
 backend: frontend
@@ -111,7 +111,6 @@ start: build
 	./$(BUILD_PATH)/$(APP_NAME)
 
 test: game-assets
-	cd $(WEB_DIR) && $(NPM) ci
 	cd $(WEB_DIR) && $(NPM) test
 	cd $(WEB_DIR) && $(NPM) run build
 	@touch $(EMBED_DIR)/.gitkeep
