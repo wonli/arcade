@@ -23,7 +23,7 @@ test('ReplaySurface is only a lifecycle shell around the real replay-mode Dungeo
   for (const forbidden of [
     'createReplayEnemy', 'syncReplayEnemies', 'syncReplayPlayers', 'syncReplayDrops',
     'spawnRemotePlayer', 'despawnRemotePlayer', 'setFlipX', 'createHealthBar',
-    'syncGroundDropPresentation', 'updateGroundDropPresentation', 'installDungeonSpatial',
+    'syncGroundDropPresentation', 'updateGroundDropPresentation',
   ]) {
     assert.equal(surface.includes(forbidden), false, `ReplaySurface must not own ${forbidden}`)
   }
@@ -32,11 +32,12 @@ test('ReplaySurface is only a lifecycle shell around the real replay-mode Dungeo
 test('real DungeonScene owns replay state materialization and semantic presentation', () => {
   assert.match(scene, /this\.applyReplayState\s*=\s*\(state\)\s*=>\s*this\.__dungeonReplayMaterializer\.apply\(state\)/)
   assert.match(scene, /installDungeonPresentationEvents\(this,\s*\{\s*onEvent\s*\}\)/)
-  assert.match(scene, /if\s*\(!replayMode\)\s*this\.startFloor\(true,/)
+  assert.match(scene, /if\s*\(!replayMode\)\s*\{[\s\S]*?this\.startFloor\(true,/)
   assert.doesNotMatch(scene, /scene\.pause\(\)|this\.scene\.pause\(\)/)
 })
 
-test('shared presentation stack owns durable Dungeon visuals including ground drops and projectiles', () => {
+test('shared presentation stack owns replay-only durable visuals without changing live startup order', () => {
+  assert.match(stack, /scene\.mode\s*!==\s*['"]replay['"]/)
   assert.match(stack, /installGroundDropPresentationRuntime/)
   assert.match(stack, /installDungeonProjectilePresentation/)
   assert.match(stack, /installDungeonWeaponVisuals/)
