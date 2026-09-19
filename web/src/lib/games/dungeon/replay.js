@@ -33,6 +33,7 @@ export const replay = Object.freeze({
       width: DUNGEON_WIDTH,
       height: DUNGEON_HEIGHT,
       ...options,
+      componentOwnsTimeline: true,
     })
   },
 })
@@ -79,9 +80,6 @@ export function captureDungeonReplayState({ scene, player = null, stats = {}, pr
     },
   })
 }
-
-// Transitional source-level alias for route wiring. Both names produce v3 state.
-export const createDungeonReplaySnapshot = captureDungeonReplayState
 
 export function normalizeDungeonReplayPlayers(state = {}) {
   const source = Array.isArray(state.players) ? state.players : []
