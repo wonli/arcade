@@ -83,7 +83,7 @@ function dependencies(scene) {
 }
 
 const state = (guestX = 300) => ({
-  scene: { floor: 3, chapter: 1, chapterFloor: 3, roomRole: 'combat', portal: { x: 840, y: 300, open: true } },
+  scene: { floor: 3, chapter: 1, chapterFloor: 3, roomRole: 'combat', sceneKey: '3:1:3', portal: { x: 840, y: 300, open: true } },
   players: [
     { id: 'host', slot: 0, x: 120, y: 140, hp: 80, maxHp: 100, facing: 'left', moving: true, weapon: { type: 'weapon.dungeon_blade', rarity: 'rare' }, effects: { haste: 0.2 } },
     { id: 'guest', slot: 1, x: guestX, y: 220, hp: 70, maxHp: 90, facing: 'right', moving: false },
@@ -117,6 +117,34 @@ test('materializer reconciles real scene entities by stable id and is idempotent
   assert.equal(scene.drops[0], drop)
   assert.equal(scene.players.get('guest'), guest)
   assert.equal(guest.state.x, 360)
+})
+
+test('materializer rebuilds the spatial room atomically when sceneKey changes', () => {
+  const scene = sceneFixture()
+  const { deps } = dependencies(scene)
+  const refreshes = []
+  scene.__replaySceneState = { floor: 3, chapter: 1, chapterFloor: 3, roomRole: 'combat', sceneKey: '3:1:3' }
+  scene.__dungeonSpatial = {
+    refreshRoom() {
+      refreshes.push(structuredClone(scene.__replaySceneState))
+      // Live refreshRoom places the player at the new room spawn before the
+      // recorded replay frame restores the exact post-transition position.
+      scene.localPlayer.state.x = 48
+      scene.localPlayer.state.y = 300
+    },
+  }
+  const materializer = createDungeonWorldStateMaterializer(scene, deps)
+  const next = state()
+  next.scene = { ...next.scene, floor: 4, chapterFloor: 4, sceneKey: '4:1:4', portal: null }
+  next.players[0] = { ...next.players[0], x: 132, y: 304 }
+
+  materializer.apply(next)
+
+  assert.equal(refreshes.length, 1)
+  assert.equal(refreshes[0].sceneKey, '4:1:4')
+  assert.equal(refreshes[0].floor, 4)
+  assert.equal(scene.localPlayer.state.x, 132)
+  assert.equal(scene.localPlayer.state.y, 304)
 })
 
 test('materializer removes entities absent from the next canonical frame', () => {
