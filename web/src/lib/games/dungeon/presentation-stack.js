@@ -4,6 +4,7 @@ import { installDungeonWorldVfx } from './vfx-usage-runtime.js'
 import { installDungeonWeaponVisuals } from './weapon-visual-runtime.js'
 import { installDungeonPlayerFacing } from './player-facing-runtime.js'
 import { installEnemyPresentationRuntime } from './enemy-presentation-runtime.js'
+import { installDungeonEnemyFeedbackPresentation } from './enemy-feedback-runtime.js'
 import { installPortalPresentationRuntime } from './portal-presentation-runtime.js'
 import { installDungeonProjectilePresentation } from './projectile-presentation-runtime.js'
 import { installGroundDropPresentationRuntime } from './ground-drop-presentation-runtime.js'
@@ -22,11 +23,12 @@ export function installDungeonPresentationStack(scene, {
   const weaponVisuals = installDungeonWeaponVisuals(scene, { player })
   const facing = installDungeonPlayerFacing(scene, { player })
   const enemies = installEnemyPresentationRuntime(scene)
+  const enemyFeedback = installDungeonEnemyFeedbackPresentation(scene)
   const portal = installPortalPresentationRuntime(scene)
   const projectiles = installDungeonProjectilePresentation(scene)
   const groundDrops = installGroundDropPresentationRuntime(scene, { getLocale })
 
-  const api = { worldVfx, weaponVisuals, facing, enemies, portal, projectiles, groundDrops }
+  const api = { worldVfx, weaponVisuals, facing, enemies, enemyFeedback, portal, projectiles, groundDrops }
   scene.__dungeonPresentationStack = api
   return api
 }
