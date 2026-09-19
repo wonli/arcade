@@ -21,6 +21,7 @@
   import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
+  import { loadDungeonAssetBundle } from '$lib/games/dungeon/asset-bundle.js'
 
   const identity = getIdentity()
   const SOLO_REPLAY_ROOM = 'SOLO-DUNGEON'
@@ -40,6 +41,7 @@
   let touchInput = null, pickupRuntime = null, hudRuntime = null
   let mounted = false, ready = false, gameOver = false, panelOpen = false
   let error = '', locale = 'en', eventText = ''
+  let assetProgress = null
   let stats = initialDungeonStats(), progress = initialDungeonProgress()
   let viewportFrame = 0
   let replaySession = null, replayTimer = null, replayFinished = false
@@ -51,6 +53,9 @@
   const roomName = (role) => t(role || 'combat')
   $: weaponModel = weaponHudModel(stats, locale)
   $: runSummary = gameOverSummary(stats, progress)
+  $: loadingLabel = assetProgress?.phase === 'download'
+    ? `${t('loading')} ${assetProgress.percent ?? 0}%`
+    : assetProgress?.phase === 'unpack' ? `${t('loading')} · ${locale === 'zh-CN' ? '解压资源' : 'unpacking assets'}` : t('loading')
 
   function hudLabels() {
     return { locale, hp:t('hp'), weapon:t('weapon'), details:t('details'), none:t('none'), emptyWeapon:t('emptyWeapon'), dungeonBlade:t('dungeonBlade'), baseDamage:t('baseDamage'), combat:t('combat'), elite:t('elite'), rest:t('rest'), boss:t('boss'), 'rarity:common':t('rarityCommon'), 'rarity:uncommon':t('rarityUncommon'), 'rarity:rare':t('rarityRare'), 'rarity:epic':t('rarityEpic'), 'rarity:legendary':t('rarityLegendary') }
@@ -175,10 +180,8 @@
 
   async function loadGameResources() {
     if (gameResources) return gameResources
-    const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([loadPhaser(), fetch('/assets/debts/manifest.json').catch(() => null), fetch('/assets/vfx/manifest.json').catch(() => null)])
-    const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
-    const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
-    return gameResources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
+    const [Phaser, bundle] = await Promise.all([loadPhaser(), loadDungeonAssetBundle({ onProgress: (next) => { assetProgress = next } })])
+    return gameResources = { Phaser, assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset), vfxManifest: bundle.vfxManifest, assetManifest: bundle.manifest, resolveAsset: bundle.resolveAsset, dispose: bundle.dispose }
   }
 
   async function startDungeon() {
@@ -212,6 +215,8 @@
         Phaser,
         parent: mount,
         assets,
+        assetManifest: gameResources.assetManifest,
+        resolveAsset: gameResources.resolveAsset,
         labels: { floor:(floor)=>t('floorTitle',{floor}), floorClear:()=>t('floorClear'), rarity:(rarity)=>rarityName(rarity), affix:(id,value,tier)=>formatAffixLabel({id,value,tier},locale) },
         onStats(next) { stats = { ...stats, ...next }; hudRuntime?.update() },
         onEvent,
@@ -273,6 +278,7 @@
 
     return () => {
       mounted = false
+      gameResources?.dispose?.()
       if (replayTimer) clearInterval(replayTimer)
       const session = replaySession
       replaySession = null
@@ -314,7 +320,7 @@
     <div bind:this={mount} class="stage"></div>
     <div bind:this={gameViewport} class="game-viewport">
       {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
-      {#if !ready && !error}<div class="overlay">{t('loading')}</div>{/if}
+      {#if !ready && !error}<div class="overlay">{loadingLabel}</div>{/if}
       {#if error}<div class="overlay error">{error}</div>{/if}
 
       {#if panelOpen}

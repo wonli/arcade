@@ -2,7 +2,7 @@ import { attachLegacyTestPlayer } from './test/player-fixture.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { installDungeonVfx, selectVfx, selectVfxVariant, vfxBlendMode, vfxCatalog } from './vfx-runtime.js'
+import { installDungeonVfx, selectVfx, selectVfxVariant, vfxBlendMode, vfxCatalog, vfxPreloadCatalog } from './vfx-runtime.js'
 
 const manifest = {
   assets: [
@@ -31,6 +31,37 @@ test('vfxCatalog keeps multiple ordered variants for each kind', () => {
   ])
   assert.equal(catalog.lightning[0].path, '/assets/vfx/lightning/bolt.png')
   assert.deepEqual(catalog.explosion, [])
+})
+
+test('vfxPreloadCatalog keeps only the best candidate for the initial load', () => {
+  const catalog = vfxPreloadCatalog(manifest)
+  assert.deepEqual(catalog.beam.map((asset) => asset.path), ['/assets/vfx/free/laser-a.png'])
+  assert.deepEqual(catalog.lightning.map((asset) => asset.path), ['/assets/vfx/lightning/bolt.png'])
+  assert.deepEqual(catalog.whirlwind.map((asset) => asset.path), ['/assets/vfx/foozle/tornado.png'])
+  assert.deepEqual(catalog.explosion, [])
+})
+
+test('installDungeonVfx queues only one texture per effect kind', () => {
+  const queued = []
+  const scene = {
+    textures: { exists: () => false },
+    load: {
+      once() {},
+      start() {},
+      image(key, path) { queued.push(path) },
+      spritesheet(key, path) { queued.push(path) },
+    },
+  }
+
+  installDungeonVfx(attachLegacyTestPlayer(scene), manifest)
+
+  assert.deepEqual(queued.sort(), [
+    '/assets/vfx/foozle/tornado.png',
+    '/assets/vfx/free/laser-a.png',
+    '/assets/vfx/lightning/bolt.png',
+    '/assets/vfx/retro-impact/critical.png',
+    '/assets/vfx/retro-impact/hit.png',
+  ].sort())
 })
 
 test('variant selection is stable for the same seed and can vary across seeds', () => {

@@ -55,6 +55,7 @@ deps: setup
 
 dungeon-assets:
 	node ./scripts/prepare-dungeon-assets.mjs
+	node ./scripts/prepare-dungeon-runtime-bundle.mjs
 
 game-assets: dungeon-assets
 
@@ -104,7 +105,7 @@ ali: linux
 		cd /data/aqi-arcade; \
 		chmod 755 .arcade-latest.next; \
 		mv -f .arcade-latest.next arcade-latest; \
-		sudo systemctl restart arcade.service'
+		sudo systemctl restart aqi-arcade.service'
 
 start: build
 	./$(BUILD_PATH)/$(APP_NAME)

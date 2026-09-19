@@ -26,6 +26,7 @@
   import { formatAffixLabel, weaponHudModel } from '$lib/games/dungeon/presentation.js'
   import { createDungeonTranslator, dungeonHudLabels, normalizeDungeonLocale } from '$lib/games/dungeon/i18n.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
+  import { loadDungeonAssetBundle } from '$lib/games/dungeon/asset-bundle.js'
 
   export let data
 
@@ -58,10 +59,14 @@
   let stats = initialDungeonStats()
   let progress = initialDungeonProgress()
   let resources = null
+  let assetProgress = null
 
   $: isHost = room?.hostId === identity.sessionId
   $: waiting = room?.status !== 'playing'
   $: weaponModel = weaponHudModel(stats, locale)
+  $: loadingLabel = assetProgress?.phase === 'download'
+    ? `${t('syncingDungeon')} ${assetProgress.percent ?? 0}%`
+    : assetProgress?.phase === 'cache' ? `${t('syncingDungeon')} · local` : t('syncingDungeon')
 
   function t(key, values = {}) {
     return createDungeonTranslator(locale)(key, values)
@@ -173,14 +178,11 @@
 
   async function loadResources() {
     if (resources) return resources
-    const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
+    const [Phaser, bundle] = await Promise.all([
       loadPhaser(),
-      fetch('/assets/debts/manifest.json').catch(() => null),
-      fetch('/assets/vfx/manifest.json').catch(() => null),
+      loadDungeonAssetBundle({ onProgress: (next) => { assetProgress = next } }),
     ])
-    const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
-    const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
-    resources = { Phaser, assets: chooseDungeonAssets(manifest), vfxManifest }
+    resources = { Phaser, assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset), vfxManifest: bundle.vfxManifest, assetManifest: bundle.manifest, resolveAsset: bundle.resolveAsset, dispose: bundle.dispose }
     return resources
   }
 
@@ -240,7 +242,7 @@
   }
 
   async function startGame() {
-    const { Phaser, assets, vfxManifest } = await loadResources()
+    const { Phaser, assets, vfxManifest, assetManifest, resolveAsset } = await loadResources()
     if (!mount) return
 
     replayFinished = false
@@ -251,6 +253,8 @@
       Phaser,
       parent: mount,
       assets,
+      assetManifest,
+      resolveAsset,
       labels: {
         floor: (floor) => t('floorTitle', { floor }),
         floorClear: () => t('floorClear'),
@@ -432,6 +436,8 @@
       scene = null
       game?.destroy(true)
       game = null
+      resources?.dispose?.()
+      resources = null
       setProgressionRunSeed(null)
       setProceduralRunSeed(null)
     }
@@ -458,10 +464,10 @@
   <section class="stage-shell">
     <div bind:this={mount} class="stage"></div>
 
-    {#if waiting}
+    {#if waiting && (!assetProgress || assetProgress.percent >= 100)}
       <div class="banner">{t('waitingPlayer', { room: roomCode.toLowerCase() })}</div>
     {:else if !ready}
-      <div class="banner">{t('syncingDungeon')}</div>
+      <div class="banner">{loadingLabel}</div>
     {/if}
 
     {#if error}<div class="error">{error}</div>{/if}

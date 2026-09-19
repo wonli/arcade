@@ -1,6 +1,6 @@
 export const DUNGEON_MUSIC_PATH = '/assets/dungeon/m1.m4a'
 
-export function createDungeonAmbient({ windowImpl = globalThis.window } = {}) {
+export function createDungeonAmbient({ windowImpl = globalThis.window, resolveAsset = (path) => path } = {}) {
   let audio = null
   let state = 'idle'
 
@@ -11,7 +11,7 @@ export function createDungeonAmbient({ windowImpl = globalThis.window } = {}) {
       return
     }
     if (!audio) {
-      audio = new windowImpl.Audio(DUNGEON_MUSIC_PATH)
+      audio = new windowImpl.Audio(resolveAsset(DUNGEON_MUSIC_PATH))
       audio.loop = true
       audio.preload = 'auto'
       audio.volume = 0.58

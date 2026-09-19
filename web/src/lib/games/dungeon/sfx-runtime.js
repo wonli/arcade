@@ -16,12 +16,12 @@ function createAudio(windowImpl, src, { loop = false, volume = 1 } = {}) {
   return audio
 }
 
-export function createDungeonSfx(windowImpl = globalThis.window) {
+export function createDungeonSfx(windowImpl = globalThis.window, resolveAsset = (path) => path) {
   const clips = {
-    move: createAudio(windowImpl, DUNGEON_SFX.move, { loop: true, volume: DEFAULT_VOLUMES.move }),
-    attack: createAudio(windowImpl, DUNGEON_SFX.attack, { volume: DEFAULT_VOLUMES.attack }),
-    heal: createAudio(windowImpl, DUNGEON_SFX.heal, { volume: DEFAULT_VOLUMES.heal }),
-    skill: createAudio(windowImpl, DUNGEON_SFX.skill, { volume: DEFAULT_VOLUMES.skill }),
+    move: createAudio(windowImpl, resolveAsset(DUNGEON_SFX.move), { loop: true, volume: DEFAULT_VOLUMES.move }),
+    attack: createAudio(windowImpl, resolveAsset(DUNGEON_SFX.attack), { volume: DEFAULT_VOLUMES.attack }),
+    heal: createAudio(windowImpl, resolveAsset(DUNGEON_SFX.heal), { volume: DEFAULT_VOLUMES.heal }),
+    skill: createAudio(windowImpl, resolveAsset(DUNGEON_SFX.skill), { volume: DEFAULT_VOLUMES.skill }),
   }
   let moving = false
 
@@ -58,11 +58,11 @@ export function createDungeonSfx(windowImpl = globalThis.window) {
   return { play, setMoving, stop }
 }
 
-export function installDungeonSfx(scene, { player = scene?.localPlayer, windowImpl = globalThis.window } = {}) {
+export function installDungeonSfx(scene, { player = scene?.localPlayer, windowImpl = globalThis.window, resolveAsset = scene?.__dungeonAssetResolver } = {}) {
   if (!scene || !player || scene.__dungeonSfxInstalled) return scene?.__dungeonSfx ?? null
   scene.__dungeonSfxInstalled = true
 
-  const sfx = createDungeonSfx(windowImpl)
+  const sfx = createDungeonSfx(windowImpl, resolveAsset ?? ((path) => path))
   const originalUpdatePlayer = scene.updatePlayer.bind(scene)
   const originalSlash = scene.slash.bind(scene)
   const originalHealPlayer = scene.healPlayer.bind(scene)
