@@ -12,14 +12,14 @@ const solo = source('../../../routes/dungeon/+page.svelte')
 const coop = source('../../../routes/room/[code]/dungeon/+page.svelte')
 
 test('live Dungeon does not preinstall weapon or ground-drop presentation before gameplay runtimes', () => {
-  assert.match(stack, /scene\.mode\s*!==\s*['"]replay['"]/)
+  assert.match(stack, /scene\.mode\s*!==\s*['"]replay['"]/) 
 
   const liveGuard = stack.indexOf("scene.mode !== 'replay'")
-  const weapons = stack.indexOf('installDungeonWeaponVisuals')
-  const drops = stack.indexOf('installGroundDropPresentationRuntime')
+  const weapons = stack.indexOf('installDungeonWeaponVisuals(scene')
+  const drops = stack.indexOf('installGroundDropPresentationRuntime(scene')
   assert.ok(liveGuard >= 0, 'presentation stack needs an explicit live/replay boundary')
-  assert.ok(weapons > liveGuard, 'held-weapon presentation must stay behind the replay-only boundary')
-  assert.ok(drops > liveGuard, 'ground-drop presentation runtime must stay behind the replay-only boundary')
+  assert.ok(weapons > liveGuard, 'held-weapon presentation install call must stay behind the replay-only boundary')
+  assert.ok(drops > liveGuard, 'ground-drop presentation install call must stay behind the replay-only boundary')
 })
 
 test('solo and coop routes keep gameplay runtime order after the replay refactor', () => {
