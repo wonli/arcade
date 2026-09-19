@@ -1,6 +1,5 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { installDungeonPresentationEvents } from './presentation-events.js'
 
 function visual() {
@@ -54,12 +53,13 @@ test('presentation events never mutate durable hp or world membership', () => {
 })
 
 test('emit presents and forwards exactly one semantic event', () => {
-  const { scene, calls } = fixture()
+  const { scene, player, calls } = fixture()
   const emitted = []
   const api = installDungeonPresentationEvents(scene, { onEvent: (event) => emitted.push(event) })
   const event = { type: 'player.attack', playerId: 'p1', x: 100, y: 120, targetX: 140, targetY: 120, facing: 'right' }
   assert.equal(api.emit(event), true)
   assert.deepEqual(emitted, [event])
+  assert.equal(player.attacking, true)
   assert.ok(calls.some((entry) => entry[0] === 'animation' && entry[1] === 'attack'))
 })
 
@@ -70,12 +70,4 @@ test('scene exposes one presentation entry point for live and replay callers', (
   assert.equal(scene.emitDungeonEvent, api.emit)
   assert.equal(scene.presentEvent({ type: 'floor.clear', floor: 2 }), true)
   assert.equal(scene.presentEvent({ type: 'unknown' }), false)
-})
-
-test('default player animation selection keeps an active attack ahead of walk or idle', () => {
-  const sceneSource = readFileSync(new URL('./scene.js', import.meta.url), 'utf8')
-  assert.match(
-    sceneSource,
-    /forceAction\s*\|\|\s*\(player\.attacking\s*\?\s*['"]attack['"]\s*:\s*player\.moving\s*\?\s*['"]walk['"]\s*:\s*['"]idle['"]\)/,
-  )
 })
