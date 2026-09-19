@@ -1,8 +1,10 @@
 <script>
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
-  import { createDungeonReplayDriver } from './replay-driver.js'
+  import { createDungeonReplayDriver, stateAt } from './replay-driver.js'
   import { installDungeonPresentationStack } from './presentation-stack.js'
+  import { setProceduralRunSeed } from './spatial.js'
+  import { installDungeonSpatial } from './spatial-runtime.js'
   import { loadPhaser } from './phaser.js'
 
   let { recording } = $props()
@@ -11,6 +13,21 @@
   let game = null
   let driver = null
   let stopped = false
+
+  function progressFromState(state = {}) {
+    const value = state?.scene ?? state ?? {}
+    return {
+      floor: Math.max(1, Number(value.floor) || 1),
+      chapter: Math.max(1, Number(value.chapter) || 1),
+      chapterFloor: Math.max(1, Number(value.chapterFloor) || 1),
+      roomRole: value.roomRole ?? 'combat',
+    }
+  }
+
+  function applyRunSeed(state = {}) {
+    const seed = String(state?.scene?.runSeed ?? '').trim().toUpperCase()
+    setProceduralRunSeed(seed || null)
+  }
 
   async function startReplay() {
     const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
@@ -21,6 +38,9 @@
     const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
     const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
     if (!mount || stopped) return
+
+    const firstFrame = stateAt(recording, 0)
+    applyRunSeed(firstFrame)
 
     game = createDungeonGame({
       Phaser,
@@ -41,6 +61,13 @@
         return
       }
 
+      scene.__replaySceneState = structuredClone(firstFrame.scene ?? {})
+      installDungeonSpatial(scene, {
+        player: scene.localPlayer,
+        getProgress: () => progressFromState(scene.__replaySceneState),
+        onEvent: () => {},
+        label: (key) => key,
+      })
       installDungeonPresentationStack(scene, { vfxManifest })
       driver = createDungeonReplayDriver({ recording, scene, loop: true })
       driver.play()
@@ -57,6 +84,7 @@
       driver = null
       game?.destroy?.(true)
       game = null
+      setProceduralRunSeed(null)
     }
   })
 </script>
