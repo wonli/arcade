@@ -75,9 +75,12 @@ jobs:
             src/lib/games/dungeon/replay.test.js \
             src/lib/games/dungeon/world-state-materializer.test.js \
             src/lib/games/dungeon/presentation-events.test.js \
+            src/lib/games/dungeon/remote-player-runtime.test.js \
             src/lib/games/dungeon/replay-combat-event-flow.test.js \
             src/lib/games/dungeon/replay-world-event-flow.test.js \
             src/lib/games/dungeon/dungeon-replay-architecture-contract.test.js \
+            src/lib/games/dungeon/live-presentation-order-regression.test.js \
+            src/lib/games/dungeon/replay-surface-contract.test.js \
             src/lib/games/dungeon/replay-surface-readiness-contract.test.js \
             src/lib/games/dungeon/solo-replay-lifecycle-contract.test.js \
             src/lib/games/dungeon/coop-replay-lifecycle-contract.test.js \
