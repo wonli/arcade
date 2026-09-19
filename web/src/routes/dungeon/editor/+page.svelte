@@ -320,7 +320,10 @@
   async function startEditor() {
     try {
       const [configResult, loaded] = await Promise.all([configClient.load(), loadResources()])
-      if (!mounted) return
+      if (!mounted) {
+        loaded.dispose()
+        return
+      }
       configSource = configResult.source
       workingConfig = normalizeWeaponPresentationConfig(configResult.config)
       resources = loaded

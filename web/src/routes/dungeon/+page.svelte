@@ -181,6 +181,10 @@
   async function loadGameResources() {
     if (gameResources) return gameResources
     const [Phaser, bundle] = await Promise.all([loadPhaser(), loadDungeonAssetBundle({ onProgress: (next) => { assetProgress = next } })])
+    if (!mounted) {
+      bundle.dispose()
+      return null
+    }
     return gameResources = { Phaser, assets: chooseDungeonAssets(bundle.manifest, bundle.resolveAsset), vfxManifest: bundle.vfxManifest, assetManifest: bundle.manifest, resolveAsset: bundle.resolveAsset, dispose: bundle.dispose }
   }
 
@@ -208,8 +212,9 @@
     error = ''
 
     try {
-      const { Phaser, assets, vfxManifest } = await loadGameResources()
-      if (!mounted) return
+      const loaded = await loadGameResources()
+      if (!loaded || !mounted) return
+      const { Phaser, assets, vfxManifest } = loaded
 
       const runGame = createDungeonGame({
         Phaser,
