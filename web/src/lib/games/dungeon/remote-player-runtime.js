@@ -131,7 +131,7 @@ export function syncRemotePlayerPresentation(scene, player) {
     player.state.maxHp,
   )
   player.runtime?.weaponVisuals?.sync?.()
-  scene.syncPlayerAnimation?.(null, player)
+  scene.syncPlayerAnimation?.(player.attacking ? 'attack' : null, player)
 }
 
 export function spawnRemotePlayer(scene, snapshot) {
