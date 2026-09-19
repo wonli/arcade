@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/wonli/arcade/game"
-	"github.com/wonli/arcade/game/chess"
-	"github.com/wonli/arcade/game/gomoku"
 	"github.com/wonli/arcade/room"
 )
 
@@ -45,33 +43,12 @@ func (s *Service) Create(gameName string, bounds ...int) (*room.Room, error) {
 	if minPlayers < 1 || maxPlayers < minPlayers || maxPlayers > 8 {
 		return nil, errors.New("invalid player bounds")
 	}
-	switch gameName {
-	case "gomoku":
-		if minPlayers != 2 || maxPlayers != 2 {
-			return nil, errors.New("gomoku requires two players")
-		}
-	case "chess":
-		if minPlayers != 2 || maxPlayers != 2 {
-			return nil, errors.New("chess requires two players")
-		}
-	case "tetris":
-		if minPlayers != maxPlayers || (maxPlayers != 1 && maxPlayers != 2) {
-			return nil, errors.New("tetris supports one or two players")
-		}
-	case "dungeon":
-		if minPlayers != 2 || maxPlayers != 2 {
-			return nil, errors.New("dungeon requires two players")
-		}
-	case "snake":
-		if minPlayers != 1 || maxPlayers != 8 {
-			return nil, errors.New("snake supports 1-8 players")
-		}
-	case "drawguess":
-		if minPlayers != 2 || maxPlayers != 8 {
-			return nil, errors.New("drawguess supports 2-8 players")
-		}
-	default:
+	spec, ok := lookupGameSpec(gameName)
+	if !ok {
 		return nil, fmt.Errorf("unsupported game: %s", gameName)
+	}
+	if err := spec.validateBounds(minPlayers, maxPlayers); err != nil {
+		return nil, err
 	}
 	return s.rooms.Create(gameName, minPlayers, maxPlayers)
 }
@@ -111,31 +88,7 @@ func (s *Service) Join(roomID string, playerID game.PlayerID, name string) error
 	}
 	return s.ready(r)
 }
-func (s *Service) AddBot(roomID string, playerID game.PlayerID, difficulty ...string) error {
-	r, ok := s.rooms.Get(roomID)
-	if !ok {
-		return errors.New("room not found")
-	}
-	if r.GameName != "gomoku" && r.GameName != "chess" {
-		return errors.New("bot is only available for gomoku and chess")
-	}
-	if len(r.Players) != 1 || r.Players[0].ID != playerID {
-		return errors.New("bot can only be added by the first player to an empty seat")
-	}
-	level := ""
-	if r.GameName == "chess" {
-		if len(difficulty) > 0 {
-			level = string(chess.NormalizeDifficulty(difficulty[0]))
-		} else {
-			level = string(chess.Medium)
-		}
-	}
-	botID := game.PlayerID("bot:" + r.ID)
-	if err := r.Join(room.Player{ID: botID, Name: "AQI BOT", Bot: true, BotDifficulty: level}); err != nil {
-		return err
-	}
-	return s.ready(r)
-}
+
 func (s *Service) Rematch(roomID string, playerID game.PlayerID) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok {
@@ -152,6 +105,7 @@ func (s *Service) Rematch(roomID string, playerID game.PlayerID) error {
 	r.SetStatus(room.StatusPlaying)
 	return nil
 }
+
 func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok {
@@ -162,72 +116,11 @@ func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMe
 	}
 	return s.botMove(r)
 }
+
 func (s *Service) ready(r *room.Room) error {
-	ids := r.PlayerIDs()
-	if r.Started() {
-		return nil
-	}
-	switch r.GameName {
-	case "gomoku":
-		if len(ids) != r.MaxPlayers {
-			return nil
-		}
-		if len(ids) != 2 {
-			return errors.New("gomoku requires two players")
-		}
-		r.Ready(gomoku.New(ids[0], ids[1]))
-	case "chess":
-		if len(ids) != r.MaxPlayers {
-			return nil
-		}
-		if len(ids) != 2 {
-			return errors.New("chess requires two players")
-		}
-		r.Ready(chess.New(ids[0], ids[1]))
-	case "tetris", "dungeon":
-		if len(ids) != r.MaxPlayers {
-			return nil
-		}
-		r.SetStatus(room.StatusPlaying)
-	case "snake", "drawguess":
-		return nil
-	default:
+	spec, ok := lookupGameSpec(r.GameName)
+	if !ok {
 		return fmt.Errorf("unsupported game: %s", r.GameName)
 	}
-	return nil
-}
-func (s *Service) botMove(r *room.Room) error {
-	if len(r.Players) != 2 || !r.Players[1].Bot || r.Game() == nil || r.Game().Status() != game.StatusPlaying {
-		return nil
-	}
-	switch state := r.Game().State().(type) {
-	case gomoku.State:
-		if state.Turn != gomoku.White {
-			return nil
-		}
-		pos, ok := gomoku.ChooseBotMove(state, gomoku.White)
-		if !ok {
-			return nil
-		}
-		payload, err := json.Marshal(pos)
-		if err != nil {
-			return err
-		}
-		return r.Move(r.Players[1].ID, payload)
-	case chess.State:
-		if state.Turn != chess.Black {
-			return nil
-		}
-		move, ok := chess.ChooseBotMove(state, chess.Black, chess.NormalizeDifficulty(r.Players[1].BotDifficulty))
-		if !ok {
-			return nil
-		}
-		payload, err := json.Marshal(move)
-		if err != nil {
-			return err
-		}
-		return r.Move(r.Players[1].ID, payload)
-	default:
-		return nil
-	}
+	return spec.onJoin(r)
 }

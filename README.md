@@ -60,6 +60,8 @@ make web-dev     Optional Vite HMR server
 make clean       Remove generated build output
 ```
 
+Adding a game? Read [`docs/ADDING_A_GAME.md`](docs/ADDING_A_GAME.md) for the current integration points and repository boundaries.
+
 ## How it is shipped
 
 ```text

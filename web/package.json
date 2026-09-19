@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "generate:dungeon-proto": "node scripts/generate-dungeon-proto.mjs",
-    "test": "node --test src/lib/*.test.js src/lib/ws/*.test.js src/lib/games/**/*.test.js"
+    "test": "node --test src/lib/*.test.js src/lib/ws/*.test.js src/lib/games/*.test.js src/lib/games/**/*.test.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",

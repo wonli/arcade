@@ -11,6 +11,15 @@ These rules apply to automated coding work in this repository.
 - Prefer ordinary file edits and normal commits on feature branches. Avoid low-level Git object/tree manipulation solely to manufacture a squashed commit.
 - If a task is already being developed on a feature branch, continue there unless the user explicitly requests a branch change.
 
+## Adding or restructuring games
+
+- Read `docs/ADDING_A_GAME.md` before adding a game.
+- Keep game-specific behavior with the game where practical instead of adding another branch to shared code.
+- Do not force a game to implement `game.Game` or another shared interface just for consistency.
+- Add a shared abstraction only when at least two real consumers benefit from it and the abstraction makes both simpler.
+- Recording and replay behavior belong to each game; shared replay code must not define a universal game recording format.
+- Structural refactors must preserve existing gameplay, public WebSocket actions/payloads, routes, and page behavior unless the task explicitly asks to change them.
+
 ## Safety
 
 - Never rewrite shared branch history implicitly.

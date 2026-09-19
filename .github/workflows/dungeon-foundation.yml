@@ -6,12 +6,13 @@ on:
       - main
     paths:
       - 'arcade/**'
+      - 'game/**'
+      - 'room/**'
       - 'server/**'
       - 'internal/gamereplay/**'
-      - 'web/src/lib/games/dungeon/**'
+      - 'web/src/lib/games/**'
       - 'web/src/lib/replay/**'
-      - 'web/src/routes/dungeon/+page.svelte'
-      - 'web/src/routes/room/[code]/dungeon/+page.svelte'
+      - 'web/src/routes/**'
       - 'web/package.json'
       - 'web/package-lock.json'
       - '.github/workflows/dungeon-foundation.yml'
@@ -20,12 +21,13 @@ on:
   pull_request:
     paths:
       - 'arcade/**'
+      - 'game/**'
+      - 'room/**'
       - 'server/**'
       - 'internal/gamereplay/**'
-      - 'web/src/lib/games/dungeon/**'
+      - 'web/src/lib/games/**'
       - 'web/src/lib/replay/**'
-      - 'web/src/routes/dungeon/+page.svelte'
-      - 'web/src/routes/room/[code]/dungeon/+page.svelte'
+      - 'web/src/routes/**'
       - 'web/package.json'
       - 'web/package-lock.json'
       - '.github/workflows/dungeon-foundation.yml'
@@ -50,8 +52,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run Arcade server contracts
-        run: go test ./internal/gamereplay ./arcade ./server
+      - name: Run Go tests
+        run: go test ./...
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -63,6 +65,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: web
         run: npm ci
+
+      - name: Run frontend tests
+        working-directory: web
+        run: npm test
 
       - name: Run focused Dungeon foundation contracts
         working-directory: web
