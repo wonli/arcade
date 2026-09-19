@@ -19,6 +19,20 @@ export function installDungeonPresentationStack(scene, {
 
   installAffixVisuals(scene, { player })
   installDungeonVfx(scene, vfxManifest)
+
+  // Live Dungeon already has a deliberate runtime order:
+  // pickup -> infinite/spatial -> attack. The attack runtime owns installation
+  // of held-weapon/facing/combat presentation, while pickup owns the live drop
+  // lifecycle. Installing the replay presentation stack before those runtimes
+  // changes texture-loading and ownership timing and breaks otherwise-correct
+  // live weapon visuals. Replay needs the remaining presentation-only runtimes
+  // because gameplay runtimes are intentionally not installed there.
+  if (scene.mode !== 'replay') {
+    const api = { mode: 'live' }
+    scene.__dungeonPresentationStack = api
+    return api
+  }
+
   const worldVfx = installDungeonWorldVfx(scene, { player })
   const weaponVisuals = installDungeonWeaponVisuals(scene, { player })
   const facing = installDungeonPlayerFacing(scene, { player })
@@ -28,7 +42,7 @@ export function installDungeonPresentationStack(scene, {
   const projectiles = installDungeonProjectilePresentation(scene)
   const groundDrops = installGroundDropPresentationRuntime(scene, { getLocale })
 
-  const api = { worldVfx, weaponVisuals, facing, enemies, enemyFeedback, portal, projectiles, groundDrops }
+  const api = { mode: 'replay', worldVfx, weaponVisuals, facing, enemies, enemyFeedback, portal, projectiles, groundDrops }
   scene.__dungeonPresentationStack = api
   return api
 }
