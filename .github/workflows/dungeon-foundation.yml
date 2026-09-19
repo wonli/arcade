@@ -15,8 +15,8 @@ on:
       - 'web/package.json'
       - 'web/package-lock.json'
       - '.github/workflows/dungeon-foundation.yml'
-      - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
-      - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
+      - 'docs/superpowers/specs/**'
+      - 'docs/superpowers/plans/**'
   pull_request:
     paths:
       - 'arcade/**'
@@ -29,8 +29,8 @@ on:
       - 'web/package.json'
       - 'web/package-lock.json'
       - '.github/workflows/dungeon-foundation.yml'
-      - 'docs/superpowers/specs/2026-09-16-dungeon-coop-foundation-design.md'
-      - 'docs/superpowers/plans/2026-09-16-dungeon-coop-foundation.md'
+      - 'docs/superpowers/specs/**'
+      - 'docs/superpowers/plans/**'
   workflow_dispatch:
 
 permissions:
@@ -71,9 +71,15 @@ jobs:
             src/lib/replay/controller.test.js \
             src/lib/replay/session.test.js \
             src/lib/games/dungeon/replay-recording.test.js \
+            src/lib/games/dungeon/replay-driver.test.js \
             src/lib/games/dungeon/replay.test.js \
             src/lib/games/dungeon/world-state-materializer.test.js \
+            src/lib/games/dungeon/presentation-events.test.js \
+            src/lib/games/dungeon/replay-combat-event-flow.test.js \
+            src/lib/games/dungeon/replay-world-event-flow.test.js \
+            src/lib/games/dungeon/dungeon-replay-architecture-contract.test.js \
             src/lib/games/dungeon/replay-surface-readiness-contract.test.js \
+            src/lib/games/dungeon/solo-replay-lifecycle-contract.test.js \
             src/lib/games/dungeon/coop-replay-lifecycle-contract.test.js \
             src/lib/games/dungeon/session-sync-runtime.test.js \
             src/lib/games/dungeon/checkpoint-clock-state.test.js \
