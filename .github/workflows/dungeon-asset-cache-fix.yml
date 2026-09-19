@@ -1,0 +1,35 @@
+name: Apply Dungeon Asset Cache Fixes
+
+on:
+  push:
+    branches:
+      - dungeon-asset-cache
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dungeon-asset-cache
+          fetch-depth: 0
+
+      - name: Apply lifecycle fixes
+        run: node ./scripts/apply-dungeon-asset-cache-fixes.mjs
+
+      - name: Remove temporary TDD helpers
+        run: |
+          rm -f web/src/lib/games/dungeon/.asset-cache-red web/src/lib/games/dungeon/.asset-cache-red-2 web/src/lib/games/dungeon/.asset-cache-red-3
+          rm -f scripts/apply-dungeon-asset-cache-fixes.mjs .github/workflows/dungeon-asset-cache-fix.yml
+
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: dispose late Dungeon asset bundles"
+          git push origin HEAD:dungeon-asset-cache
