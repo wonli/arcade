@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-19-game-foundation-cleanup-design.md`
 
+**Status:** implementation and documentation are in place; final branch verification is pending.
+
 ## Global Constraints
 
 - No gameplay changes.
