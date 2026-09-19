@@ -119,6 +119,7 @@ export function stateAt(recording, time) {
   const index = frames.indexOf(previous)
   const next = frames[Math.min(frames.length - 1, index + 1)]
   if (!next || next === previous || next.t <= previous.t) return clone(previous.state)
+  if (!sameReplayScene(previous.state, next.state)) return clone(previous.state)
   const alpha = clamp((target - previous.t) / (next.t - previous.t), 0, 1)
   return interpolateState(previous.state, next.state, alpha)
 }
@@ -154,6 +155,25 @@ function interpolateEntities(previous = [], next = [], alpha) {
       y: lerp(entry.y, nextEntry.y, alpha),
     }
   })
+}
+
+function sameReplayScene(previous = {}, next = {}) {
+  const left = previous?.scene ?? {}
+  const right = next?.scene ?? {}
+  const leftKey = String(left.sceneKey ?? '').trim()
+  const rightKey = String(right.sceneKey ?? '').trim()
+  if (leftKey || rightKey) return leftKey !== '' && leftKey === rightKey
+
+  return sameOptionalScalar(left.floor, right.floor)
+    && sameOptionalScalar(left.chapter, right.chapter)
+    && sameOptionalScalar(left.chapterFloor, right.chapterFloor)
+    && sameOptionalScalar(left.roomRole, right.roomRole)
+}
+
+function sameOptionalScalar(left, right) {
+  if (left == null && right == null) return true
+  if (left == null || right == null) return false
+  return String(left) === String(right)
 }
 
 function frameAtOrBefore(frames, time) {
