@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { createDungeonGame, chooseDungeonAssets } from './scene.js'
   import { createDungeonReplayDriver } from './replay-driver.js'
+  import { installDungeonPresentationStack } from './presentation-stack.js'
   import { loadPhaser } from './phaser.js'
 
   let { recording } = $props()
@@ -12,11 +13,13 @@
   let stopped = false
 
   async function startReplay() {
-    const [Phaser, dungeonResponse] = await Promise.all([
+    const [Phaser, dungeonResponse, vfxResponse] = await Promise.all([
       loadPhaser(),
       fetch('/assets/debts/manifest.json').catch(() => null),
+      fetch('/assets/vfx/manifest.json').catch(() => null),
     ])
     const manifest = dungeonResponse?.ok ? await dungeonResponse.json() : { png: [] }
+    const vfxManifest = vfxResponse?.ok ? await vfxResponse.json() : { assets: [] }
     if (!mount || stopped) return
 
     game = createDungeonGame({
@@ -37,6 +40,8 @@
         if (attempts++ < 120) requestAnimationFrame(attach)
         return
       }
+
+      installDungeonPresentationStack(scene, { vfxManifest })
       driver = createDungeonReplayDriver({ recording, scene, loop: true })
       driver.play()
     }
