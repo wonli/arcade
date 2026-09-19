@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { installDungeonPresentationEvents } from './presentation-events.js'
 
 function visual() {
@@ -69,4 +70,12 @@ test('scene exposes one presentation entry point for live and replay callers', (
   assert.equal(scene.emitDungeonEvent, api.emit)
   assert.equal(scene.presentEvent({ type: 'floor.clear', floor: 2 }), true)
   assert.equal(scene.presentEvent({ type: 'unknown' }), false)
+})
+
+test('default player animation selection keeps an active attack ahead of walk or idle', () => {
+  const sceneSource = readFileSync(new URL('./scene.js', import.meta.url), 'utf8')
+  assert.match(
+    sceneSource,
+    /forceAction\s*\|\|\s*\(player\.attacking\s*\?\s*['"]attack['"]\s*:\s*player\.moving\s*\?\s*['"]walk['"]\s*:\s*['"]idle['"]\)/,
+  )
 })
