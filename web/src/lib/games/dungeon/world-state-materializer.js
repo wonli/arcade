@@ -30,11 +30,17 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
   }
 
   function applySceneState(value = {}) {
+    const previous = scene.__replaySceneState ?? null
+    const roomChanged = previous != null && !sameReplayScene(previous, value)
+
     if (Number.isFinite(Number(value.floor))) scene.floor = Math.max(1, Math.round(Number(value.floor)))
     scene.__replaySceneState = {
       ...(scene.__replaySceneState ?? {}),
       ...plainClone(value),
     }
+
+    if (roomChanged) scene.__dungeonSpatial?.refreshRoom?.()
+
     if (value.portal) {
       portalPresentation?.ensure?.({
         id: value.portal.id ?? `portal:${scene.floor ?? 1}`,
@@ -205,6 +211,23 @@ export function createDungeonWorldStateMaterializer(scene, dependencies = {}) {
   }
 
   return { apply, resetTransient }
+}
+
+function sameReplayScene(previous = {}, next = {}) {
+  const previousKey = String(previous?.sceneKey ?? '').trim()
+  const nextKey = String(next?.sceneKey ?? '').trim()
+  if (previousKey || nextKey) return previousKey !== '' && previousKey === nextKey
+
+  return sameOptionalScalar(previous.floor, next.floor)
+    && sameOptionalScalar(previous.chapter, next.chapter)
+    && sameOptionalScalar(previous.chapterFloor, next.chapterFloor)
+    && sameOptionalScalar(previous.roomRole, next.roomRole)
+}
+
+function sameOptionalScalar(left, right) {
+  if (left == null && right == null) return true
+  if (left == null || right == null) return false
+  return String(left) === String(right)
 }
 
 function finiteNumber(value, fallback = 0) {
