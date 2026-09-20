@@ -35,6 +35,24 @@ function oneCell(key, label, kind, ref, semantic, allowedRotations = [0]) {
   return entry(key, label, kind, { width: 1, height: 1, cells: cellsFromRef(ref) }, semantic, allowedRotations)
 }
 
+function archesColumnMotif(column) {
+  return {
+    id: `Arches_columns-wall-cap-${column}`,
+    width: 1,
+    height: 3,
+    source: { atlas: 'Arches_columns.png', x: column, y: 10 },
+    cells: [10, 11, 12].map((row) => ({
+      x: 0,
+      y: row - 10,
+      tileset: 'Arches_columns',
+      tileId: row * 20 + column,
+      flipX: false,
+      flipY: false,
+      flipDiagonal: false,
+    })),
+  }
+}
+
 export function listDungeon3RoomAssets() {
   const stairs = dungeon3Rules.motifs.stairs.find((motif) => motif.width === 5 && motif.height === 3) ?? dungeon3Rules.motifs.stairs[0]
   const flatBridge = {
@@ -43,6 +61,18 @@ export function listDungeon3RoomAssets() {
     height: 1,
     cells: cellsFromRef(dungeon3Rules.floorSkins[0].center),
   }
+  const wallCaps = Array.from({ length: 18 }, (_, index) => {
+    const column = index + 1
+    return entry(
+      `wall-cap.${String(index + 1).padStart(2, '0')}`,
+      `墙端堵头·${String(index + 1).padStart(2, '0')}`,
+      'wall',
+      archesColumnMotif(column),
+      `wall-cap:Arches_columns:${column}`,
+      [0, 180],
+      'wall-caps',
+    )
+  })
 
   const assets = [
     entry('wall.vertical.west', '竖墙·左边缘', 'wall', dungeon3Rules.assemblies.wallVerticalWest, 'wall-vertical-west'),
@@ -57,6 +87,7 @@ export function listDungeon3RoomAssets() {
     entry('stairs.default', '楼梯', 'stairs', stairs, 'stairs', [0, 180]),
     entry('bridge.flat', '平桥桥面', 'bridge', flatBridge, 'water-bridge-flat', [0, 90, 180, 270]),
     entry('bridge.arch', '拱桥·Arches_columns', 'bridge', dungeon3Rules.assemblies.bridgeArch, 'water-bridge-arch', [0, 180]),
+    ...wallCaps,
   ]
 
   const addAssembly = (key, label, kind, semantic) => {

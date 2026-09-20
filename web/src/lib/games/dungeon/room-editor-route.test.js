@@ -97,5 +97,12 @@ test('room editor renders complete multi-tile resource previews', async () => {
   assert.match(source, /class="asset-preview"/)
   assert.match(source, /class="preview-tile"/)
   assert.match(source, /assetPreviewStyle\(asset\)/)
-  assert.match(source, /paletteGroup === 'arches'/)
+  assert.match(source, /asset\.paletteGroup === group\.paletteGroup/)
+})
+
+test('room editor gives wall-end caps their own palette group', async () => {
+  const source = await readFile(routePath, 'utf8')
+
+  assert.match(source, /墙端堵头/)
+  assert.match(source, /paletteGroup: 'wall-caps'/)
 })

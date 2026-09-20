@@ -24,6 +24,7 @@
   const groups = [
     { key: 'terrain', label: '水域', kinds: ['water'] },
     { key: 'walls', label: '墙体', kinds: ['wall'] },
+    { key: 'wall-caps', label: '墙端堵头', paletteGroup: 'wall-caps' },
     { key: 'doors', label: '门', kinds: ['door'] },
     { key: 'bridges', label: '桥', kinds: ['bridge'] },
     { key: 'arches', label: '拱券 / 柱体', paletteGroup: 'arches' },
@@ -98,7 +99,7 @@
   }
 
   function assetsForGroup(group) {
-    if (group.paletteGroup === 'arches') return assets.filter((asset) => asset.paletteGroup === 'arches')
+    if (group.paletteGroup) return assets.filter((asset) => asset.paletteGroup === group.paletteGroup)
     return assets.filter((asset) => group.kinds.includes(asset.kind) && !asset.paletteGroup)
   }
 

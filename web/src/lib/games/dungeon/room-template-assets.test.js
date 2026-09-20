@@ -67,3 +67,15 @@ test('Arches_columns assets are marked as a dedicated selectable palette family'
   assert.ok(archAssets.every((asset) => asset.cells.every((cell) => cell.tileset === 'Arches_columns')))
   assert.ok(archAssets.every((asset) => asset.width > 1 || asset.height > 1), 'palette should expose complete combinations, not transparent single cells')
 })
+
+test('catalog exposes Arches_columns wall-end caps as selectable one-column stacks', () => {
+  const assets = listDungeon3RoomAssets()
+  const caps = assets.filter((asset) => asset.paletteGroup === 'wall-caps')
+
+  assert.equal(caps.length, 18, 'the visible Arches_columns cap run should be selectable column by column')
+  assert.ok(caps.every((asset) => asset.kind === 'wall'))
+  assert.ok(caps.every((asset) => asset.width === 1 && asset.height === 3))
+  assert.ok(caps.every((asset) => asset.cells.every((cell) => cell.tileset === 'Arches_columns')))
+  assert.deepEqual(caps[0].cells.map((cell) => cell.tileId), [201, 221, 241])
+  assert.deepEqual(caps.at(-1).cells.map((cell) => cell.tileId), [218, 238, 258])
+})
