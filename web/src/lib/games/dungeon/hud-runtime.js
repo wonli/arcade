@@ -1,6 +1,6 @@
 import { currentWeapon } from './player-loadout.js'
 import { weaponDisplayName } from './presentation.js'
-import { dungeonHudLayout } from './viewport-layout.js'
+import { dungeonCameraLayout, dungeonHudLayout } from './viewport-layout.js'
 
 export const HUD_INSET = 56
 export const HUD_WEAPON_ICON_URL = new URL('./assets/sword-7soul1_20201212/32x32/dagger_01.png', import.meta.url).href
@@ -13,6 +13,18 @@ const HUD_GAP = 8
 const HUD_BG = 0x05070a
 const HUD_BG_ALPHA = 0.48
 const HUD_WEAPON_TEXTURE_KEY = 'dungeon-hud-weapon-icon'
+
+export function dungeonHudViewportMetrics({ canvas = {}, viewport = {}, scale = {}, mode = 'fit' } = {}) {
+  const canvasWidth = Number(canvas.width) > 0 ? Number(canvas.width) : 0
+  const canvasHeight = Number(canvas.height) > 0 ? Number(canvas.height) : 0
+  const width = canvasWidth || (Number(viewport.width) > 0 ? Number(viewport.width) : Number(scale.width) > 0 ? Number(scale.width) : 960)
+  const height = canvasHeight || (Number(viewport.height) > 0 ? Number(viewport.height) : Number(scale.height) > 0 ? Number(scale.height) : 600)
+  const cover = mode === 'cover' || viewport.mode === 'cover'
+  const zoom = cover
+    ? (canvasWidth && canvasHeight ? dungeonCameraLayout({ width, height, mode: 'cover' }).zoom : Number(viewport.zoom) > 0 ? Number(viewport.zoom) : dungeonCameraLayout({ width, height, mode: 'cover' }).zoom)
+    : 1
+  return { width, height, zoom, mode: cover ? 'cover' : 'fit' }
+}
 
 function equippedWeaponName(weapon, labels) {
   return weaponDisplayName(weapon, labels.locale ?? 'en') ?? labels.dungeonBlade ?? 'Dungeon Blade'
@@ -114,6 +126,7 @@ export function installDungeonHud(scene, {
   const weaponDetail = scene.add.text(46, 28, '', { ...textStyle, fontSize: '8px', color: '#7d8792', fontStyle: 'bold' })
   weapon.add([weaponBg, iconSlot, weaponTitle, weaponDetail])
   weaponBg.on('pointerdown', () => onDetails())
+  weapon.setVisible?.(false)
 
   const potionX = HUD_INSET + WEAPON_WIDTH + HUD_GAP
   const potion = pin(scene.add.container(potionX, HUD_INSET))
@@ -126,6 +139,7 @@ export function installDungeonHud(scene, {
   const potionText = scene.add.text(34, 19, '0', { ...textStyle, fontSize: '10px', color: '#e7d9d9', fontStyle: 'bold' })
   potion.add([potionBg, bottleBody, bottleNeck, bottleShine, potionText])
   potionBg.on('pointerdown', () => onPotion())
+  potion.setVisible?.(false)
 
   const progressHud = pin(scene.add.container(0, HUD_INSET), 221)
   const progressBg = scene.add.rectangle(0, 0, PROGRESS_WIDTH, HUD_HEIGHT, HUD_BG, 0.54)
@@ -135,12 +149,21 @@ export function installDungeonHud(scene, {
   const floorText = scene.add.text(10, 22, '', { ...textStyle, fontSize: '12px', fontStyle: 'bold' })
   const bossText = scene.add.text(PROGRESS_WIDTH - 8, 8, '', { ...textStyle, fontSize: '7px', color: '#ff746c', fontStyle: 'bold' }).setOrigin(1, 0)
   progressHud.add([progressBg, chapterText, floorText, bossText])
+  progressHud.setVisible?.(false)
 
   const positionHud = () => {
     const viewport = scene.__dungeonViewport
-    const isMobileViewport = viewport?.mode === 'cover' || scene.__dungeonViewportMode === 'cover'
+    const canvas = scene.game?.canvas ?? scene.sys?.game?.canvas
+    const rect = canvas?.getBoundingClientRect?.()
+    const metrics = dungeonHudViewportMetrics({
+      canvas: { width: rect?.width ?? canvas?.clientWidth, height: rect?.height ?? canvas?.clientHeight },
+      viewport,
+      scale: { width: scene.scale?.width, height: scene.scale?.height },
+      mode: scene.__dungeonViewportMode,
+    })
+    const isMobileViewport = metrics.mode === 'cover'
     const layout = isMobileViewport
-      ? dungeonHudLayout({ width: viewport?.width ?? 960, height: viewport?.height ?? 600, zoom: viewport?.zoom ?? 1, inset: 12, compact: true })
+      ? dungeonHudLayout({ width: metrics.width, height: metrics.height, zoom: metrics.zoom, inset: 12, compact: true })
       : dungeonHudLayout({ width: scene.scale?.width ?? scene.cameras?.main?.width ?? 960, height: scene.scale?.height ?? scene.cameras?.main?.height ?? 600, zoom: 1, inset: HUD_INSET })
     weapon.setPosition(layout.weapon.x, layout.weapon.y)
     potion.setPosition(layout.potion.x, layout.potion.y)

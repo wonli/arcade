@@ -18,7 +18,7 @@
   import { installDungeonAttackRuntime } from '$lib/games/dungeon/attack-runtime.js'
   import { installDungeonBacktracking } from '$lib/games/dungeon/backtrack-runtime.js'
   import { installDungeonTouchInput } from '$lib/games/dungeon/touch-runtime.js'
-  import { installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
+  import { HUD_WEAPON_ICON_URL, installDungeonHud } from '$lib/games/dungeon/hud-runtime.js'
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
   import { loadDungeonAssetBundle } from '$lib/games/dungeon/asset-bundle.js'
@@ -327,6 +327,20 @@
     <div bind:this={mount} class="stage"></div>
     {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
     <div bind:this={gameViewport} class="game-viewport">
+      {#if ready && !gameOver && !panelOpen}
+        <button class="hud-weapon" on:click={()=>setPanel(true)} aria-label={t('details')} title={t('details')}>
+          <span class="hud-weapon-icon"><img src={HUD_WEAPON_ICON_URL} alt="" /></span>
+          <span class="hud-weapon-copy"><strong class:common={stats.weaponRarity==='common'} class:uncommon={stats.weaponRarity==='uncommon'} class:rare={stats.weaponRarity==='rare'} class:epic={stats.weaponRarity==='epic'} class:legendary={stats.weaponRarity==='legendary'}>{stats.weapon ? `${rarityName(stats.weaponRarity)} · ${weaponModel.name ?? t('dungeonBlade')}` : t('none')}</strong><small>{stats.weapon ? `+${weaponModel.damage ?? 0} ${t('damage')}` : t('emptyWeapon')}</small></span>
+        </button>
+        <div class="hud-progress" aria-label={`${t('chapter')} ${progress.chapter ?? 1}, ${t('floor')} ${progress.floor ?? 1}`}>
+          <small>{t('chapter')} {progress.chapter ?? 1}</small><strong>{t('floor')} {progress.floor ?? 1}</strong>{#if progress.roomRole === 'boss'}<em>{t('boss')}</em>{/if}
+        </div>
+      {/if}
+      {#if ready && !gameOver && !panelOpen}
+        <button class:available={(stats.healthPotions ?? 0) > 0} class="potion-action" on:click={usePotion} aria-label={t('usePotion')} title={t('usePotion')}>
+          <span class="potion-bottle" aria-hidden="true"></span><strong>× {stats.healthPotions ?? 0}</strong>
+        </button>
+      {/if}
       {#if !ready && !error}<div class="overlay">{loadingLabel}</div>{/if}
       {#if error}<div class="overlay error">{error}</div>{/if}
 
@@ -352,26 +366,29 @@
 <style>
   :global(html),:global(body){margin:0;width:100%;height:100%;overflow:hidden;background:#080a0d}
   :global(body){color:#f4f0e8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-  .page{height:100dvh;padding:12px;box-sizing:border-box;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:9px;overflow:hidden}
-  .topbar{width:min(1180px,100%);margin:0 auto;display:flex;justify-content:space-between;gap:20px;align-items:center;min-height:46px}
+  .page{height:100dvh;padding:0;box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr);gap:0;overflow:hidden}
+  .topbar,footer{display:none}
+  .topbar{width:min(1180px,100%);margin:0 auto;justify-content:space-between;gap:20px;align-items:center;min-height:46px}
   .title-copy{min-width:0}.brand{color:#c1ff56;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.18em}.topbar h1{display:inline;margin:0 0 0 12px;font-size:22px;letter-spacing:-.04em}.topbar p{display:inline;margin:0 0 0 12px;color:#6f7882;font-size:11px;white-space:nowrap}
   .actions{display:flex;gap:6px;align-items:center;flex:0 0 auto}.actions button,.actions a{height:30px;padding:0 9px;border:0;background:#111419;color:#89939e;font:inherit;font-size:10px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}.actions button.active{background:#182017;color:#c1ff56}
   .stage-shell{position:relative;align-self:stretch;justify-self:center;width:100%;height:100%;min-height:0;background:#050608;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;box-shadow:0 14px 38px rgba(0,0,0,.3)}
   .stage{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:auto!important;touch-action:none}
   .game-viewport{position:absolute;z-index:30;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
+  .hud-weapon,.hud-progress{position:absolute;top:12px;box-sizing:border-box;border:1px solid rgba(71,80,91,.42);background:rgba(15,18,23,.86);color:#f4f0e8;pointer-events:auto}.hud-weapon{left:max(12px,env(safe-area-inset-left));display:flex;align-items:center;width:176px;height:48px;padding:7px 8px;gap:8px;text-align:left;cursor:pointer}.hud-weapon-icon{display:grid;place-items:center;width:32px;height:32px;flex:0 0 auto;background:rgba(23,28,34,.72)}.hud-weapon-icon img{width:28px;height:28px;image-rendering:pixelated}.hud-weapon-copy{min-width:0;display:grid;gap:4px}.hud-weapon-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:800 10px ui-monospace,SFMono-Regular,Menlo,monospace}.hud-weapon-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7d8792;font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace}.hud-progress{right:max(12px,env(safe-area-inset-right));display:grid;width:116px;height:48px;padding:7px 9px;gap:2px}.hud-progress small{color:#7d8792;font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace}.hud-progress strong{font:800 12px ui-monospace,SFMono-Regular,Menlo,monospace}.hud-progress em{position:absolute;right:8px;top:7px;color:#ff746c;font:800 7px ui-monospace,SFMono-Regular,Menlo,monospace;font-style:normal}
+  .potion-action{position:absolute;top:68px;right:max(12px,env(safe-area-inset-right));z-index:2;display:flex;align-items:center;justify-content:center;gap:7px;width:58px;height:42px;padding:0;border:1px solid rgba(255,135,145,.42);border-radius:4px;background:rgba(15,18,23,.82);color:#9aa4ae;font:800 10px ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:auto;cursor:pointer;opacity:.72;touch-action:manipulation}.potion-action.available{color:#ffb9bf;border-color:rgba(255,135,145,.78);opacity:1}.potion-action:active{transform:translateY(1px)}.potion-action .potion-bottle{transform:scale(.78)}
   .potion-bottle{position:relative;display:inline-block;width:15px;height:18px;flex:0 0 auto;border-radius:3px 3px 6px 6px;background:#b92f43;box-shadow:inset 0 -5px 0 rgba(82,12,25,.42),0 2px 7px rgba(0,0,0,.36)}.potion-bottle::before{content:"";position:absolute;left:4px;top:-5px;width:7px;height:6px;border-radius:2px 2px 1px 1px;background:#c9bea5;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}.potion-bottle::after{content:"";position:absolute;left:3px;top:4px;width:3px;height:6px;border-radius:2px;background:rgba(255,210,214,.52)}.potion-bottle.small{width:12px;height:15px;border-radius:3px 3px 5px 5px}.potion-bottle.small::before{left:3px;top:-4px;width:6px;height:5px}.potion-bottle.small::after{left:2px;top:3px;width:2px;height:5px}
   .common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}.legendary{color:#ffb347}
-  .touch-controls{display:none;position:absolute;inset:0;z-index:45;pointer-events:none}.joystick-slot{position:absolute;left:16px;bottom:42px;pointer-events:auto}.touch-actions{position:absolute;right:16px;bottom:42px;display:flex;align-items:flex-end;gap:12px;pointer-events:auto}.touch-button{width:72px;height:72px;border-radius:50%;border:1px solid rgba(244,240,232,.38);background:rgba(15,18,23,.68);color:#f4f0e8;font:800 10px ui-monospace,monospace;touch-action:manipulation;box-shadow:0 5px 15px rgba(0,0,0,.28)}.touch-button.skill{width:84px;height:84px;color:#d7c4ff;border-color:rgba(201,132,255,.64);background:rgba(74,38,96,.62)}.touch-button.interact{color:#c1ff56;border-color:rgba(193,255,86,.55)}
+  .touch-controls{display:none;position:absolute;inset:0;z-index:45;pointer-events:none;box-sizing:border-box}.joystick-slot{position:absolute;left:16px;bottom:42px;pointer-events:auto}.touch-actions{position:absolute;right:16px;bottom:42px;display:flex;align-items:flex-end;gap:12px;max-width:calc(100% - 120px);pointer-events:auto}.touch-button{width:72px;height:72px;flex:0 0 auto;border-radius:50%;border:1px solid rgba(244,240,232,.38);background:rgba(15,18,23,.68);color:#f4f0e8;font:800 10px ui-monospace,monospace;touch-action:manipulation;box-shadow:0 5px 15px rgba(0,0,0,.28)}.touch-button.skill{width:84px;height:84px;color:#d7c4ff;border-color:rgba(201,132,255,.64);background:rgba(74,38,96,.62)}.touch-button.interact{color:#c1ff56;border-color:rgba(193,255,86,.55)}
   .overlay{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d10;color:#c1ff56;font-family:ui-monospace,monospace;font-weight:800;z-index:60;pointer-events:auto}.overlay.error{color:#ff6875;padding:32px;text-align:center}
   .stats-overlay,.gameover-overlay{position:absolute;inset:0;z-index:80;display:grid;place-items:center;padding:18px;background:rgba(3,4,6,.74);backdrop-filter:blur(4px);pointer-events:auto}.stats-panel,.gameover-panel{width:min(520px,calc(100% - 20px));box-sizing:border-box;padding:22px;background:rgba(14,18,23,.96);box-shadow:0 20px 55px rgba(0,0,0,.55);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.pause-mark{color:#c1ff56;font-size:9px;font-weight:900;letter-spacing:.18em}.weapon-title{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-top:10px}.weapon-title span,.affix-box>span,.stat-grid span,.run-stats span,.run-weapon span{display:block;color:#68737f;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.weapon-title h2{margin:5px 0 0;font-size:24px}.close{width:42px;height:42px;border:0;background:#1a2028;color:#d8dde2;font-size:24px;cursor:pointer}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;background:#090c10}.stat-grid>div{padding:12px;border-right:1px solid rgba(71,80,91,.45)}.stat-grid>div:last-child{border:0}.stat-grid strong{display:block;margin-top:4px;font-size:16px}.potion-count{display:flex!important;align-items:center;gap:6px}.affix-box{margin-top:12px;padding:14px;background:#090c10}.affix-list{display:grid;gap:7px;margin-top:9px;color:#cbd3dc;font-size:12px}.affix-box p{margin:8px 0 0;color:#65707c;font-size:11px}.panel-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:16px}.panel-actions button,.gameover-actions button,.gameover-actions a{min-height:50px;border:0;font:900 11px ui-monospace,monospace;letter-spacing:.05em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}.use-potion{background:#2a1319;color:#ff8993}.use-potion:disabled{opacity:.35}.resume{background:#c1ff56;color:#080a0d}.gameover-kicker{color:#ff6875;font-size:10px;font-weight:900;letter-spacing:.18em}.gameover-panel h2{margin:8px 0 16px}.run-stats{display:grid;grid-template-columns:1fr 1fr;background:#090c10}.run-stats>div,.run-weapon{padding:13px}.run-stats strong,.run-weapon strong{display:block;margin-top:4px}.run-weapon{margin-top:10px;background:#090c10}.gameover-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:10px;margin-top:16px}.gameover-actions a{background:#171b21;color:#aab2bb}.gameover-actions button{background:#c1ff56;color:#080a0d}
-  footer{width:min(1180px,100%);margin:0 auto;display:flex;justify-content:space-between;gap:20px;color:#5f6872;font-size:10px;line-height:16px;min-height:16px}
+  footer{width:min(1180px,100%);margin:0 auto;justify-content:space-between;gap:20px;color:#5f6872;font-size:10px;line-height:16px;min-height:16px}
   @media(any-pointer:coarse){.touch-controls{display:block}}
   @media(max-width:900px){.topbar p{display:none}}
   @media(max-width:720px){
-    .page{padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));grid-template-rows:auto minmax(0,1fr);gap:5px}
+    .page{padding:0;grid-template-rows:minmax(0,1fr);gap:0}
     .topbar{min-height:32px;gap:8px}.topbar h1,.topbar p{display:none}.brand{font-size:9px}.actions{gap:3px}.actions button,.actions a{height:28px;padding:0 7px;background:rgba(17,20,25,.76);font-size:9px}
     .stage-shell{width:100%;height:100%;box-shadow:none}.stage :global(canvas){width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
-    .stats-overlay,.gameover-overlay{padding:8px;align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-controls{display:block}.touch-button{width:58px;height:58px}.touch-button.skill{width:64px;height:64px}.joystick-slot{left:10px;bottom:max(16px,env(safe-area-inset-bottom))}.joystick-slot :global(.virtual-joystick){width:100px!important;height:100px!important}.joystick-slot :global(.joystick-knob){left:33px!important;top:33px!important;width:34px!important;height:34px!important}.touch-actions{right:10px;bottom:max(16px,env(safe-area-inset-bottom));gap:8px}footer{display:none}
+    .hud-weapon{left:max(10px,env(safe-area-inset-left));width:176px}.hud-progress{right:max(10px,env(safe-area-inset-right));width:116px}.potion-action{top:68px;right:max(10px,env(safe-area-inset-right));width:56px;height:40px}.stats-overlay,.gameover-overlay{padding:8px;align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-controls{display:block}.touch-button{width:52px;height:52px}.touch-button.skill{width:58px;height:58px}.joystick-slot{left:max(10px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom))}.joystick-slot :global(.virtual-joystick){width:88px!important;height:88px!important}.joystick-slot :global(.joystick-knob){left:29px!important;top:29px!important;width:30px!important;height:30px!important}.touch-actions{right:max(10px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));gap:6px}footer{display:none}
   }
   @media(orientation:landscape) and (max-height:600px){
     .page{padding:0;grid-template-rows:minmax(0,1fr);gap:0}
@@ -379,13 +396,13 @@
     footer{display:none}
     .stage-shell{width:100%;height:100%}
     .stage :global(canvas){width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
-    .touch-controls{display:block}
-    .joystick-slot{left:8px;bottom:max(8px,env(safe-area-inset-bottom))}
-    .joystick-slot :global(.virtual-joystick){width:82px!important;height:82px!important}
-    .joystick-slot :global(.joystick-knob){left:27px!important;top:27px!important;width:28px!important;height:28px!important}
-    .touch-actions{right:8px;bottom:max(8px,env(safe-area-inset-bottom));gap:6px}
-    .touch-button{width:48px;height:48px;font-size:9px}
-    .touch-button.skill{width:56px;height:56px}
+    .hud-weapon{left:max(8px,env(safe-area-inset-left));width:154px;height:42px;padding:5px 6px}.hud-weapon-icon{width:28px;height:28px}.hud-weapon-icon img{width:24px;height:24px}.hud-weapon-copy strong{font-size:9px}.hud-progress{right:max(8px,env(safe-area-inset-right));width:104px;height:42px;padding:5px 7px}.hud-progress strong{font-size:11px}.potion-action{top:60px;right:max(8px,env(safe-area-inset-right));width:52px;height:36px}.touch-controls{display:block}
+    .joystick-slot{left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom))}
+    .joystick-slot :global(.virtual-joystick){width:78px!important;height:78px!important}
+    .joystick-slot :global(.joystick-knob){left:26px!important;top:26px!important;width:26px!important;height:26px!important}
+    .touch-actions{right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));gap:5px}
+    .touch-button{width:46px;height:46px;font-size:9px}
+    .touch-button.skill{width:52px;height:52px}
   }
-  @media(max-height:520px) and (orientation:portrait){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.page{padding:5px;gap:4px;grid-template-rows:auto minmax(0,1fr)}}
+  @media(max-height:520px) and (orientation:portrait){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.hud-weapon,.hud-progress{top:8px}.potion-action{top:56px}}
 </style>

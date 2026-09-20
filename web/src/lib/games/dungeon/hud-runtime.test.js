@@ -2,9 +2,24 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   dungeonHudModel,
+  dungeonHudViewportMetrics,
   HUD_INSET,
   HUD_WEAPON_ICON_URL,
 } from './hud-runtime.js'
+
+test('mobile HUD metrics prefer the canvas screen size over Phaser logical size', () => {
+  assert.deepEqual(dungeonHudViewportMetrics({
+    canvas: { width: 336, height: 629 },
+    viewport: { mode: 'cover', width: 960, height: 600, zoom: 1 },
+    scale: { width: 960, height: 600 },
+    mode: 'cover',
+  }), {
+    width: 336,
+    height: 629,
+    zoom: 629 / 600,
+    mode: 'cover',
+  })
+})
 
 test('dungeon HUD model keeps the compact HUD inside the playable area', () => {
   const model = dungeonHudModel({

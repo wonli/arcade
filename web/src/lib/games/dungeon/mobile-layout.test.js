@@ -26,7 +26,15 @@ test('dungeon gives landscape play the full stage height', () => {
 })
 
 test('dungeon scales touch controls down for mobile and landscape', () => {
-  assertAll(/(?:\.touch-actions button|\.touch-button)\s*\{[^}]*width:58px[^}]*height:58px/s)
-  assertAll(/(?:\.touch-actions \.skill|\.touch-button\.skill)\s*\{[^}]*width:64px[^}]*height:64px/s)
-  assertAll(/@media\(orientation:landscape\)\s+and\s+\(max-height:600px\)[\s\S]*?(?:\.touch-actions button|\.touch-button)\s*\{[^}]*width:48px[^}]*height:48px/s)
+  assertAll(/(?:\.touch-actions button|\.touch-button)\s*\{[^}]*width:52px[^}]*height:52px/s)
+  assertAll(/(?:\.touch-actions \.skill|\.touch-button\.skill)\s*\{[^}]*width:58px[^}]*height:58px/s)
+  assertAll(/@media\(orientation:landscape\)\s+and\s+\(max-height:600px\)[\s\S]*?(?:\.touch-actions button|\.touch-button)\s*\{[^}]*width:46px[^}]*height:46px/s)
+})
+
+test('dungeon keeps all gameplay HUD cards fixed to visible stage edges', () => {
+  assertAll(/\.hud-weapon,\.hud-progress\s*\{[^}]*position:absolute/s)
+  assertAll(/\.hud-weapon\{[^}]*left:max\(12px,env\(safe-area-inset-left\)\)/s)
+  assertAll(/\.hud-progress\{[^}]*right:max\(12px,env\(safe-area-inset-right\)\)/s)
+  assertAll(/\.potion-action\s*\{[^}]*top:68px[^}]*right:max\(12px,env\(safe-area-inset-right\)\)/s)
+  assert.match(sources[0], /\.potion-action\s*\{[^}]*top:60px[^}]*right:max\(8px,env\(safe-area-inset-right\)\)/s)
 })

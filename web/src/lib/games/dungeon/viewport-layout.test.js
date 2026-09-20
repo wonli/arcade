@@ -35,3 +35,11 @@ test('compact mobile HUD keeps the potion below the weapon at wider landscape si
   assert.equal(layout.potion.x * layout.zoom, 774)
   assert.equal(layout.potion.y * layout.zoom, 68)
 })
+
+test('compact mobile HUD clamps the potion to the visible right edge on narrow screens', () => {
+  const layout = dungeonHudLayout({ width: 272, height: 500, zoom: 1, inset: 8, compact: true })
+
+  assert.equal(layout.potion.x, 206)
+  assert.equal(layout.potion.x + 58, 264)
+  assert.ok(layout.potion.x >= 8)
+})

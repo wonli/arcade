@@ -33,7 +33,7 @@
 {/if}
 
 <style>
-  .arcade-shell{height:100dvh;min-height:0;display:grid;grid-template-rows:44px minmax(0,1fr);overflow:hidden;background:#0b0d10}
+  .arcade-shell{height:100dvh;min-height:0;display:grid;grid-template-rows:calc(44px + env(safe-area-inset-top)) minmax(0,1fr);overflow:hidden;background:#0b0d10}
   .arcade-content{min-height:0;overflow:auto;overscroll-behavior:contain}
 
   :global(.arcade-content > .home){height:100%!important;min-height:0!important;grid-template-rows:minmax(0,1fr)!important}
@@ -52,7 +52,7 @@
   :global(.arcade-content > .page > header:not(.topbar) .players button:first-of-type){display:none!important}
 
   @media(max-width:640px){
-    .arcade-shell{grid-template-rows:40px minmax(0,1fr)}
+    .arcade-shell{grid-template-rows:calc(40px + env(safe-area-inset-top)) minmax(0,1fr)}
     :global(.arcade-content .room-main){padding-top:16px}
   }
 </style>
