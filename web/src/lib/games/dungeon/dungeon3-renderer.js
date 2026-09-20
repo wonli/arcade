@@ -126,6 +126,7 @@ export function buildDungeon3TilePlan(geometry) {
     .map(path => path.direction?.fromSide == null ? null : `wall-${path.from}-${path.direction.fromSide}`)
     .filter(Boolean))
   const connectedPathIds = new Set((geometry.paths ?? []).map(path => path.id))
+  const pathsById = new Map((geometry.paths ?? []).map(path => [path.id, path]))
   const walls = geometry.walls ?? []
   const redundantTouchingWallIds = new Set()
   for (const wall of walls) {
@@ -151,11 +152,22 @@ export function buildDungeon3TilePlan(geometry) {
     const vertical = wall.orientation === 'vertical'
     const motif = rules.assemblies.wall
     if (!vertical) {
+      const openingPath = wall.opening?.pathId == null ? null : pathsById.get(wall.opening.pathId)
+      const capOpening = wall.opening && openingPath?.connectionKind !== 'door' ? wall.opening : null
+      const capXs = new Set((capOpening ? [capOpening.x - size, capOpening.x + capOpening.width] : [])
+        .filter(x => x >= wall.x && x < wall.x + wall.width))
       for (let x = wall.x; x < wall.x + wall.width; x += size) {
         if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
+        if (capXs.has(x)) continue
         for (let y = 0; y < motif.height; y++) {
           const ref = motif.cells.find(c => c.x === (x / size % motif.width) && c.y === y)
           add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+        }
+      }
+      if (capOpening && rules.assemblies.wallCap09) {
+        for (const x of capXs) {
+          stamp(rules.assemblies.wallCap09, x / size, wall.y / size, 'wall-cap', 5.1,
+            { wallId: wall.id, pathId: wall.opening?.pathId })
         }
       }
     } else {

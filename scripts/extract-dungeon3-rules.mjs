@@ -60,6 +60,13 @@ export function extractDungeon3Rules(xml) {
     wallVerticalWest: crop('wall-vertical-west', 'Walls2', -11, 12, 1, 6),
     wallVerticalEast: crop('wall-vertical-east', 'Walls2', -8, 12, 1, 6),
     wallVerticalBody: crop('wall-vertical-body', 'Walls2', -14, 19, 1, 3),
+    wallCap09: {
+      id: 'wall-cap-09',
+      width: 1,
+      height: 3,
+      source: { atlas: 'Arches_columns.png', x: 9, y: 10 },
+      cells: [10, 11, 12].map((row) => ({ x: 0, y: row - 10, ...ref('Arches_columns', row * 20 + 9) })),
+    },
     door: crop('wall-door', 'Walls2', 4, 15, 2, 3),
     floorTrap: crop('floor-pressure-trap', 'Objects0', -22, 7, 2, 2),
     wallTrap: crop('wall-dragon-trap', 'Objects1', -12, 3, 2, 6),

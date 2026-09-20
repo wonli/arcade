@@ -284,7 +284,13 @@ export function createRoomScenarioTemplate(scenario = 'all-assets', options = {}
 
   if (scenario === 'wall') {
     const builder = scenarioBuilder({ ...options, name: options.name || 'Wall chamber' }, 32, 20)
-    for (const x of [5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25]) builder.place('wall.horizontal', x, 2)
+    // Match room-03.json: this authored wall leaves a two-cell opening and
+    // frames it with the Arches_columns cap on both sides. Do not generalize
+    // the cap to ordinary wall ends or the other wall runs in this scenario.
+    for (const x of [5, 7, 9, 11, 13]) builder.place('wall.horizontal', x, 2)
+    builder.place('wall-cap.09', 15, 2)
+    builder.place('wall-cap.09', 18, 2)
+    for (const x of [19, 21, 23, 25]) builder.place('wall.horizontal', x, 2)
     builder.place('wall.vertical.west', 1, 4)
     builder.place('wall.vertical.east', 29, 4)
     for (const y of [5, 8, 11]) builder.place('wall.vertical.body', 3, y)

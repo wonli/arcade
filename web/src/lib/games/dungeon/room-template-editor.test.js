@@ -66,6 +66,20 @@ test('focused correction scenarios isolate the five structural questions', () =>
   }
 })
 
+test('wall chamber uses the authored two-cell opening with wall-cap.09 end pieces', () => {
+  const template = createRoomScenarioTemplate('wall', { id: 'wall-cap-reference' })
+  const placed = template.placements
+    .filter(({ y }) => y === 2)
+    .map(({ asset, x, width, height }) => ({ asset, x, width, height }))
+
+  assert.deepEqual(placed, [
+    ...[5, 7, 9, 11, 13].map((x) => ({ asset: 'wall.horizontal', x, width: 2, height: 3 })),
+    { asset: 'wall-cap.09', x: 15, width: 1, height: 3 },
+    { asset: 'wall-cap.09', x: 18, width: 1, height: 3 },
+    ...[19, 21, 23, 25].map((x) => ({ asset: 'wall.horizontal', x, width: 2, height: 3 })),
+  ])
+})
+
 test('doorway scenario keeps authored 2x3 wall segments flush to both door frames', () => {
   const template = createRoomScenarioTemplate('door', { id: 'doorway-reference' })
   const placed = template.placements.map(({ asset, x, y, width, height }) => ({ asset, x, y, width, height }))
@@ -95,6 +109,7 @@ test('doorway scenario keeps authored 2x3 wall segments flush to both door frame
 test('focused templates expose their unique assets for an on-canvas correction strip', () => {
   assert.deepEqual(getTemplateAssetKeys(createRoomScenarioTemplate('wall')), [
     'wall.horizontal',
+    'wall-cap.09',
     'wall.vertical.west',
     'wall.vertical.east',
     'wall.vertical.body',

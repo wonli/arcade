@@ -166,6 +166,38 @@ test('a connected room pair renders one wall band for the path instead of two pa
   assert.ok(tiles.every(tile => tile.wallId === 'wall-0-south'))
 })
 
+test('non-door horizontal openings use authored wall caps without a second wall layer', () => {
+  const size = 16
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: size, columns: 16, rows: 12, cells: Array.from({ length: 192 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [
+      { center: { x: 48, y: 64 } }, { center: { x: 160, y: 64 } },
+      { center: { x: 48, y: 160 } }, { center: { x: 160, y: 160 } },
+    ],
+    paths: [
+      { id: 'open', from: 0, to: 1, direction: { fromSide: 'south' }, connectionKind: 'open' },
+      { id: 'door', from: 2, to: 3, direction: { fromSide: 'south' }, connectionKind: 'door' },
+    ],
+    bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [
+      { id: 'wall-0-south', orientation: 'horizontal', x: 32, y: 32, width: 176, height: 48,
+        opening: { x: 96, width: 32, pathId: 'open' } },
+      { id: 'wall-2-south', orientation: 'horizontal', x: 32, y: 128, width: 176, height: 48,
+        opening: { x: 96, width: 32, pathId: 'door' } },
+    ],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry)
+  const caps = tiles.filter(tile => tile.layer === 'wall-cap')
+
+  assert.deepEqual(caps.map(tile => [tile.x, tile.y, tile.tileId]), [
+    [80, 32, 209], [80, 48, 229], [80, 64, 249],
+    [128, 32, 209], [128, 48, 229], [128, 64, 249],
+  ])
+  assert.equal(tiles.some(tile => tile.layer === 'wall' && tile.wallId === 'wall-0-south' && [80, 128].includes(tile.x)), false)
+  assert.equal(tiles.some(tile => tile.layer === 'wall-cap' && tile.wallId === 'wall-2-south'), false)
+})
+
 test('touching rooms without a connection also share one boundary wall band', () => {
   const geometry = {
     seed: 1,
