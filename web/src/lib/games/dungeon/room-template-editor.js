@@ -1,4 +1,5 @@
-import { normalizeRoomTemplate, validateRoomTemplate } from './room-template.js'
+import { createEmptyRoomTemplate, normalizeRoomTemplate, validateRoomTemplate } from './room-template.js'
+import { listDungeon3RoomAssets } from './room-template-assets.js'
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -129,4 +130,43 @@ export function placePort(state, port) {
   const template = clone(state.template)
   template.ports.push(clone(port))
   return applyTemplate(state, template)
+}
+
+export function createResourceShowcaseTemplate(options = {}) {
+  const width = Math.max(Number.isInteger(options.width) ? options.width : 32, 24)
+  const height = Math.max(Number.isInteger(options.height) ? options.height : 20, 16)
+  const assets = listDungeon3RoomAssets()
+  const byKey = new Map(assets.map((asset) => [asset.key, asset]))
+  const empty = createRoomEditorState(createEmptyRoomTemplate({
+    id: options.id || 'resource-showcase',
+    name: options.name || 'Dungeon3 resource showcase',
+    width,
+    height,
+  }))
+  let state = empty
+  const requireSuccess = (next) => {
+    if (next.errors.length) throw new Error(next.errors.map((error) => error.message).join('; '))
+    return next
+  }
+
+  const place = (key, x, y) => { state = requireSuccess(placeAsset(state, byKey.get(key), x, y)) }
+  place('water.body', 1, 1)
+  place('water.edge.n', 3, 1)
+  place('water.edge.w', 5, 1)
+  place('wall.vertical.west', 1, 4)
+  place('wall.vertical.east', 3, 4)
+  place('wall.vertical.body', 5, 4)
+  place('wall.horizontal', 7, 4)
+  place('door.closed', 10, 4)
+  place('door.open', 13, 4)
+  place('stairs.default', 17, 4)
+
+  for (let y = 11; y < 13; y += 1) {
+    for (let x = 1; x < 19; x += 1) state = requireSuccess(setCellKind(state, x, y, 'water'))
+  }
+  place('bridge.flat', 2, 11)
+  place('bridge.arch', 6, 11)
+  state = requireSuccess(placePort(state, { id: 'port-west', edge: 'west', x: 0, y: 5, kind: 'door', level: 1, water: false }))
+  state = requireSuccess(placePort(state, { id: 'port-east', edge: 'east', x: width - 1, y: 5, kind: 'door', level: 1, water: false }))
+  return state.template
 }

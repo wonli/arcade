@@ -1,6 +1,5 @@
 <script>
   import {
-    createEmptyRoomTemplate,
     parseRoomTemplate,
     serializeRoomTemplate,
     validateRoomTemplate,
@@ -8,6 +7,7 @@
   import { listDungeon3RoomAssets } from '$lib/games/dungeon/room-template-assets.js'
   import {
     createRoomEditorState,
+    createResourceShowcaseTemplate,
     eraseAt,
     placeAsset,
     placePort,
@@ -24,7 +24,7 @@
     { key: 'stairs', label: '楼梯', kinds: ['stairs'] },
   ]
 
-  let state = createRoomEditorState(createEmptyRoomTemplate({ id: 'room-01', width: 24, height: 16 }))
+  let state = createRoomEditorState(createResourceShowcaseTemplate({ id: 'room-01' }))
   let selectedAsset = assets[0]
   let selectedTool = 'place'
   let paintKind = 'water'
@@ -162,12 +162,12 @@
 
   function newRoom() {
     const id = roomId.trim() || 'untitled-room'
-    const next = createRoomEditorState(createEmptyRoomTemplate({ id, name: id, width: 24, height: 16 }))
+    const next = createRoomEditorState(createResourceShowcaseTemplate({ id, name: id }))
     past = []
     future = []
     state = { ...next, selectedAsset, selectedTool: 'place' }
     selectedTool = 'place'
-    message = '已创建空白房间：没有自动添加墙、门或装饰。'
+    message = '已生成资源样板房：所有已识别资源都已摆出，等待你在浏览器中校正组合。'
   }
 
   function exportJson() {

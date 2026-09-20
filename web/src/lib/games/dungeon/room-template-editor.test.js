@@ -5,6 +5,7 @@ import { createEmptyRoomTemplate } from './room-template.js'
 import { listDungeon3RoomAssets } from './room-template-assets.js'
 import {
   createRoomEditorState,
+  createResourceShowcaseTemplate,
   eraseAt,
   placeAsset,
   placePort,
@@ -13,6 +14,18 @@ import {
 
 const assets = listDungeon3RoomAssets()
 const find = (key) => assets.find((asset) => asset.key === key)
+
+test('resource showcase uses every catalog asset in a valid authored layout', () => {
+  const template = createResourceShowcaseTemplate({ id: 'showcase' })
+  const result = new Set(template.placements.map((placement) => placement.asset))
+
+  assert.equal(template.id, 'showcase')
+  assert.equal(result.size, assets.length)
+  for (const asset of assets) assert.ok(result.has(asset.key), `showcase missing ${asset.key}`)
+  assert.ok(template.cells.some((cell) => cell.kind === 'water'))
+  assert.ok(template.features.some((feature) => feature.semantic === 'water-bridge-flat'))
+  assert.ok(template.features.some((feature) => feature.semantic === 'water-bridge-arch'))
+})
 
 test('motif placement is atomic when the footprint is out of bounds', () => {
   const template = createEmptyRoomTemplate({ id: 'bounds', width: 4, height: 4 })
