@@ -59,6 +59,8 @@ export function extractDungeon3Rules(xml) {
     // included in an edge asset.
     wallVerticalWest: crop('wall-vertical-west', 'Walls2', -11, 12, 1, 6),
     wallVerticalEast: crop('wall-vertical-east', 'Walls2', -8, 12, 1, 6),
+    wallVerticalWestBody: crop('wall-vertical-west-body', 'Walls2', -11, 15, 1, 3),
+    wallVerticalEastBody: crop('wall-vertical-east-body', 'Walls2', -8, 15, 1, 3),
     wallVerticalBody: crop('wall-vertical-body', 'Walls2', -14, 19, 1, 3),
     wallCap09: {
       id: 'wall-cap-09',

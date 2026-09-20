@@ -77,6 +77,20 @@ export function buildDungeon3TilePlan(geometry) {
     })
     return { ...motif, width, height, cells }
   }
+  const wallUnderlayRef = cell => {
+    if (!cell || isLand(cell)) return null
+    const skin = rules.floorSkins[rules.floorSkins.length - 1 - (cell.level ?? 0) % rules.floorSkins.length]
+    return skin?.center ?? null
+  }
+  const stampWallUnderlay = (wall, x, y) => {
+    const passage = wall.passage ?? wall.opening
+    const inPassage = passage && (wall.orientation === 'horizontal'
+      ? x >= passage.x && x < passage.x + passage.width
+      : y >= passage.y && y < passage.y + passage.height)
+    if (inPassage) return
+    const ref = wallUnderlayRef(at(x / size, y / size))
+    if (ref) add(x / size, y / size, ref, 'wall-underlay', 5.1, { wallId: wall.id })
+  }
   for (const feature of geometry.waterFeatures ?? []) {
     stamp(feature.motif, feature.x / size, feature.y / size, feature.layer,
       feature.layer === 'underwater-ruin' ? 1.25 : 1.5, { animationOffset: feature.animationOffset })
@@ -142,16 +156,18 @@ export function buildDungeon3TilePlan(geometry) {
           && other.y === wall.y && other.height === wall.height && other.x === wall.x + size)
     if (touching) redundantTouchingWallIds.add(wall.id)
   }
-  for (const wall of walls) {
-    // A path has two room-side wall records, but only the from-side record is
-    // one authored wall band. Rendering both records puts two parallel wall
-    // faces around every doorway/bridge and makes the door footprint disagree
-    // with the room template.
-    if (wall.opening?.pathId != null && connectedPathIds.has(wall.opening.pathId) && !connectedWallIds.has(wall.id)) continue
-    if (redundantTouchingWallIds.has(wall.id)) continue
+  // A shared connection renders one wall band. Only visible walls can continue
+  // another segment; a suppressed room-side record must not remove its foot.
+  const visibleWalls = walls.filter(wall => !redundantTouchingWallIds.has(wall.id)
+    && !(wall.opening?.pathId != null && connectedPathIds.has(wall.opening.pathId) && !connectedWallIds.has(wall.id)))
+  // Draw junctions after side walls so their complete silhouettes survive.
+  for (const wall of [...visibleWalls].sort((a, b) => Number(b.orientation === 'vertical') - Number(a.orientation === 'vertical'))) {
     const vertical = wall.orientation === 'vertical'
     const motif = rules.assemblies.wall
     if (!vertical) {
+      for (let x = wall.x; x < wall.x + wall.width; x += size) {
+        for (let y = wall.y; y < wall.y + motif.height * size; y += size) stampWallUnderlay(wall, x, y)
+      }
       const openingPath = wall.opening?.pathId == null ? null : pathsById.get(wall.opening.pathId)
       const capOpening = wall.opening && openingPath?.connectionKind !== 'door' ? wall.opening : null
       const capXs = new Set((capOpening ? [capOpening.x - size, capOpening.x + capOpening.width] : [])
@@ -160,7 +176,7 @@ export function buildDungeon3TilePlan(geometry) {
         if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
         if (capXs.has(x)) continue
         for (let y = 0; y < motif.height; y++) {
-          const ref = motif.cells.find(c => c.x === (x / size % motif.width) && c.y === y)
+          const ref = motif.cells.find(c => c.x === (Math.floor((x - wall.x) / size) % motif.width) && c.y === y)
           add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
         }
       }
@@ -170,40 +186,46 @@ export function buildDungeon3TilePlan(geometry) {
             { wallId: wall.id, pathId: wall.opening?.pathId })
         }
       }
+      if (rules.assemblies.wallCap09) {
+        for (const x of [wall.x - size, wall.x + wall.width]) {
+          for (let y = wall.y; y < wall.y + rules.assemblies.wallCap09.height * size; y += size) stampWallUnderlay(wall, x, y)
+          stamp(rules.assemblies.wallCap09, x / size, wall.y / size, 'wall-cap', 5.1,
+            { wallId: wall.id, wallEnd: true })
+        }
+      }
     } else {
-      // room-01 records dedicated one-column west/east strips from
-      // walls_floor. Rotating the horizontal wall here loses the authored
-      // edge pixels and is what made the map's side walls look like loose
-      // chunks. Use the matching edge strip first, then the authored narrow
-      // body for any span that is longer than the six-cell cap.
+      // Keep the authored west/east facing. Stretch only interior stone;
+      // the complete strip includes a foot that cannot tile vertically.
       const edge = wall.side === 'west' ? rules.assemblies.wallVerticalWest
         : wall.side === 'east' ? rules.assemblies.wallVerticalEast
           : rules.assemblies.wallVerticalBody
-      const body = rules.assemblies.wallVerticalBody
+      const body = wall.side === 'west'
+        ? (rules.assemblies.wallVerticalWestBody ?? rules.assemblies.wallVerticalBody)
+        : wall.side === 'east'
+          ? (rules.assemblies.wallVerticalEastBody ?? rules.assemblies.wallVerticalBody)
+          : rules.assemblies.wallVerticalBody
       const spans = wall.opening
         ? [[wall.y, wall.opening.y], [wall.opening.y + wall.opening.height, wall.y + wall.height]]
         : [[wall.y, wall.y + wall.height]]
       const stampVerticalSpan = (from, to) => {
-        let y = from
-        const stamp = (assembly, top) => {
-          for (const cell of assembly.cells) {
-            const worldY = top + cell.y * size
-            if (worldY < to) add(wall.x / size + cell.x, worldY / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
-          }
-        }
-        if (y + edge.height * size <= to) {
-          stamp(edge, y)
-          y += edge.height * size
-        }
-        while (y + body.height * size <= to) {
-          stamp(body, y)
-          y += body.height * size
-        }
-        if (y < to) {
-          for (let offset = 0; y + offset * size < to; offset += 1) {
-            const cell = body.cells[offset % body.height]
-            add(wall.x / size + cell.x, (y + offset * size) / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
-          }
+        for (let y = from; y < to; y += size) stampWallUnderlay(wall, wall.x, y)
+        const joins = (atY, above) => visibleWalls.some(other => other !== wall
+          && other.orientation === 'vertical' && other.x === wall.x && other.side === wall.side
+          && (above ? other.y + other.height === atY : other.y === atY)
+          && !(other.opening && (above
+            ? other.opening.y + other.opening.height >= atY
+            : other.opening.y <= atY)))
+        const continuesAbove = joins(from, true)
+        const continuesBelow = joins(to, false)
+        const count = Math.ceil((to - from) / size)
+        for (let row = 0; row < count; row++) {
+          // Only the interior stone is repeatable. The last atlas row contains
+          // a foot and transparent pixels, and must never recur mid-wall.
+          const tail = count - body.height
+          const cell = !continuesBelow && row >= Math.max(1, tail)
+            ? body.cells[row - tail]
+            : !continuesAbove && row === 0 ? edge.cells[0] : edge.cells[1]
+          add(wall.x / size, (from + row * size) / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
         }
       }
       for (const [from, to] of spans) if (to > from) stampVerticalSpan(from, to)

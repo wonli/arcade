@@ -89,6 +89,18 @@ test('vertical room edges reserve one authored walls_floor column', () => {
   }
 })
 
+test('rooms in the same slot column keep a shared outside wall line', () => {
+  for (let seed = 1; seed <= 80; seed++) {
+    const geometry = generateDungeonGeometry({ runSeed: seed, floor: seed % 5 + 1 })
+    for (const column of [0, 1, 2]) {
+      const rooms = geometry.rooms.filter(room => room.slot.column === column)
+      if (rooms.length < 2) continue
+      assert.equal(new Set(rooms.map(room => room.x)).size, 1, `seed ${seed}, column ${column}: room x drift`)
+      assert.equal(new Set(rooms.map(room => room.width)).size, 1, `seed ${seed}, column ${column}: room width drift`)
+    }
+  }
+})
+
 test('generated rooms spend more of the authored terrain vocabulary', () => {
   const kinds = new Set()
   for (let seed = 1; seed <= 50; seed++) {

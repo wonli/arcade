@@ -145,8 +145,79 @@ test('long vertical room edges keep one authored cap and repeat only the middle 
   }
   const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.wallId === 'wall-west')
   const edge = dungeon3Rules.assemblies.wallVerticalWest.cells.map(cell => cell.tileId)
-  const body = dungeon3Rules.assemblies.wallVerticalBody.cells.map(cell => cell.tileId)
-  assert.deepEqual(tiles.map(tile => tile.tileId), [...edge, ...body, ...body])
+  const body = dungeon3Rules.assemblies.wallVerticalWestBody.cells.map(cell => cell.tileId)
+  assert.equal(tiles.length, 12)
+  assert.equal(tiles.filter(tile => tile.tileId === body.at(-1)).length, 1, 'wall foot occurs only at the end')
+  assert.deepEqual(tiles.slice(1, -3).map(tile => tile.tileId), Array(8).fill(edge[1]))
+  assert.deepEqual(tiles.slice(-3).map(tile => tile.tileId), body)
+})
+
+test('touching side walls do not restart their caps or feet at a room boundary', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 10, rows: 16, cells: Array.from({ length: 160 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], walls: [
+      { id: 'upper', side: 'east', orientation: 'vertical', x: 32, y: 16, width: 16, height: 96 },
+      { id: 'lower', side: 'east', orientation: 'vertical', x: 32, y: 112, width: 16, height: 96 },
+    ],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall')
+  const edge = dungeon3Rules.assemblies.wallVerticalEast.cells
+  const foot = dungeon3Rules.assemblies.wallVerticalEastBody.cells.at(-1).tileId
+  assert.equal(tiles.length, 12)
+  assert.equal(tiles.filter(tile => tile.tileId === foot).length, 1)
+  assert.equal(tiles.find(tile => tile.y === 96).tileId, edge[1].tileId)
+  assert.equal(tiles.find(tile => tile.y === 112).tileId, edge[1].tileId)
+})
+
+test('horizontal wall sections keep authored left-to-right order at any world x', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 12, rows: 8, cells: Array.from({ length: 96 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [
+      { id: 'wall-even', side: 'north', orientation: 'horizontal', x: 32, y: 16, width: 32, height: 48, opening: null },
+      { id: 'wall-odd', side: 'north', orientation: 'horizontal', x: 48, y: 80, width: 32, height: 48, opening: null },
+    ],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall')
+  const expected = dungeon3Rules.assemblies.wall.cells
+  assert.deepEqual(tiles.filter(tile => tile.wallId === 'wall-even' && tile.y === 16).map(tile => tile.tileId), [expected[0].tileId, expected[1].tileId])
+  assert.deepEqual(tiles.filter(tile => tile.wallId === 'wall-odd' && tile.y === 80).map(tile => tile.tileId), [expected[0].tileId, expected[1].tileId])
+})
+
+test('horizontal wall ends close the authored corner against side walls', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 12, rows: 10, cells: Array.from({ length: 120 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [{ id: 'wall-north', side: 'north', orientation: 'horizontal', x: 32, y: 16, width: 64, height: 48, opening: null }],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall-cap' && tile.wallId === 'wall-north')
+  const cap = dungeon3Rules.assemblies.wallCap09.cells.map(cell => cell.tileId)
+  assert.deepEqual(tiles.filter(tile => tile.x === 16).map(tile => tile.tileId), cap)
+  assert.deepEqual(tiles.filter(tile => tile.x === 96).map(tile => tile.tileId), cap)
+})
+
+test('wall footprints cover water underneath instead of leaking through transparent edges', () => {
+  const size = 16
+  const cells = Array.from({ length: 100 }, () => ({ kind: 'floor', level: 0 }))
+  for (const x of [1, 2, 3, 4, 5, 6]) cells[x + 1 * 10] = { kind: 'water', level: 0 }
+  for (const y of [2, 3, 4]) cells[y * 10 + 1] = { kind: 'water', level: 0 }
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: size, columns: 10, rows: 10, cells },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [
+      { id: 'wall-north', side: 'north', orientation: 'horizontal', x: 16, y: 16, width: 96, height: 48, opening: null },
+      { id: 'wall-west', side: 'west', orientation: 'vertical', x: 16, y: 32, width: 16, height: 48, opening: null },
+    ],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall-underlay')
+  assert.ok(tiles.some(tile => tile.x === 16 && tile.y === 16))
+  assert.ok(tiles.some(tile => tile.x === 16 && tile.y === 32))
+  assert.ok(tiles.some(tile => tile.x === 16 && tile.y === 48))
+  assert.ok(tiles.some(tile => tile.x === 16 && tile.y === 64))
 })
 
 test('a connected room pair renders one wall band for the path instead of two parallel walls', () => {
@@ -188,14 +259,14 @@ test('non-door horizontal openings use authored wall caps without a second wall 
     ],
   }
   const tiles = renderer.buildDungeon3TilePlan(geometry)
-  const caps = tiles.filter(tile => tile.layer === 'wall-cap')
+  const caps = tiles.filter(tile => tile.layer === 'wall-cap' && !tile.wallEnd)
 
   assert.deepEqual(caps.map(tile => [tile.x, tile.y, tile.tileId]), [
     [80, 32, 209], [80, 48, 229], [80, 64, 249],
     [128, 32, 209], [128, 48, 229], [128, 64, 249],
   ])
   assert.equal(tiles.some(tile => tile.layer === 'wall' && tile.wallId === 'wall-0-south' && [80, 128].includes(tile.x)), false)
-  assert.equal(tiles.some(tile => tile.layer === 'wall-cap' && tile.wallId === 'wall-2-south'), false)
+  assert.equal(tiles.some(tile => tile.layer === 'wall-cap' && !tile.wallEnd && tile.wallId === 'wall-2-south'), false)
 })
 
 test('touching rooms without a connection also share one boundary wall band', () => {

@@ -1,5 +1,6 @@
 import { currentWeapon } from './player-loadout.js'
 import { weaponDisplayName } from './presentation.js'
+import { dungeonHudLayout } from './viewport-layout.js'
 
 export const HUD_INSET = 56
 export const HUD_WEAPON_ICON_URL = new URL('./assets/sword-7soul1_20201212/32x32/dagger_01.png', import.meta.url).href
@@ -135,12 +136,18 @@ export function installDungeonHud(scene, {
   const bossText = scene.add.text(PROGRESS_WIDTH - 8, 8, '', { ...textStyle, fontSize: '7px', color: '#ff746c', fontStyle: 'bold' }).setOrigin(1, 0)
   progressHud.add([progressBg, chapterText, floorText, bossText])
 
-  const positionProgressHud = () => {
-    const width = scene.scale?.width ?? scene.cameras?.main?.width ?? 960
-    progressHud.setPosition(Math.max(HUD_INSET, width - HUD_INSET - PROGRESS_WIDTH), HUD_INSET)
+  const positionHud = () => {
+    const viewport = scene.__dungeonViewport
+    const isMobileViewport = viewport?.mode === 'cover' || scene.__dungeonViewportMode === 'cover'
+    const layout = isMobileViewport
+      ? dungeonHudLayout({ width: viewport?.width ?? 960, height: viewport?.height ?? 600, zoom: viewport?.zoom ?? 1, inset: 12, compact: true })
+      : dungeonHudLayout({ width: scene.scale?.width ?? scene.cameras?.main?.width ?? 960, height: scene.scale?.height ?? scene.cameras?.main?.height ?? 600, zoom: 1, inset: HUD_INSET })
+    weapon.setPosition(layout.weapon.x, layout.weapon.y)
+    potion.setPosition(layout.potion.x, layout.potion.y)
+    progressHud.setPosition(layout.progress.x, layout.progress.y)
   }
-  positionProgressHud()
-  scene.scale?.on?.('resize', positionProgressHud)
+  positionHud()
+  scene.scale?.on?.('resize', positionHud)
 
   let iconImage = null
   let destroyed = false
@@ -186,7 +193,7 @@ export function installDungeonHud(scene, {
 
   const destroy = () => {
     destroyed = true
-    scene.scale?.off?.('resize', positionProgressHud)
+    scene.scale?.off?.('resize', positionHud)
     weapon.destroy(true)
     potion.destroy(true)
     progressHud.destroy(true)

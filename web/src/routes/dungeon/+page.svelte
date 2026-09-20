@@ -22,6 +22,7 @@
   import { initialDungeonStats, initialDungeonProgress } from '$lib/games/dungeon/session.js'
   import { loadPhaser } from '$lib/games/dungeon/phaser.js'
   import { loadDungeonAssetBundle } from '$lib/games/dungeon/asset-bundle.js'
+  import { dungeonViewportMode } from '$lib/games/dungeon/viewport-layout.js'
 
   const identity = getIdentity()
   const SOLO_REPLAY_ROOM = 'SOLO-DUNGEON'
@@ -223,6 +224,7 @@
         assetManifest: gameResources.assetManifest,
         resolveAsset: gameResources.resolveAsset,
         labels: { floor:(floor)=>t('floorTitle',{floor}), floorClear:()=>t('floorClear'), rarity:(rarity)=>rarityName(rarity), affix:(id,value,tier)=>formatAffixLabel({id,value,tier},locale) },
+        viewportMode: dungeonViewportMode({ width: window.innerWidth, height: window.innerHeight }),
         onStats(next) { stats = { ...stats, ...next }; hudRuntime?.update() },
         onEvent,
       })
@@ -323,8 +325,8 @@
 
   <section bind:this={stageShell} class="stage-shell">
     <div bind:this={mount} class="stage"></div>
+    {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
     <div bind:this={gameViewport} class="game-viewport">
-      {#if !gameOver && !panelOpen}<div class="touch-controls" aria-hidden="true"><div class="joystick-slot"><VirtualJoystick on:move={handleJoystickMove}/></div><div class="touch-actions"><button class="touch-button interact" on:pointerdown={triggerInteract}>{t('touchInteract')}</button><button class="touch-button skill" on:pointerdown={triggerSkill}>{t('touchSkill')}</button></div></div>{/if}
       {#if !ready && !error}<div class="overlay">{loadingLabel}</div>{/if}
       {#if error}<div class="overlay error">{error}</div>{/if}
 
@@ -354,8 +356,8 @@
   .topbar{width:min(1180px,100%);margin:0 auto;display:flex;justify-content:space-between;gap:20px;align-items:center;min-height:46px}
   .title-copy{min-width:0}.brand{color:#c1ff56;text-decoration:none;font-size:10px;font-weight:900;letter-spacing:.18em}.topbar h1{display:inline;margin:0 0 0 12px;font-size:22px;letter-spacing:-.04em}.topbar p{display:inline;margin:0 0 0 12px;color:#6f7882;font-size:11px;white-space:nowrap}
   .actions{display:flex;gap:6px;align-items:center;flex:0 0 auto}.actions button,.actions a{height:30px;padding:0 9px;border:0;background:#111419;color:#89939e;font:inherit;font-size:10px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}.actions button.active{background:#182017;color:#c1ff56}
-  .stage-shell{position:relative;align-self:stretch;justify-self:center;width:min(1180px,100%);height:100%;min-height:0;background:#050608;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;box-shadow:0 14px 38px rgba(0,0,0,.3)}
-  .stage{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;max-width:100%!important;max-height:100%!important;margin:auto!important;touch-action:none}
+  .stage-shell{position:relative;align-self:stretch;justify-self:center;width:100%;height:100%;min-height:0;background:#050608;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;box-shadow:0 14px 38px rgba(0,0,0,.3)}
+  .stage{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}.stage :global(canvas){display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:auto!important;touch-action:none}
   .game-viewport{position:absolute;z-index:30;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
   .potion-bottle{position:relative;display:inline-block;width:15px;height:18px;flex:0 0 auto;border-radius:3px 3px 6px 6px;background:#b92f43;box-shadow:inset 0 -5px 0 rgba(82,12,25,.42),0 2px 7px rgba(0,0,0,.36)}.potion-bottle::before{content:"";position:absolute;left:4px;top:-5px;width:7px;height:6px;border-radius:2px 2px 1px 1px;background:#c9bea5;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}.potion-bottle::after{content:"";position:absolute;left:3px;top:4px;width:3px;height:6px;border-radius:2px;background:rgba(255,210,214,.52)}.potion-bottle.small{width:12px;height:15px;border-radius:3px 3px 5px 5px}.potion-bottle.small::before{left:3px;top:-4px;width:6px;height:5px}.potion-bottle.small::after{left:2px;top:3px;width:2px;height:5px}
   .common{color:#f4f0e8}.uncommon{color:#70ff9f}.rare{color:#67a8ff}.epic{color:#c984ff}.legendary{color:#ffb347}
@@ -368,8 +370,22 @@
   @media(max-width:720px){
     .page{padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));grid-template-rows:auto minmax(0,1fr);gap:5px}
     .topbar{min-height:32px;gap:8px}.topbar h1,.topbar p{display:none}.brand{font-size:9px}.actions{gap:3px}.actions button,.actions a{height:28px;padding:0 7px;background:rgba(17,20,25,.76);font-size:9px}
-    .stage-shell{width:100%;height:100%;box-shadow:none}
-    .stats-overlay,.gameover-overlay{padding:8px;align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-button{width:64px;height:64px}.touch-button.skill{width:76px;height:76px}.joystick-slot{left:10px;bottom:34px}.touch-actions{right:10px;bottom:34px;gap:9px}footer{display:none}
+    .stage-shell{width:100%;height:100%;box-shadow:none}.stage :global(canvas){width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
+    .stats-overlay,.gameover-overlay{padding:8px;align-items:end}.stats-panel,.gameover-panel{width:100%;padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.stat-grid>div{border-bottom:1px solid rgba(71,80,91,.4)}.panel-actions{grid-template-columns:1fr}.panel-actions button{min-height:52px}.resume{order:-1}.touch-controls{display:block}.touch-button{width:58px;height:58px}.touch-button.skill{width:64px;height:64px}.joystick-slot{left:10px;bottom:max(16px,env(safe-area-inset-bottom))}.joystick-slot :global(.virtual-joystick){width:100px!important;height:100px!important}.joystick-slot :global(.joystick-knob){left:33px!important;top:33px!important;width:34px!important;height:34px!important}.touch-actions{right:10px;bottom:max(16px,env(safe-area-inset-bottom));gap:8px}footer{display:none}
   }
-  @media(max-height:520px){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.page{padding:5px;gap:4px;grid-template-rows:auto minmax(0,1fr)}}
+  @media(orientation:landscape) and (max-height:600px){
+    .page{padding:0;grid-template-rows:minmax(0,1fr);gap:0}
+    .topbar{display:none}
+    footer{display:none}
+    .stage-shell{width:100%;height:100%}
+    .stage :global(canvas){width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}
+    .touch-controls{display:block}
+    .joystick-slot{left:8px;bottom:max(8px,env(safe-area-inset-bottom))}
+    .joystick-slot :global(.virtual-joystick){width:82px!important;height:82px!important}
+    .joystick-slot :global(.joystick-knob){left:27px!important;top:27px!important;width:28px!important;height:28px!important}
+    .touch-actions{right:8px;bottom:max(8px,env(safe-area-inset-bottom));gap:6px}
+    .touch-button{width:48px;height:48px;font-size:9px}
+    .touch-button.skill{width:56px;height:56px}
+  }
+  @media(max-height:520px) and (orientation:portrait){.topbar h1,.topbar p,footer{display:none}.topbar{min-height:28px}.page{padding:5px;gap:4px;grid-template-rows:auto minmax(0,1fr)}}
 </style>

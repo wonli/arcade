@@ -194,7 +194,11 @@ function build(seed, floor, attempt) {
   const rooms = topology.slots.map((slot, id) => {
     const cx = SLOT_COLUMNS[slot.column], cy = SLOT_ROWS[slot.row]
     const theme = themes[id]
-    const width = theme === 'flooded' ? 224 : 256, height = 160
+    // Keep each slot's outside wall on one grid line. Flooded rooms vary by
+    // water/inlet layout, not by shrinking their footprint; a narrower room
+    // would move both side walls by one tile and expose the boundary water as
+    // broken map-edge walls when rooms in the same column touch.
+    const width = 256, height = 160
     return rect(cx - width / 2, cy - height / 2, width, height, 'room', {
       id, theme, level: roomLevels[id], center: point(cx, cy), slot: { ...slot },
     })

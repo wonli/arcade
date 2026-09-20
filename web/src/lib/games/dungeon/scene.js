@@ -7,6 +7,7 @@ import { affixSummary } from './affixes.js'
 import { createDefaultPlayerState } from './player-state.js'
 import { createDungeonWorldStateMaterializer } from './world-state-materializer.js'
 import { installDungeonPresentationEvents } from './presentation-events.js'
+import { dungeonCameraLayout, DUNGEON_WORLD_HEIGHT, DUNGEON_WORLD_WIDTH } from './viewport-layout.js'
 import {
   applyPickup,
   attackInterval,
@@ -22,8 +23,8 @@ import {
   secondaryTarget,
 } from './combat.js'
 
-const WIDTH = 960
-const HEIGHT = 600
+const WIDTH = DUNGEON_WORLD_WIDTH
+const HEIGHT = DUNGEON_WORLD_HEIGHT
 const TILE = 48
 function normalizeAssets(manifest = {}) {
   if (Array.isArray(manifest.assets)) return manifest.assets
@@ -146,7 +147,40 @@ export function chooseDungeonAssets(manifest = {}, resolveAsset = (path) => path
   }, resolveAsset)
 }
 
-export function createDungeonGame({ Phaser, parent, assets = {}, assetManifest = null, resolveAsset = (path) => path, labels = {}, onStats = () => {}, onEvent = () => {}, mode = 'live' }) {
+function configureDungeonViewport(scene, viewportMode) {
+  const cover = viewportMode === 'cover'
+  scene.__dungeonViewportMode = viewportMode
+  const camera = scene.cameras?.main
+  if (cover) {
+    camera?.setBounds?.(0, 0, WIDTH, HEIGHT)
+    camera?.startFollow?.(scene.localPlayer.actor, true, 0.12, 0.12)
+  } else {
+    camera?.stopFollow?.()
+    camera?.setZoom?.(1)
+    camera?.setScroll?.(0, 0)
+  }
+
+  const apply = (gameSize) => {
+    const width = gameSize?.width ?? scene.scale?.width ?? WIDTH
+    const height = gameSize?.height ?? scene.scale?.height ?? HEIGHT
+    const layout = cover
+      ? dungeonCameraLayout({ width, height, mode: 'cover' })
+      : { mode: 'fit', width: WIDTH, height: HEIGHT, zoom: 1, viewportWidth: WIDTH, viewportHeight: HEIGHT, scrollX: 0, scrollY: 0 }
+
+    scene.__dungeonViewport = layout
+    if (cover) {
+      camera?.setZoom?.(layout.zoom)
+      camera?.centerOn?.(scene.localPlayer.state.x, scene.localPlayer.state.y)
+    }
+  }
+
+  scene.scale?.on?.('resize', apply)
+  apply()
+  scene.events?.once?.('shutdown', () => scene.scale?.off?.('resize', apply))
+  scene.events?.once?.('destroy', () => scene.scale?.off?.('resize', apply))
+}
+
+export function createDungeonGame({ Phaser, parent, assets = {}, assetManifest = null, resolveAsset = (path) => path, labels = {}, onStats = () => {}, onEvent = () => {}, mode = 'live', viewportMode = 'fit' }) {
   const replayMode = mode === 'replay'
   const text = {
     floor: (value) => typeof labels.floor === 'function' ? labels.floor(value) : `FLOOR ${value}`,
@@ -220,6 +254,7 @@ export function createDungeonGame({ Phaser, parent, assets = {}, assetManifest =
       this.localPlayer.bar = this.createHealthBar(this.localPlayer.state.x, this.localPlayer.state.y - 42, 54, 6, 0x55e879)
       this.setupPlayerAnimations()
       this.syncPlayerAnimation()
+      configureDungeonViewport(this, viewportMode)
 
       installDungeonPresentationEvents(this, { onEvent })
       this.__dungeonReplayMaterializer = createDungeonWorldStateMaterializer(this)
@@ -1024,5 +1059,6 @@ export function createDungeonGame({ Phaser, parent, assets = {}, assetManifest =
     }
   }
 
-  return new Phaser.Game({ type: Phaser.AUTO, width: WIDTH, height: HEIGHT, parent, backgroundColor: '#0b0d10', pixelArt: true, antialias: false, scene: DungeonScene, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH } })
+  const scaleMode = viewportMode === 'cover' ? Phaser.Scale.RESIZE : Phaser.Scale.FIT
+  return new Phaser.Game({ type: Phaser.AUTO, width: WIDTH, height: HEIGHT, parent, backgroundColor: '#0b0d10', pixelArt: true, antialias: false, scene: DungeonScene, scale: { mode: scaleMode, autoCenter: viewportMode !== 'cover' } })
 }
