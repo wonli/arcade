@@ -108,20 +108,22 @@ test('doors sit on the room boundary with a narrow visual opening and a full tra
       assert.equal(door.orientation, orientations[door.side])
       seenSides.add(door.side)
       if (wall.orientation === 'horizontal') {
-        assert.equal(door.x, room.center.x)
-        assert.equal(door.y, door.side === 'north' ? room.y : room.y + room.height)
+        assert.equal(door.x, wall.opening.x + wall.opening.width / 2)
+        assert.equal(door.y, wall.y + wall.height / 2)
         assert.equal(wall.opening.width, 32)
         assert.equal(wall.passage.width, 96)
         assert.equal(door.collision.width, 96)
         assert.equal(door.collision.height, 16)
         assert.equal(door.collision.x, door.x - 48)
+        assert.equal(door.collision.y, door.y - 8)
       } else {
-        assert.equal(door.x, door.side === 'west' ? room.x : room.x + room.width)
-        assert.equal(door.y, room.center.y)
+        assert.equal(door.x, wall.x + wall.width / 2)
+        assert.equal(door.y, wall.opening.y + wall.opening.height / 2)
         assert.equal(wall.opening.height, 32)
         assert.equal(wall.passage.height, 96)
         assert.equal(door.collision.width, 16)
         assert.equal(door.collision.height, 96)
+        assert.equal(door.collision.x, door.x - 8)
         assert.equal(door.collision.y, door.y - 48)
       }
     }

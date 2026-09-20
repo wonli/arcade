@@ -21,17 +21,25 @@ export function randomId(cryptoImpl = globalThis.crypto, random = Math.random, n
   return `legacy-${now().toString(36)}-${entropy}`
 }
 
-export function getIdentity() {
-  let playerId = localStorage.getItem(playerKey)
+function browserStorage(name) {
+  try {
+    return globalThis?.[name] ?? null
+  } catch {
+    return null
+  }
+}
+
+export function getIdentity({ storage = browserStorage('localStorage'), sessionStorage = browserStorage('sessionStorage') } = {}) {
+  let playerId = storage?.getItem(playerKey)
   if (!playerId) {
     playerId = randomId()
-    localStorage.setItem(playerKey, playerId)
+    storage?.setItem(playerKey, playerId)
   }
 
-  let sessionId = sessionStorage.getItem(sessionKey)
+  let sessionId = sessionStorage?.getItem(sessionKey)
   if (!sessionId) {
     sessionId = randomId()
-    sessionStorage.setItem(sessionKey, sessionId)
+    sessionStorage?.setItem(sessionKey, sessionId)
   }
 
   return { playerId, sessionId }

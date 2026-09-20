@@ -122,29 +122,79 @@ export function buildDungeon3TilePlan(geometry) {
       }
     }
   }
-  for (const wall of geometry.walls ?? []) {
-    const motif = rules.assemblies.wall
+  const connectedWallIds = new Set((geometry.paths ?? [])
+    .map(path => path.direction?.fromSide == null ? null : `wall-${path.from}-${path.direction.fromSide}`)
+    .filter(Boolean))
+  const connectedPathIds = new Set((geometry.paths ?? []).map(path => path.id))
+  const walls = geometry.walls ?? []
+  const redundantTouchingWallIds = new Set()
+  for (const wall of walls) {
+    if (wall.opening?.pathId != null) continue
+    const touching = wall.orientation === 'horizontal'
+      ? wall.side === 'north'
+        && walls.some(other => other.orientation === 'horizontal' && other.side === 'south'
+          && other.opening?.pathId == null
+          && other.x === wall.x && other.width === wall.width && other.y === wall.y + size)
+      : wall.side === 'west'
+        && walls.some(other => other.orientation === 'vertical' && other.side === 'east'
+          && other.opening?.pathId == null
+          && other.y === wall.y && other.height === wall.height && other.x === wall.x + size)
+    if (touching) redundantTouchingWallIds.add(wall.id)
+  }
+  for (const wall of walls) {
+    // A path has two room-side wall records, but only the from-side record is
+    // one authored wall band. Rendering both records puts two parallel wall
+    // faces around every doorway/bridge and makes the door footprint disagree
+    // with the room template.
+    if (wall.opening?.pathId != null && connectedPathIds.has(wall.opening.pathId) && !connectedWallIds.has(wall.id)) continue
+    if (redundantTouchingWallIds.has(wall.id)) continue
     const vertical = wall.orientation === 'vertical'
-    // The authored horizontal wall's lower edge faces the room. Rotating it
-    // clockwise puts that edge on the east side of a west wall; rotating it
-    // counter-clockwise puts it on the west side of an east wall.
-    const oriented = vertical ? transformMotif(motif, wall.side === 'west' ? 'right' : 'left') : motif
+    const motif = rules.assemblies.wall
     if (!vertical) {
       for (let x = wall.x; x < wall.x + wall.width; x += size) {
         if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
-        for (let y = 0; y < oriented.height; y++) {
-          const ref = oriented.cells.find(c => c.x === (x / size % oriented.width) && c.y === y)
+        for (let y = 0; y < motif.height; y++) {
+          const ref = motif.cells.find(c => c.x === (x / size % motif.width) && c.y === y)
           add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
         }
       }
     } else {
-      for (let y = wall.y; y < wall.y + wall.height; y += oriented.height * size) {
-        for (const cell of oriented.cells) {
-          const worldY = y + cell.y * size
-          if (wall.opening && worldY >= wall.opening.y && worldY < wall.opening.y + wall.opening.height) continue
-          add(wall.x / size + cell.x, worldY / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+      // room-01 records dedicated one-column west/east strips from
+      // walls_floor. Rotating the horizontal wall here loses the authored
+      // edge pixels and is what made the map's side walls look like loose
+      // chunks. Use the matching edge strip first, then the authored narrow
+      // body for any span that is longer than the six-cell cap.
+      const edge = wall.side === 'west' ? rules.assemblies.wallVerticalWest
+        : wall.side === 'east' ? rules.assemblies.wallVerticalEast
+          : rules.assemblies.wallVerticalBody
+      const body = rules.assemblies.wallVerticalBody
+      const spans = wall.opening
+        ? [[wall.y, wall.opening.y], [wall.opening.y + wall.opening.height, wall.y + wall.height]]
+        : [[wall.y, wall.y + wall.height]]
+      const stampVerticalSpan = (from, to) => {
+        let y = from
+        const stamp = (assembly, top) => {
+          for (const cell of assembly.cells) {
+            const worldY = top + cell.y * size
+            if (worldY < to) add(wall.x / size + cell.x, worldY / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+          }
+        }
+        if (y + edge.height * size <= to) {
+          stamp(edge, y)
+          y += edge.height * size
+        }
+        while (y + body.height * size <= to) {
+          stamp(body, y)
+          y += body.height * size
+        }
+        if (y < to) {
+          for (let offset = 0; y + offset * size < to; offset += 1) {
+            const cell = body.cells[offset % body.height]
+            add(wall.x / size + cell.x, (y + offset * size) / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+          }
         }
       }
+      for (const [from, to] of spans) if (to > from) stampVerticalSpan(from, to)
     }
   }
   for (const door of geometry.doors ?? []) {

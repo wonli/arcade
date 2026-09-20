@@ -54,6 +54,12 @@ export function extractDungeon3Rules(xml) {
     underwaterRuin: crop('submerged-masonry', 'Walls_under_water', -15, 0, 4, 1),
     waterRipple: crop('water-ripple', 'Water_details', -17, -2, 4, 2),
     wall: crop('wall-section', 'Walls2', 6, 15, 2, 3),
+    // Keep each edge as the single-column strip from walls_floor.png. The
+    // neighboring column belongs to the wall body/turn and must not be
+    // included in an edge asset.
+    wallVerticalWest: crop('wall-vertical-west', 'Walls2', -11, 12, 1, 6),
+    wallVerticalEast: crop('wall-vertical-east', 'Walls2', -8, 12, 1, 6),
+    wallVerticalBody: crop('wall-vertical-body', 'Walls2', -14, 19, 1, 3),
     door: crop('wall-door', 'Walls2', 4, 15, 2, 3),
     floorTrap: crop('floor-pressure-trap', 'Objects0', -22, 7, 2, 2),
     wallTrap: crop('wall-dragon-trap', 'Objects1', -12, 3, 2, 6),

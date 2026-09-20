@@ -347,7 +347,7 @@ function build(seed, floor, attempt) {
         orientation: horizontal ? 'horizontal' : 'vertical',
         x: horizontal ? room.x : side === 'west' ? room.x - TILE : room.x + room.width,
         y: horizontal ? (side === 'north' ? room.y - TILE : room.y + room.height) : room.y,
-        width: horizontal ? room.width : 48,
+        width: horizontal ? room.width : TILE,
         height: horizontal ? 48 : room.height,
         opening, passage,
       }
@@ -375,10 +375,16 @@ function build(seed, floor, attempt) {
     const room = rooms[path.from], side = path.direction.fromSide, wall = wallByRoomSide.get(`${room.id}:${side}`)
     if (!wall) continue
     const horizontal = wall.orientation === 'horizontal'
+    // The authored door is a complete 2x3 replacement for one horizontal
+    // wall segment (room-02), not a sprite centered on the room boundary.
+    // Anchor its visual footprint to the wall band; side doors use the
+    // one-column wall band's center before the renderer rotates the motif.
+    const anchor = horizontal
+      ? { x: wall.opening.x + wall.opening.width / 2, y: wall.y + wall.height / 2 }
+      : { x: wall.x + wall.width / 2, y: wall.opening.y + wall.opening.height / 2 }
     const door = {
       id: `door-${path.id}`, roomId: room.id, pathId: path.id, wallId: wall.id, side,
-      x: horizontal ? room.center.x : side === 'west' ? room.x : room.x + room.width,
-      y: horizontal ? side === 'north' ? room.y : room.y + room.height : room.center.y,
+      x: anchor.x, y: anchor.y,
       orientation: doorOrientation[side], role: 'gate', opened: false,
       motif: dungeon3Rules.assemblies.door, openMotif: dungeon3Rules.assemblies.doorOpen, static: true,
     }

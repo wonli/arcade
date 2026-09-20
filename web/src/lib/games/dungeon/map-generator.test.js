@@ -80,6 +80,15 @@ test('authored walls frame the rooms and props are denser with complete multi-ti
   assert.ok([...scales].some(size => size.split('x').map(Number).some(value => value >= 64)), `expected complete multi-tile props, saw ${[...scales]}`)
 })
 
+test('vertical room edges reserve one authored walls_floor column', () => {
+  for (const seed of [3, 17, 41]) {
+    const geometry = generateDungeonGeometry({ runSeed: seed, floor: 2 })
+    const vertical = geometry.walls.filter(wall => wall.orientation === 'vertical')
+    assert.ok(vertical.length > 0)
+    assert.ok(vertical.every(wall => wall.width === geometry.grid.tileSize), `seed ${seed}: side wall footprint must match the authored one-column strip`)
+  }
+})
+
 test('generated rooms spend more of the authored terrain vocabulary', () => {
   const kinds = new Set()
   for (let seed = 1; seed <= 50; seed++) {
