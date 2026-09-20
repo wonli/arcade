@@ -16,7 +16,10 @@ export function buildDungeon3TilePlan(geometry) {
   }
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
     const cell = at(x, y)
-    if (cell.kind === 'boundary') continue
+    if (cell.kind === 'boundary') {
+      add(x, y, rules.water.body, 'water-edge', 0.9)
+      continue
+    }
     add(x, y, rules.water.body, 'water', 1)
     if (cell.kind === 'water' && rules.water.sheen?.length) {
       const sheenHash = ((geometry.seed ?? 0) + x * 67 + y * 113) >>> 0
@@ -93,12 +96,15 @@ export function buildDungeon3TilePlan(geometry) {
         : x === bridge.x / size ? palette.vertical[0] : x === (bridge.x + bridge.width) / size - 1 ? palette.vertical[2] : palette.vertical[1]
       add(x, y, { tileset: 'walls_floor', tileId: edge }, 'bridge-deck', 3.5, { bridgeVariant: bridge.variant ?? 0, pathId: bridge.pathId })
     }
-    if (horizontal && bridge.structure === 'arch') {
-      const arch = rules.assemblies.bridgeArch
-      const left = Math.floor((bridge.x + bridge.width / 2) / size - arch.width / 2)
-      const top = Math.floor(bridge.y / size + ((bridge.height / size) - arch.height) / 2)
-      stamp(arch, left, top, 'bridge-arch', 3.7, { bridgeVariant: bridge.variant ?? 0, pathId: bridge.pathId })
-    }
+    const structure = bridge.structure === 'arch'
+      ? rules.assemblies.bridgeArch
+      : rules.motifs.arches?.find(motif => motif.width === 5 && motif.height === 3)
+    if (!structure) continue
+    const oriented = horizontal ? structure : transformMotif(structure, 'right')
+    const left = Math.floor((bridge.x + bridge.width / 2) / size - oriented.width / 2)
+    const top = Math.floor((bridge.y + bridge.height / 2) / size - oriented.height / 2)
+    stamp(oriented, left, top, 'bridge-structure', bridge.structure === 'arch' ? 3.8 : 3.7,
+      { bridgeVariant: bridge.variant ?? 0, pathId: bridge.pathId, structure: bridge.structure })
   }
   for (const elevation of geometry.elevations ?? []) {
     const vertical = elevation.orientation === 'left' || elevation.orientation === 'right'
@@ -119,7 +125,10 @@ export function buildDungeon3TilePlan(geometry) {
   for (const wall of geometry.walls ?? []) {
     const motif = rules.assemblies.wall
     const vertical = wall.orientation === 'vertical'
-    const oriented = vertical ? transformMotif(motif, wall.side === 'west' ? 'left' : 'right') : motif
+    // The authored horizontal wall's lower edge faces the room. Rotating it
+    // clockwise puts that edge on the east side of a west wall; rotating it
+    // counter-clockwise puts it on the west side of an east wall.
+    const oriented = vertical ? transformMotif(motif, wall.side === 'west' ? 'right' : 'left') : motif
     if (!vertical) {
       for (let x = wall.x; x < wall.x + wall.width; x += size) {
         if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
@@ -130,15 +139,18 @@ export function buildDungeon3TilePlan(geometry) {
       }
     } else {
       for (let y = wall.y; y < wall.y + wall.height; y += oriented.height * size) {
-        if (wall.opening && y < wall.opening.y + wall.opening.height && y + oriented.height * size > wall.opening.y) continue
-        for (const cell of oriented.cells) add(wall.x / size + cell.x, y / size + cell.y, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+        for (const cell of oriented.cells) {
+          const worldY = y + cell.y * size
+          if (wall.opening && worldY >= wall.opening.y && worldY < wall.opening.y + wall.opening.height) continue
+          add(wall.x / size + cell.x, worldY / size, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+        }
       }
     }
   }
   for (const door of geometry.doors ?? []) {
     const source = door.opened ? (door.openMotif ?? rules.assemblies.doorOpen ?? door.motif) : door.motif
     const motif = transformMotif(source, door.orientation ?? 'down')
-    stamp(motif, door.x / size - motif.width / 2, door.y / size - motif.height / 2, 'door', 5.2,
+    stamp(motif, Math.floor(door.x / size - motif.width / 2), Math.floor(door.y / size - motif.height / 2), 'door', 5.2,
       { static: true, featureKind: 'door', doorState: door.opened ? 'open' : 'closed', wallId: door.wallId, doorId: door.id, pathId: door.pathId, orientation: door.orientation })
   }
   for (const trap of geometry.traps ?? []) {

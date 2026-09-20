@@ -72,6 +72,73 @@ test('opened doors stamp an authored open frame into the terrain plan', () => {
   assert.notDeepEqual(opened.map(tile => tile.tileId), closed.map(tile => tile.tileId))
 })
 
+test('boundary cells remain visible water instead of becoming a blank map edge', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 3, rows: 2, cells: [
+      { kind: 'boundary', level: 0 }, { kind: 'water', level: 0 }, { kind: 'boundary', level: 0 },
+      { kind: 'boundary', level: 0 }, { kind: 'floor', level: 0 }, { kind: 'boundary', level: 0 },
+    ] },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], walls: [], decorations: [],
+    waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry)
+  assert.equal(tiles.filter(tile => tile.layer === 'water-edge').length, 4)
+  assert.equal(tiles.filter(tile => tile.layer === 'water-edge').every(tile => tile.tileset === 'Water_coasts_animation'), true)
+})
+
+test('vertical wall rendering keeps both sides of a door opening filled', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 8, rows: 8, cells: Array.from({ length: 64 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [{ id: 'wall-east', side: 'east', orientation: 'vertical', x: 64, y: 16, width: 48, height: 80,
+      opening: { y: 40, height: 32, pathId: 3 }, }],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall')
+  assert.ok(tiles.length > 0)
+  assert.ok(tiles.some(tile => tile.y < 40))
+  assert.ok(tiles.some(tile => tile.y >= 72))
+  assert.equal(tiles.some(tile => tile.y >= 40 && tile.y < 72), false)
+})
+
+test('east and west walls face the room instead of mirroring the wrong edge inward', () => {
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: 16, columns: 10, rows: 8, cells: Array.from({ length: 80 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], bridges: [], stairs: [], doors: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    walls: [
+      { id: 'wall-west', side: 'west', orientation: 'vertical', x: 32, y: 16, width: 48, height: 80, opening: null },
+      { id: 'wall-east', side: 'east', orientation: 'vertical', x: 112, y: 16, width: 48, height: 80, opening: null },
+    ],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'wall')
+  assert.equal(tiles.find(tile => tile.wallId === 'wall-west').rotation, 90)
+  assert.equal(tiles.find(tile => tile.wallId === 'wall-east').rotation, -90)
+})
+
+test('flat and arch bridges both stamp authored Arches_columns structure in either direction', () => {
+  const size = 16
+  const cells = Array.from({ length: 20 * 12 }, () => ({ kind: 'water', level: 0 }))
+  const markBridge = (x, y, width, height) => {
+    for (let yy = y / size; yy < (y + height) / size; yy++) for (let xx = x / size; xx < (x + width) / size; xx++) cells[yy * 20 + xx] = { kind: 'bridge', level: 0 }
+  }
+  markBridge(96, 48, 96, 80)
+  markBridge(240, 48, 80, 96)
+  const geometry = {
+    seed: 1, grid: { tileSize: size, columns: 20, rows: 12, cells },
+    rooms: [], paths: [], stairs: [], doors: [], walls: [], decorations: [], waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+    bridges: [
+      { x: 96, y: 48, width: 96, height: 80, orientation: 'horizontal', structure: 'flat', variant: 0, pathId: 'flat' },
+      { x: 240, y: 48, width: 80, height: 96, orientation: 'vertical', structure: 'arch', variant: 1, pathId: 'arch' },
+    ],
+  }
+  const structures = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.layer === 'bridge-structure')
+  assert.ok(structures.some(tile => tile.pathId === 'flat'))
+  assert.ok(structures.some(tile => tile.pathId === 'arch'))
+  assert.ok(structures.every(tile => tile.tileset === 'Arches_columns'))
+})
+
 test('side doors rotate the complete authored footprint without changing occupancy', () => {
   const size = 16
   const geometry = {

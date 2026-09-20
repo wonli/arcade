@@ -325,11 +325,23 @@ function build(seed, floor, attempt) {
   }
   const wallByRoomSide = new Map()
   const wallSides = ['north', 'east', 'south', 'west']
-  const doorOrientation = { north: 'down', south: 'up', west: 'right', east: 'left' }
+  // The authored door frame is upright in its native/down orientation. A
+  // south-side connection is still approached from below, but must not flip
+  // the frame upside down.
+  const doorOrientation = { north: 'down', south: 'down', west: 'right', east: 'left' }
   for (const room of rooms) {
     for (const side of wallSides) {
       const horizontal = side === 'north' || side === 'south'
       const path = connectionByRoomSide.get(room.id).get(side) ?? null
+      const passage = path ? (horizontal ? { x: room.center.x - 48, width: 96, pathId: path.id } : { y: room.center.y - 48, height: 96, pathId: path.id }) : null
+      // A door needs a narrow authored visual opening, while the route still
+      // needs a full actor throat. Keeping those spans separate prevents the
+      // wall renderer from leaving a large blank hole beside the door.
+      const opening = path
+        ? path.connectionKind === 'door'
+          ? (horizontal ? { x: room.center.x - 16, width: 32, pathId: path.id } : { y: room.center.y - 16, height: 32, pathId: path.id })
+          : passage
+        : null
       const wall = {
         id: `wall-${room.id}-${side}`, roomId: room.id, side,
         orientation: horizontal ? 'horizontal' : 'vertical',
@@ -337,7 +349,7 @@ function build(seed, floor, attempt) {
         y: horizontal ? (side === 'north' ? room.y - TILE : room.y + room.height) : room.y,
         width: horizontal ? room.width : 48,
         height: horizontal ? 48 : room.height,
-        opening: path ? (horizontal ? { x: room.center.x - 48, width: 96, pathId: path.id } : { y: room.center.y - 48, height: 96, pathId: path.id }) : null,
+        opening, passage,
       }
       g.walls.push(wall)
       wallByRoomSide.set(`${room.id}:${side}`, wall)
@@ -345,14 +357,14 @@ function build(seed, floor, attempt) {
       const band = horizontal
         ? { x: room.x, y: side === 'north' ? room.y - TILE : room.y + room.height, width: room.width, height: TILE }
         : { x: side === 'west' ? room.x - TILE : room.x + room.width, y: room.y, width: TILE, height: room.height }
-      if (!wall.opening) {
+      if (!wall.passage) {
         g.solids.push({ ...band, kind: 'wall', wallId: wall.id })
       } else if (horizontal) {
-        for (const [x, width] of [[band.x, wall.opening.x - band.x], [wall.opening.x + wall.opening.width, band.x + band.width - wall.opening.x - wall.opening.width]]) {
+        for (const [x, width] of [[band.x, wall.passage.x - band.x], [wall.passage.x + wall.passage.width, band.x + band.width - wall.passage.x - wall.passage.width]]) {
           if (width > 0) g.solids.push({ ...band, x, width, wallId: wall.id })
         }
       } else {
-        for (const [y, height] of [[band.y, wall.opening.y - band.y], [wall.opening.y + wall.opening.height, band.y + band.height - wall.opening.y - wall.opening.height]]) {
+        for (const [y, height] of [[band.y, wall.passage.y - band.y], [wall.passage.y + wall.passage.height, band.y + band.height - wall.passage.y - wall.passage.height]]) {
           if (height > 0) g.solids.push({ ...band, y, height, wallId: wall.id })
         }
       }
@@ -365,14 +377,14 @@ function build(seed, floor, attempt) {
     const horizontal = wall.orientation === 'horizontal'
     const door = {
       id: `door-${path.id}`, roomId: room.id, pathId: path.id, wallId: wall.id, side,
-      x: horizontal ? room.center.x : side === 'west' ? room.x + 8 : room.x + room.width - 8,
-      y: horizontal ? side === 'north' ? room.y + 8 : room.y + room.height - 8 : room.center.y,
+      x: horizontal ? room.center.x : side === 'west' ? room.x : room.x + room.width,
+      y: horizontal ? side === 'north' ? room.y : room.y + room.height : room.center.y,
       orientation: doorOrientation[side], role: 'gate', opened: false,
       motif: dungeon3Rules.assemblies.door, openMotif: dungeon3Rules.assemblies.doorOpen, static: true,
     }
     door.collision = horizontal
-      ? rect(door.x - 16, side === 'north' ? room.y : room.y + room.height - TILE * 2, 32, TILE * 2, 'door', { doorId: door.id, pathId: path.id })
-      : rect(side === 'west' ? room.x : room.x + room.width - TILE * 2, door.y - 16, TILE * 2, 32, 'door', { doorId: door.id, pathId: path.id })
+      ? rect(door.x - 48, door.y - TILE / 2, 96, TILE, 'door', { doorId: door.id, pathId: path.id })
+      : rect(door.x - TILE / 2, door.y - 48, TILE, 96, 'door', { doorId: door.id, pathId: path.id })
     g.doors.push(door)
     g.solids.push({ ...door.collision })
   }
@@ -384,12 +396,14 @@ function build(seed, floor, attempt) {
   populateWater(g, random)
 
   const reserved = [g.spawn, g.exit, g.rest, ...g.chests, ...g.spawnPoints, ...g.doors]
+  const keyTileIds = new Set([237, 238])
+  const isKeyMotif = motif => motif.cells?.some(cell => keyTileIds.has(cell.tileId))
   const motifs = [
     ...dungeon3Rules.motifs.coffins.map(motif => ({ kind: 'coffin', motif })),
     ...dungeon3Rules.motifs.otherObjects.map(motif => ({ kind: 'object', motif })),
     ...dungeon3Rules.motifs.candles.map(motif => ({ kind: 'candle', motif })),
     ...dungeon3Rules.motifs.reliefs.map(motif => ({ kind: 'relief', motif })),
-  ].filter(entry => entry.motif.width <= 6 && entry.motif.height <= 6)
+  ].filter(entry => entry.motif.width <= 6 && entry.motif.height <= 6 && !isKeyMotif(entry.motif))
   const byScale = {
     large: motifs.filter(entry => decorationScale(entry.motif) === 'large'),
     medium: motifs.filter(entry => decorationScale(entry.motif) === 'medium'),

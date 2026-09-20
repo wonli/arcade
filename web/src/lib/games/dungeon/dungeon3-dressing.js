@@ -156,7 +156,7 @@ export function populateRoomHazards(g) {
     if (!wall) return false
     for(const x of [room.x+32,room.x+room.width-48,room.x+16,room.x+room.width-64]) {
       const area={x,y:wall.y+32,width:32,height:64}
-      if (wall.opening && x<wall.opening.x+wall.opening.width && x+32>wall.opening.x) continue
+      if (wall.passage && x<wall.passage.x+wall.passage.width && x+32>wall.passage.x) continue
       if (!available(room,area)) continue
       g.traps.push({id:`wall-trap-${room.id}`,roomId:room.id,wallId:wall.id,kind:'wall-trap',x:x+16,y:wall.y+48,
         motif:rules.assemblies.wallTrap,damageArea:area,orientation:'down'})
@@ -187,8 +187,8 @@ export function populateWater(g, random) {
   for (const wall of g.walls) {
     for (let y=wall.y/TILE;y<(wall.y+wall.height)/TILE;y++) for (let x=wall.x/TILE;x<(wall.x+wall.width)/TILE;x++) {
       const inOpening = wall.orientation === 'vertical'
-        ? wall.opening && y*TILE >= wall.opening.y && y*TILE < wall.opening.y + wall.opening.height
-        : wall.opening && x*TILE >= wall.opening.x && x*TILE < wall.opening.x + wall.opening.width
+        ? wall.passage && y*TILE >= wall.passage.y && y*TILE < wall.passage.y + wall.passage.height
+        : wall.passage && x*TILE >= wall.passage.x && x*TILE < wall.passage.x + wall.passage.width
       if (inOpening) continue
       wallCells.add(`${x},${y}`)
     }

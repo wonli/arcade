@@ -94,6 +94,17 @@ test('generated rooms spend more of the authored terrain vocabulary', () => {
   assert.ok(kinds.has('relief'), `missing reliefs from generated terrain: ${[...kinds]}`)
 })
 
+test('keys are not emitted as ordinary random floor decorations', () => {
+  const keyTiles = new Set([237, 238])
+  for (let seed = 1; seed <= 80; seed++) {
+    const g = generateDungeonGeometry({ runSeed: seed, floor: seed % 6 + 1 })
+    for (const decoration of g.decorations.filter(entry => entry.kind === 'object')) {
+      assert.equal(decoration.motif.cells.some(cell => keyTiles.has(cell.tileId)), false,
+        `seed ${seed}: key motif ${decoration.motif.id} was placed as generic decoration`)
+    }
+  }
+})
+
 test('room connections keep a generous walkable throat and expose doors without rest-room statues', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const g = generateDungeonGeometry({ runSeed: seed, floor: 3 })

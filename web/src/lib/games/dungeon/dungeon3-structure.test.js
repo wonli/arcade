@@ -74,9 +74,14 @@ test('connections distinguish same-level bridges from stair transitions; doors b
 test('render plan includes animated water, complete traps, bridge decks and elevation faces', () => {
   const g=generateDungeonGeometry({runSeed:33})
   const plan=buildDungeon3TilePlan(g)
-  for(const layer of ['water-detail','underwater-ruin','bridge-deck','bridge-arch','elevation-face','wall','floor-trap','wall-trap']) assert.ok(plan.some(t=>t.layer===layer),layer)
-  for (const tile of plan.filter(t => t.layer === 'bridge-arch')) assert.equal(tile.tileset, 'Arches_columns')
-  for (const stair of g.stairs) assert.equal(plan.some(tile => tile.layer === 'bridge-arch' && tile.pathId === stair.pathId), false)
+  for(const layer of ['water-detail','underwater-ruin','bridge-deck','elevation-face','wall','floor-trap','wall-trap']) assert.ok(plan.some(t=>t.layer===layer),layer)
+  const archGeometry = [33, 1, 7, 13, 21, 29].map(runSeed => generateDungeonGeometry({ runSeed }))
+    .find(geometry => geometry.bridges.some(bridge => bridge.structure === 'arch'))
+  assert.ok(archGeometry, 'fixed samples did not produce an arch bridge')
+  const archPlan = buildDungeon3TilePlan(archGeometry)
+  assert.ok(archPlan.some(tile => tile.layer === 'bridge-structure'))
+  for (const tile of archPlan.filter(t => t.layer === 'bridge-structure')) assert.equal(tile.tileset, 'Arches_columns')
+  for (const stair of archGeometry.stairs) assert.equal(archPlan.some(tile => tile.layer === 'bridge-structure' && tile.pathId === stair.pathId), false)
   for(const trap of g.traps) assert.equal(plan.filter(t=>t.trapId===trap.id).length,trap.motif.cells.length)
   for(const t of plan.filter(t=>t.layer==='water-detail')) assert.equal(g.grid.cells[t.y/16*g.grid.columns+t.x/16].kind,'water')
 })
@@ -89,4 +94,37 @@ test('opened doors keep an authored open-door frame instead of becoming empty sp
   const opened = buildDungeon3TilePlan(g).filter(tile => tile.featureKind === 'door' && tile.wallId === door.wallId)
   assert.equal(opened.length, closed.length)
   assert.deepEqual(opened.map(tile => tile.tileId), rules.assemblies.doorOpen.cells.map(cell => cell.tileId))
+})
+
+test('doors sit on the room boundary with a narrow visual opening and a full traversal throat', () => {
+  const orientations = { north: 'down', south: 'down', west: 'right', east: 'left' }
+  const seenSides = new Set()
+  for (let seed = 1; seed <= 40; seed++) {
+    const g = generateDungeonGeometry({ runSeed: seed })
+    for (const door of g.doors) {
+      const room = g.rooms[door.roomId]
+      const wall = g.walls.find(entry => entry.id === door.wallId)
+      assert.ok(room && wall)
+      assert.equal(door.orientation, orientations[door.side])
+      seenSides.add(door.side)
+      if (wall.orientation === 'horizontal') {
+        assert.equal(door.x, room.center.x)
+        assert.equal(door.y, door.side === 'north' ? room.y : room.y + room.height)
+        assert.equal(wall.opening.width, 32)
+        assert.equal(wall.passage.width, 96)
+        assert.equal(door.collision.width, 96)
+        assert.equal(door.collision.height, 16)
+        assert.equal(door.collision.x, door.x - 48)
+      } else {
+        assert.equal(door.x, door.side === 'west' ? room.x : room.x + room.width)
+        assert.equal(door.y, room.center.y)
+        assert.equal(wall.opening.height, 32)
+        assert.equal(wall.passage.height, 96)
+        assert.equal(door.collision.width, 16)
+        assert.equal(door.collision.height, 96)
+        assert.equal(door.collision.y, door.y - 48)
+      }
+    }
+  }
+  assert.ok(seenSides.size >= 2, `expected doors on several wall sides, saw ${[...seenSides]}`)
 })
