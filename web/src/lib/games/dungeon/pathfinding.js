@@ -8,8 +8,11 @@ function pointInRect(position, area) {
   return position.x >= area.x && position.x <= area.x + area.width && position.y >= area.y && position.y <= area.y + area.height
 }
 
+function bridgeArea(bridge) {
+  return bridge?.walkable ?? bridge
+}
 function pointOnBridge(position, geometry) {
-  return (geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))
+  return (geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridgeArea(bridge)))
 }
 
 function hardBlocked(position, actorRadius, geometry) {

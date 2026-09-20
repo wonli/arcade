@@ -152,7 +152,8 @@ export function populateRoomHazards(g) {
     !g.decorations.some(d=>d.footprint && overlaps(area,{x:d.x-d.footprint.width/2,y:d.y-d.footprint.height/2,...d.footprint})) &&
     !g.traps.some(t=>overlaps(area,t.damageArea))
   const addWallTrap = room => {
-    const wall=g.walls.find(w=>w.roomId===room.id)
+    const wall=g.walls.find(w=>w.roomId===room.id&&w.orientation==='horizontal'&&w.side==='north')
+    if (!wall) return false
     for(const x of [room.x+32,room.x+room.width-48,room.x+16,room.x+room.width-64]) {
       const area={x,y:wall.y+32,width:32,height:64}
       if (wall.opening && x<wall.opening.x+wall.opening.width && x+32>wall.opening.x) continue
@@ -182,15 +183,26 @@ export function populateRoomHazards(g) {
 export function populateWater(g, random) {
   const {columns,rows,cells} = g.grid
   const water = (x,y) => x>=0&&y>=0&&x<columns&&y<rows&&cells[y*columns+x].kind==='water'
+  const wallCells = new Set()
+  for (const wall of g.walls) {
+    for (let y=wall.y/TILE;y<(wall.y+wall.height)/TILE;y++) for (let x=wall.x/TILE;x<(wall.x+wall.width)/TILE;x++) {
+      const inOpening = wall.orientation === 'vertical'
+        ? wall.opening && y*TILE >= wall.opening.y && y*TILE < wall.opening.y + wall.opening.height
+        : wall.opening && x*TILE >= wall.opening.x && x*TILE < wall.opening.x + wall.opening.width
+      if (inOpening) continue
+      wallCells.add(`${x},${y}`)
+    }
+  }
   const occupied = new Set()
   const variants = [rules.assemblies.waterRipple,rules.assemblies.waterFoam,rules.assemblies.waterLong,rules.assemblies.waterSmall]
   const candidates = []
   for(let y=3;y<rows-2;y++) for(let x=3;x<columns-3;x++) if(water(x,y)) candidates.push({x,y,order:random()})
   candidates.sort((a,b)=>a.order-b.order)
-  const place = (motif,layer,limit) => {
+  const place = (motif,layer,limit,accept=()=>true) => {
     let count=0
     for(const p of candidates) {
       if(count>=limit) break
+      if(!accept(p,motif)) continue
       if(!motif.cells.every(c=>water(p.x+c.x,p.y+c.y)&&!occupied.has(`${p.x+c.x},${p.y+c.y}`))) continue
       g.waterFeatures.push({x:p.x*TILE,y:p.y*TILE,motif,layer,animationOffset:Math.floor(random()*6)*150})
       for(const c of motif.cells) occupied.add(`${p.x+c.x},${p.y+c.y}`)
@@ -204,5 +216,6 @@ export function populateWater(g, random) {
   for(const motif of variants) place(motif,'water-detail',detailLimit)
   occupied.clear()
   const ruinLimit = Math.max(3,Math.floor(g.rooms.length*(0.65+random()*0.7)))
-  place(rules.assemblies.underwaterRuin,'underwater-ruin',ruinLimit)
+  const wallBacked = (p,motif) => motif.cells.some(c => wallCells.has(`${p.x+c.x},${p.y+c.y}`))
+  place(rules.assemblies.underwaterRuin,'underwater-ruin',ruinLimit,wallBacked)
 }

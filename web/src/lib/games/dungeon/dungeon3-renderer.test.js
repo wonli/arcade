@@ -46,6 +46,50 @@ test('floor levels carry authored inset floor panels and southern concave transi
   assert.ok(tiles.some(t=>t.layer==='stairs'&&t.motifId===dungeon3Rules.motifs.stairs.find(m=>m.width===5).id))
 })
 
+test('water bodies and bridges use authored visual variants instead of one fixed tile', () => {
+  const waterBodies = new Set()
+  const bridgeVariants = new Set()
+  for (let seed = 1; seed <= 24; seed++) {
+    const geometry = generateDungeonGeometry({ runSeed: seed, floor: seed % 5 + 1 })
+    for (const tile of renderer.buildDungeon3TilePlan(geometry)) {
+      if (tile.layer === 'water-sheen') waterBodies.add(tile.tileId)
+    }
+    for (const bridge of geometry.bridges) bridgeVariants.add(bridge.variant)
+  }
+  assert.ok(waterBodies.size >= 2, `expected varied water bodies, saw ${[...waterBodies]}`)
+  assert.ok(bridgeVariants.size >= 2, `expected varied bridge variants, saw ${[...bridgeVariants]}`)
+})
+
+test('opened doors stamp an authored open frame into the terrain plan', () => {
+  const geometry = generateDungeonGeometry({ runSeed: 7 })
+  const door = geometry.doors[0]
+  const closed = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.featureKind === 'door' && tile.wallId === door.wallId)
+  door.opened = true
+  const opened = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.featureKind === 'door' && tile.wallId === door.wallId)
+  assert.ok(closed.length > 0)
+  assert.equal(opened.length, closed.length)
+  assert.ok(opened.every(tile => tile.doorState === 'open'))
+  assert.notDeepEqual(opened.map(tile => tile.tileId), closed.map(tile => tile.tileId))
+})
+
+test('side doors rotate the complete authored footprint without changing occupancy', () => {
+  const size = 16
+  const geometry = {
+    seed: 1,
+    grid: { tileSize: size, columns: 8, rows: 8, cells: Array.from({ length: 64 }, () => ({ kind: 'floor', level: 0 })) },
+    rooms: [], paths: [], bridges: [], stairs: [], walls: [], decorations: [],
+    doors: [{ id: 'door-side', pathId: 2, wallId: 'wall-side', x: 56, y: 48, side: 'east', orientation: 'left', opened: false,
+      motif: dungeon3Rules.assemblies.door, openMotif: dungeon3Rules.assemblies.doorOpen }],
+    waterFeatures: [], elevations: [], traps: [], pavingAreas: [], solids: [],
+  }
+  const tiles = renderer.buildDungeon3TilePlan(geometry).filter(tile => tile.featureKind === 'door')
+  assert.equal(tiles.length, 6)
+  assert.equal(new Set(tiles.map(tile => `${tile.x},${tile.y}`)).size, 6)
+  assert.deepEqual([...new Set(tiles.map(tile => tile.x))].sort((a, b) => a - b), [32, 48, 64])
+  assert.deepEqual([...new Set(tiles.map(tile => tile.y))].sort((a, b) => a - b), [32, 48])
+  assert.ok(tiles.every(tile => tile.rotation === -90))
+})
+
 test('terrain renderer batches tile plan into render textures instead of one game object per tile', () => {
   const geometry = generateDungeonGeometry({ runSeed: 33 })
   const tiles = renderer.buildDungeon3TilePlan(geometry)

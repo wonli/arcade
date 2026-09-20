@@ -136,3 +136,27 @@ test('the rendered ordinary-map assets keep complete motifs at every randomized 
     for(const t of plan.filter(t=>t.layer==='water-detail'||t.layer==='underwater-ruin')) assert.equal(g.grid.cells[t.y/16*g.grid.columns+t.x/16].kind,'water')
   }
 })
+
+test('underwater wall reflections stay inside water cells backed by an authored wall', () => {
+  for (const seed of [5, 13, 33, 57, 91]) {
+    const g = generateDungeonGeometry({ runSeed: seed })
+    const wallCells = new Set()
+    for (const wall of g.walls) {
+      for (let y = wall.y / g.grid.tileSize; y < (wall.y + wall.height) / g.grid.tileSize; y++) {
+        for (let x = wall.x / g.grid.tileSize; x < (wall.x + wall.width) / g.grid.tileSize; x++) {
+          const inOpening = wall.orientation === 'vertical'
+            ? wall.opening && y * g.grid.tileSize >= wall.opening.y && y * g.grid.tileSize < wall.opening.y + wall.opening.height
+            : wall.opening && x * g.grid.tileSize >= wall.opening.x && x * g.grid.tileSize < wall.opening.x + wall.opening.width
+          if (inOpening) continue
+          wallCells.add(`${x},${y}`)
+        }
+      }
+    }
+    for (const feature of g.waterFeatures.filter(entry => entry.layer === 'underwater-ruin')) {
+      const left = feature.x / g.grid.tileSize
+      const top = feature.y / g.grid.tileSize
+      const backedByWall = feature.motif.cells.some(cell => wallCells.has(`${left + cell.x},${top + cell.y}`))
+      assert.equal(backedByWall, true, `seed ${seed}: underwater wall reflection placed without a wall`)
+    }
+  }
+})

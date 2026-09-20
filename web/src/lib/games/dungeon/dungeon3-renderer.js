@@ -18,6 +18,10 @@ export function buildDungeon3TilePlan(geometry) {
     const cell = at(x, y)
     if (cell.kind === 'boundary') continue
     add(x, y, rules.water.body, 'water', 1)
+    if (cell.kind === 'water' && rules.water.sheen?.length) {
+      const sheenHash = ((geometry.seed ?? 0) + x * 67 + y * 113) >>> 0
+      if (sheenHash % 9 === 0) add(x, y, rules.water.sheen[sheenHash % rules.water.sheen.length], 'water-sheen', 1.8, { animationOffset: (sheenHash % 6) * 150 })
+    }
     if (!isLand(cell)) continue
     const skin = rules.floorSkins[rules.floorSkins.length - 1 - cell.level % rules.floorSkins.length]
     add(x, y, skin.center, 'floor', 2)
@@ -56,44 +60,86 @@ export function buildDungeon3TilePlan(geometry) {
   const stamp = (motif, left, top, layer, depth, extra = {}) => {
     for (const cell of motif.cells) add(left + cell.x, top + cell.y, cell, layer, depth, { motifId: motif.id, ...extra })
   }
+  const transformMotif = (motif, orientation = 'down') => {
+    if (!motif || orientation === 'down') return motif
+    const rotate = orientation === 'left' || orientation === 'right'
+    const width = rotate ? motif.height : motif.width
+    const height = rotate ? motif.width : motif.height
+    const cells = motif.cells.map(cell => {
+      let x = cell.x, y = cell.y, angle = cell.rotation ?? 0
+      if (orientation === 'left') { x = cell.y; y = motif.width - 1 - cell.x; angle -= 90 }
+      if (orientation === 'right') { x = motif.height - 1 - cell.y; y = cell.x; angle += 90 }
+      if (orientation === 'up') { x = motif.width - 1 - cell.x; y = motif.height - 1 - cell.y; angle += 180 }
+      return { ...cell, x, y, rotation: angle }
+    })
+    return { ...motif, width, height, cells }
+  }
   for (const feature of geometry.waterFeatures ?? []) {
     stamp(feature.motif, feature.x / size, feature.y / size, feature.layer,
       feature.layer === 'underwater-ruin' ? 1.25 : 1.5, { animationOffset: feature.animationOffset })
   }
 
+  const bridgeVariants = [
+    { horizontal: [121, 138, 155], vertical: [137, 138, 139] },
+    { horizontal: [122, 139, 156], vertical: [154, 155, 156] },
+    { horizontal: [123, 140, 157], vertical: [155, 156, 157] },
+  ]
   for (const bridge of geometry.bridges ?? []) {
     const horizontal = bridge.orientation === 'horizontal'
+    const palette = bridgeVariants[Math.abs(bridge.variant ?? 0) % bridgeVariants.length]
     for (let y = bridge.y / size; y < (bridge.y + bridge.height) / size; y++) for (let x = bridge.x / size; x < (bridge.x + bridge.width) / size; x++) {
       if (at(x, y)?.kind !== 'bridge') continue
-      const edge = horizontal ? y === bridge.y / size ? 121 : y === (bridge.y + bridge.height) / size - 1 ? 155 : 138
-        : x === bridge.x / size ? 137 : x === (bridge.x + bridge.width) / size - 1 ? 139 : 138
-      add(x, y, { tileset: 'walls_floor', tileId: edge }, 'bridge-deck', 3.5)
+      const edge = horizontal ? y === bridge.y / size ? palette.horizontal[0] : y === (bridge.y + bridge.height) / size - 1 ? palette.horizontal[2] : palette.horizontal[1]
+        : x === bridge.x / size ? palette.vertical[0] : x === (bridge.x + bridge.width) / size - 1 ? palette.vertical[2] : palette.vertical[1]
+      add(x, y, { tileset: 'walls_floor', tileId: edge }, 'bridge-deck', 3.5, { bridgeVariant: bridge.variant ?? 0, pathId: bridge.pathId })
     }
-    if (horizontal) {
+    if (horizontal && bridge.structure === 'arch') {
       const arch = rules.assemblies.bridgeArch
-      const left = Math.floor((bridge.x + bridge.width / 2) / size - arch.width / 2), top = (bridge.y + bridge.height) / size
-      if (arch.cells.every(c => at(left + c.x, top + c.y)?.kind === 'water')) stamp(arch, left, top, 'bridge-support', 3.6)
+      const left = Math.floor((bridge.x + bridge.width / 2) / size - arch.width / 2)
+      const top = Math.floor(bridge.y / size + ((bridge.height / size) - arch.height) / 2)
+      stamp(arch, left, top, 'bridge-arch', 3.7, { bridgeVariant: bridge.variant ?? 0, pathId: bridge.pathId })
     }
   }
   for (const elevation of geometry.elevations ?? []) {
-    for (let x = elevation.x; x < elevation.x + elevation.width; x += size) {
-      if (x >= elevation.opening.x && x < elevation.opening.x + elevation.opening.width) continue
-      if (!land(x / size, elevation.y / size)) continue
-      stamp(rules.assemblies.terrace, x / size, elevation.y / size, 'elevation-face', 4.1)
+    const vertical = elevation.orientation === 'left' || elevation.orientation === 'right'
+    const terrace = vertical ? transformMotif(rules.assemblies.terrace, elevation.orientation) : rules.assemblies.terrace
+    if (vertical) {
+      for (let y = elevation.y; y < elevation.y + elevation.height; y += size) {
+        if (y >= elevation.opening.y && y < elevation.opening.y + elevation.opening.height) continue
+        stamp(terrace, elevation.x / size, y / size, 'elevation-face', 4.1)
+      }
+    } else {
+      for (let x = elevation.x; x < elevation.x + elevation.width; x += size) {
+        if (x >= elevation.opening.x && x < elevation.opening.x + elevation.opening.width) continue
+        if (!land(x / size, elevation.y / size)) continue
+        stamp(terrace, x / size, elevation.y / size, 'elevation-face', 4.1)
+      }
     }
   }
   for (const wall of geometry.walls ?? []) {
     const motif = rules.assemblies.wall
-    for (let x = wall.x; x < wall.x + wall.width; x += size) {
-      if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
-      for (let y = 0; y < motif.height; y++) {
-        const ref = motif.cells.find(c => c.x === (x / size % motif.width) && c.y === y)
-        add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id })
+    const vertical = wall.orientation === 'vertical'
+    const oriented = vertical ? transformMotif(motif, wall.side === 'west' ? 'left' : 'right') : motif
+    if (!vertical) {
+      for (let x = wall.x; x < wall.x + wall.width; x += size) {
+        if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
+        for (let y = 0; y < oriented.height; y++) {
+          const ref = oriented.cells.find(c => c.x === (x / size % oriented.width) && c.y === y)
+          add(x / size, wall.y / size + y, ref, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
+        }
+      }
+    } else {
+      for (let y = wall.y; y < wall.y + wall.height; y += oriented.height * size) {
+        if (wall.opening && y < wall.opening.y + wall.opening.height && y + oriented.height * size > wall.opening.y) continue
+        for (const cell of oriented.cells) add(wall.x / size + cell.x, y / size + cell.y, cell, 'wall', 5.1, { wallId: wall.id, pathId: wall.opening?.pathId })
       }
     }
   }
   for (const door of geometry.doors ?? []) {
-    stamp(door.motif, door.x / size - door.motif.width / 2, door.y / size - door.motif.height / 2, 'door', 5.2, { static: true, featureKind: 'door', wallId: door.wallId })
+    const source = door.opened ? (door.openMotif ?? rules.assemblies.doorOpen ?? door.motif) : door.motif
+    const motif = transformMotif(source, door.orientation ?? 'down')
+    stamp(motif, door.x / size - motif.width / 2, door.y / size - motif.height / 2, 'door', 5.2,
+      { static: true, featureKind: 'door', doorState: door.opened ? 'open' : 'closed', wallId: door.wallId, doorId: door.id, pathId: door.pathId, orientation: door.orientation })
   }
   for (const trap of geometry.traps ?? []) {
     stamp(trap.motif, trap.x / size - trap.motif.width / 2, trap.y / size - trap.motif.height / 2,
@@ -129,14 +175,23 @@ export function buildDungeon3TilePlan(geometry) {
   }
   const stepMotif = rules.motifs.stairs.find(m => m.width === 5 && m.height === 3)
   if (stepMotif) for (const stair of geometry.stairs ?? []) {
-    const width = (stair.width ?? stepMotif.width * size) / size
-    const left = Math.floor(stair.x / size - width / 2), top = Math.floor(stair.y / size - stepMotif.height / 2)
-    // Repeat only the authored middle columns; retain both end caps and all
-    // three vertical rows. Perspective stairs must never be rotated in 2D.
-    for (let y = 0; y < stepMotif.height; y++) for (let x = 0; x < width; x++) {
-      const sourceX = x === 0 ? 0 : x === width - 1 ? stepMotif.width - 1 : 1 + (x - 1) % (stepMotif.width - 2)
-      const ref = stepMotif.cells.find(c => c.x === sourceX && c.y === y)
-      add(left + x, top + y, ref, 'stairs', 4.2, { motifId: stepMotif.id, pathId: stair.pathId })
+    const vertical = stair.orientation === 'left' || stair.orientation === 'right'
+    const oriented = vertical ? transformMotif(stepMotif, stair.orientation) : transformMotif(stepMotif, stair.orientation === 'up' ? 'up' : 'down')
+    const spanX = Math.max(1, Math.round((stair.width ?? oriented.width * size) / size))
+    const spanY = Math.max(1, Math.round((stair.height ?? oriented.height * size) / size))
+    const left = Math.floor(stair.x / size - spanX / 2), top = Math.floor(stair.y / size - spanY / 2)
+    if (!vertical) {
+      for (let y = 0; y < oriented.height; y++) for (let x = 0; x < spanX; x++) {
+        const sourceX = x === 0 ? 0 : x === spanX - 1 ? oriented.width - 1 : 1 + (x - 1) % Math.max(1, oriented.width - 2)
+        const ref = oriented.cells.find(c => c.x === sourceX && c.y === y)
+        add(left + x, top + y, ref, 'stairs', 4.2, { motifId: stepMotif.id, pathId: stair.pathId, orientation: stair.orientation })
+      }
+    } else {
+      for (let y = 0; y < spanY; y++) for (let x = 0; x < oriented.width; x++) {
+        const sourceY = y === 0 ? 0 : y === spanY - 1 ? oriented.height - 1 : 1 + (y - 1) % Math.max(1, oriented.height - 2)
+        const ref = oriented.cells.find(c => c.x === x && c.y === sourceY)
+        add(left + x, top + y, ref, 'stairs', 4.2, { motifId: stepMotif.id, pathId: stair.pathId, orientation: stair.orientation })
+      }
     }
   }
 
@@ -145,7 +200,7 @@ export function buildDungeon3TilePlan(geometry) {
 
 export function queueDungeon3Textures(scene, resolveAsset = scene?.__dungeonAssetResolver ?? ((path) => path)) {
   const base = '/assets/dungeon-tileset/dungeon-pixel-tileset-for-rpg-and-roguelike-game/Tiled_files/'
-  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire', 'Water_detilazation', 'plate_trap', 'dragon_trap', 'Spikes']
+  const used = ['walls_floor', 'Water_coasts_animation', 'plates', 'coffins', 'other_objects', 'stairs', 'doors', 'Statue_fire', 'Water_detilazation', 'plate_trap', 'dragon_trap', 'Spikes', 'Arches_columns', 'candles', 'scull_bas-relief']
   let queued = false
   for (const name of used) {
     const set = rules.tilesets[name], key = dungeon3TextureKey(name)

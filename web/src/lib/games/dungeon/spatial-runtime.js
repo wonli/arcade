@@ -2,6 +2,7 @@ import { activeTrapAt } from './dungeon3-hazards.js'
 import { queueDungeon3Textures, renderDungeon3Terrain } from './dungeon3-renderer.js'
 import { placePlayerAtRoomSpawn, safeEnemySpawn } from './room-anchors.js'
 import { chestEntityId, createDungeonChestRuntime } from './chest-runtime.js'
+import { createDungeonDoorRuntime } from './door-runtime.js'
 import { chooseEnvironmentAssets } from './environment-assets.js'
 import { nearestInteractable } from './interactables.js'
 import { buildNavGrid, findPath, nextWaypoint } from './pathfinding.js'
@@ -397,6 +398,12 @@ function showChestPrompt(scene, chest, label) {
 }
 function hideChestPrompt(chest) { chest?.prompt?.destroy?.(); if (chest) chest.prompt = null }
 
+function showDoorPrompt(scene, door, label) {
+  if (door?.prompt) return
+  door.prompt = scene.add.text(door.x, door.y - 42, `[E] ${label('openDoor')}`, { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px', fontStyle: 'bold', color: '#ffd86b', stroke: '#08090b', strokeThickness: 4 }).setOrigin(0.5).setDepth(36)
+}
+function hideDoorPrompt(door) { door?.prompt?.destroy?.(); if (door) door.prompt = null }
+
 function queueEnvironmentTexture(scene, key, asset) {
   if (!asset?.path || scene.textures?.exists?.(key)) return false
   if ((asset.frames ?? 1) > 1 && asset.frameWidth > 0 && asset.frameHeight > 0) scene.load.spritesheet(key, asset.path, { frameWidth: asset.frameWidth, frameHeight: asset.frameHeight, endFrame: asset.frames - 1 })
@@ -466,7 +473,7 @@ function collisionGeometryForEnemy(enemy, geometry) { return enemyIsFlying(enemy
 export function installDungeonSpatial(scene, { player = scene?.localPlayer, getProgress = () => ({ floor: scene?.floor ?? 1, chapter: 1, roomRole: 'combat', fortuneActive: false }), onEvent = () => {}, label = (key) => key, random = Math.random } = {}) {
   if (!scene || !player || scene.__dungeonSpatialInstalled) return scene?.__dungeonSpatial ?? null
   scene.__dungeonSpatialInstalled = true
-  let chests = [], trapCooldownUntil = 0
+  let chests = [], doors = [], trapCooldownUntil = 0
   const chestKey = scene.input.keyboard.addKey('E')
   const originalDrawArena = scene.drawArena.bind(scene)
   const originalUpdatePlayer = scene.updatePlayer.bind(scene)
@@ -482,6 +489,18 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     hidePrompt: hideChestPrompt,
     range: CHEST_RANGE,
   })
+  const doorRuntime = createDungeonDoorRuntime({
+    scene,
+    getDoors: () => doors,
+    range: CHEST_RANGE,
+    onOpened: (event, door) => {
+      const geometry = scene.__roomGeometry
+      if (geometry) geometry.solids = geometry.solids.filter(solid => solid.doorId !== event.doorId)
+      if (door) door.opened = true
+      onEvent(event)
+      refreshRoom({ geometry })
+    },
+  })
 
   const refreshRoom = ({ geometry: fixedGeometry = null } = {}) => {
     const progress = getProgress() ?? {}
@@ -489,9 +508,12 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     const geometry = fixedGeometry ?? roomGeometry(null, floor, random)
     scene.clearArena()
     for (const chest of chests) hideChestPrompt(chest)
+    for (const door of doors) hideDoorPrompt(door)
     chests = []
+    doors = []
     renderFloor(scene, geometry)
     scene.__roomGeometry = geometry
+    doors = geometry.doors ?? []
     if (!fixedGeometry) placePlayerAtRoomSpawn(scene, player)
     const cellSize = geometry.grid?.tileSize ?? 32
     scene.__navGrids = {
@@ -618,19 +640,25 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
   }
 
   const updateInteraction = () => {
-    const nearest = nearestInteractable(player.state, chests, CHEST_RANGE)
+    const nearest = nearestInteractable(player.state, [...doors, ...chests], CHEST_RANGE)
     for (const chest of chests) { if (chest === nearest) showChestPrompt(scene, chest, label); else hideChestPrompt(chest) }
+    for (const door of doors) { if (door === nearest) showDoorPrompt(scene, door, label); else hideDoorPrompt(door) }
   }
   scene.events.on('update', updateInteraction)
 
-  const openNearestChest = () => chestRuntime.openNearest(player)
-  chestKey.on('down', openNearestChest)
+  const openNearestInteraction = () => {
+    const nearest = nearestInteractable(player.state, [...doors, ...chests], CHEST_RANGE)
+    if (!nearest) return { opened: false, reason: 'nothing-nearby' }
+    return doors.includes(nearest) ? doorRuntime.openById(player, nearest.id) : chestRuntime.openById(player, nearest.id)
+  }
+  chestKey.on('down', openNearestInteraction)
   refreshRoom()
 
   scene.events.once('shutdown', () => {
-    chestKey.off('down', openNearestChest)
+    chestKey.off('down', openNearestInteraction)
     scene.events.off('update', updateInteraction)
     for (const chest of chests) hideChestPrompt(chest)
+    for (const door of doors) hideDoorPrompt(door)
     chestRuntime.restore()
     scene.drawArena = originalDrawArena
     scene.updatePlayer = originalUpdatePlayer
@@ -643,7 +671,9 @@ export function installDungeonSpatial(scene, { player = scene?.localPlayer, getP
     refreshRoom,
     getGeometry: () => scene.__roomGeometry,
     getChests: () => [...chests],
+    getDoors: () => [...doors],
     openChestById: (target, chestId) => chestRuntime.openById(target, chestId),
+    openDoorById: (target, doorId) => doorRuntime.openById(target, doorId),
     applyOpenedChestIds: (ids) => chestRuntime.applyOpenedChestIds(ids),
     openedChestIds: () => chestRuntime.openedChestIds(),
     setChestIntentHandler: (handler = null) => chestRuntime.setIntentHandler(handler),

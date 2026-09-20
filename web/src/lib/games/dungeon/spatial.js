@@ -132,10 +132,11 @@ export function circleHitsSolid(position, radius, geometry) {
     if (!circleRectIntersects(position, radius, water)) continue
     let pieces = [water]
     for (const bridge of geometry?.bridges ?? []) {
+      const deck = bridge.walkable ?? bridge
       pieces = pieces.flatMap((area) => {
-        const x = Math.max(area.x, bridge.x), y = Math.max(area.y, bridge.y)
-        const right = Math.min(area.x + area.width, bridge.x + bridge.width)
-        const bottom = Math.min(area.y + area.height, bridge.y + bridge.height)
+        const x = Math.max(area.x, deck.x), y = Math.max(area.y, deck.y)
+        const right = Math.min(area.x + area.width, deck.x + deck.width)
+        const bottom = Math.min(area.y + area.height, deck.y + deck.height)
         if (x >= right || y >= bottom) return [area]
         return [
           { x: area.x, y: area.y, width: area.width, height: y - area.y },
@@ -169,7 +170,7 @@ export function movementWithCollision(from, delta, radius, geometry) {
 }
 
 export function terrainAt(position, geometry) {
-  if ((geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge))) return { type: 'bridge', speedMultiplier: 1, navCost: 1 }
+  if ((geometry?.bridges ?? []).some((bridge) => pointInRect(position, bridge.walkable ?? bridge))) return { type: 'bridge', speedMultiplier: 1, navCost: 1 }
   const water = (geometry?.water ?? []).some((area) => pointInRect(position, area))
   return water ? { type: 'water', speedMultiplier: 0, navCost: Infinity } : { type: 'floor', speedMultiplier: 1, navCost: 1 }
 }

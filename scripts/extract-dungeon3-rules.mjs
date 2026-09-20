@@ -44,6 +44,7 @@ export function extractDungeon3Rules(xml) {
     if (cells.length !== width * height) throw new Error(`Incomplete Dungeon3 assembly: ${id}`)
     return { id, width, height, source: { layer: layerName, x, y }, cells }
   }
+  const arches = motifs('Arches_columns', /^Objects2$/, 4).filter(m => m.width <= 6 && m.height <= 6)
   const assemblies = {
     statue: crop('fire-statue', 'Objects1', -6, -1, 5, 5),
     spikes: crop('spike-bank', 'Objects0', -26, 11, 4, 1),
@@ -57,7 +58,16 @@ export function extractDungeon3Rules(xml) {
     floorTrap: crop('floor-pressure-trap', 'Objects0', -22, 7, 2, 2),
     wallTrap: crop('wall-dragon-trap', 'Objects1', -12, 3, 2, 6),
     terrace: crop('terrace-face', 'Floor', -11, 9, 1, 2),
-    bridgeArch: crop('bridge-arch', 'Floor3', -12, 18, 6, 2),
+    bridgeArch: arches.find(m => m.width === 6 && m.height === 2 && m.cells.length === 12),
+  }
+  assemblies.doorOpen = {
+    ...assemblies.door,
+    id: 'wall-door-open',
+    cells: assemblies.door.cells.map(cell => {
+      const frames = map.tilesets[cell.tileset]?.animations?.[String(cell.tileId)] ?? []
+      const openFrame = frames[Math.floor(frames.length / 2)]
+      return openFrame ? { ...cell, tileId: openFrame.tileId } : { ...cell }
+    }),
   }
   const coast=slice('Water_coasts_animation',[175,176,177,204,205,206,233,234,235])
   const detailLayers=['floor1_details','floor2_details','floor3_details']
@@ -75,7 +85,7 @@ export function extractDungeon3Rules(xml) {
     assemblies,
     paving:slice('plates',[8,10,12,21,23,25,73,75,77]),
     floorDark:slice('walls_floor',[375,376,377,392,393,394,409,410,411]),
-    water:{body:ref('Water_coasts_animation',871),coast,southFoot:[262,263,264].map(id=>ref('Water_coasts_animation',id)),
+    water:{body:ref('Water_coasts_animation',871),sheen:[323,325,360,362].map(id=>ref('Water_detilazation',id)),coast,southFoot:[262,263,264].map(id=>ref('Water_coasts_animation',id)),
       innerNW:ref('Water_coasts_animation',268),innerNE:ref('Water_coasts_animation',266),
       innerSW:ref('Water_coasts_animation',152),innerSE:ref('Water_coasts_animation',150),
       concaveSouth:{
@@ -83,7 +93,7 @@ export function extractDungeon3Rules(xml) {
         se:{id:'coast-concave-se',width:1,height:3,source:{layer:'Floor',x:3,y:5},cells:[150,179,208].map((id,y)=>({x:0,y,...ref('Water_coasts_animation',id)}))},
       },
       description:'Coasts occupy LAND cells; the Water layer underneath uses tile 871. South edges need one additional cliff-foot tile in the water row below. All directions indicate the missing land neighbor. Southern concave transitions are three rows tall in the source: a land lip, a transition face, then its foot. The concaveSouth motifs use the lip as y=0; preserve all cells rather than treating the lip as a one-cell corner.'},
-    motifs:{coffins:motifs('coffins',/^Objects/,4).filter(m=>m.cells.length===m.width*m.height),otherObjects:motifs('other_objects',/^Objects/),plates:motifs('plates',/^plates/),stairs:motifs('stairs',/./,4),doors:motifs('doors',/^Walls/,2)},
+    motifs:{coffins:motifs('coffins',/^Objects/,4).filter(m=>m.cells.length===m.width*m.height),otherObjects:motifs('other_objects',/^Objects/),arches,candles:motifs('candles',/^Objects[56]$/,2).filter(m=>m.width<=6&&m.height<=6),reliefs:motifs('scull_bas-relief',/^Objects2$/,2).filter(m=>m.width<=6&&m.height<=6),plates:motifs('plates',/^plates/),stairs:motifs('stairs',/./,4),doors:motifs('doors',/^Walls/,2)},
   }
 }
 export function serializeDungeon3Rules(rules) {

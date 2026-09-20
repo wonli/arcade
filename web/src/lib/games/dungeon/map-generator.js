@@ -14,8 +14,10 @@ const RADIUS = 26
 const SLOT_COLUMNS = [176, 480, 784]
 const SLOT_ROWS = [144, 304, 464]
 const CORRIDOR = 96
+const BRIDGE_THROAT = 80
 const rect = (x, y, width, height, kind, extra = {}) => ({ x, y, width, height, kind, ...extra })
 const point = (x, y) => ({ x, y })
+const snapDownToTile = value => Math.floor(value / TILE) * TILE
 
 function hashSeed(value) {
   let hash = 2166136261 >>> 0
@@ -94,6 +96,16 @@ function growRoomGraph(random, targetCount) {
   }
   return { slots, edges: [...edges, ...extras] }
 }
+function assignRoomLevels(random, roomCount, edges) {
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const levels = Array.from({ length: roomCount }, () => Math.floor(random() * 3))
+    if (new Set(levels).size < 2) continue
+    if (edges.every(([a, b]) => Math.abs(levels[a] - levels[b]) <= 1)) return levels
+  }
+  const levels = Array(roomCount).fill(1)
+  levels[0] = 0
+  return levels
+}
 function graphInfo(roomCount, edges, start) {
   const adjacency = Array.from({ length: roomCount }, () => [])
   for (const [a, b] of edges) { adjacency[a].push(b); adjacency[b].push(a) }
@@ -135,6 +147,22 @@ function rectanglesFor(grid, kind) {
   }
   return out
 }
+function connectionDirection(a, b) {
+  if (a.center.y === b.center.y) {
+    const fromRight = a.center.x < b.center.x
+    return { axis: 'horizontal', fromSide: fromRight ? 'east' : 'west', toSide: fromRight ? 'west' : 'east' }
+  }
+  const fromBottom = a.center.y < b.center.y
+  return { axis: 'vertical', fromSide: fromBottom ? 'south' : 'north', toSide: fromBottom ? 'north' : 'south' }
+}
+function rectHasWater(area, cells) {
+  for (let y = area.y / TILE; y < (area.y + area.height) / TILE; y++) {
+    for (let x = area.x / TILE; x < (area.x + area.width) / TILE; x++) {
+      if (cells[y * COLS + x]?.kind === 'water') return true
+    }
+  }
+  return false
+}
 
 function decorationCandidates(random, room, width, height) {
   const candidates = []
@@ -161,13 +189,14 @@ function build(seed, floor, attempt) {
   })
   const targetCount = weightedRoomCount(random)
   const topology = growRoomGraph(random, targetCount)
+  const roomLevels = assignRoomLevels(random, topology.slots.length, topology.edges)
   const themes = shuffle(random, ['shrine', 'crypt', 'gauntlet', 'flooded', ...Array.from({ length: Math.max(0, targetCount - 4) }, (_, i) => i % 2 ? 'crypt' : 'gallery')])
   const rooms = topology.slots.map((slot, id) => {
     const cx = SLOT_COLUMNS[slot.column], cy = SLOT_ROWS[slot.row]
     const theme = themes[id]
     const width = theme === 'flooded' ? 224 : 256, height = 160
     return rect(cx - width / 2, cy - height / 2, width, height, 'room', {
-      id, theme, level: 2 - slot.row, center: point(cx, cy), slot: { ...slot },
+      id, theme, level: roomLevels[id], center: point(cx, cy), slot: { ...slot },
     })
   })
   const carve = (area, kind, level, onlyWater = false) => {
@@ -184,21 +213,35 @@ function build(seed, floor, attempt) {
   const paths = [], bridges = []
   for (const [a, b] of topology.edges) {
     const from = rooms[a].center, to = rooms[b].center
-    const horizontal = from.y === to.y, half = CORRIDOR / 2
+    const direction = connectionDirection(rooms[a], rooms[b])
+    const horizontal = direction.axis === 'horizontal', half = CORRIDOR / 2
     const path = horizontal
       ? rect(Math.min(from.x, to.x) - half, from.y - half, Math.abs(to.x - from.x) + half * 2, half * 2, 'path')
       : rect(from.x - half, Math.min(from.y, to.y) - half, CORRIDOR, Math.abs(to.y - from.y) + CORRIDOR, 'path')
     path.id = paths.length; path.from = a; path.to = b; path.level = Math.min(rooms[a].level, rooms[b].level)
+    path.direction = direction
+    path.levelDelta = Math.abs(rooms[a].level - rooms[b].level)
+    path.crossesWater = rectHasWater(path, cells)
+    path.connectionKind = path.levelDelta ? 'stairs' : path.crossesWater ? 'bridge' : random() < 0.68 ? 'door' : 'open'
     paths.push(path)
     const lower = horizontal ? (from.x < to.x ? rooms[a] : rooms[b]) : (from.y < to.y ? rooms[a] : rooms[b])
     const upper = lower === rooms[a] ? rooms[b] : rooms[a]
     const bridge = horizontal
-      ? rect(lower.x + lower.width - TILE, from.y - half, Math.max(TILE * 2, upper.x - lower.x - lower.width + TILE * 2), half * 2, 'bridge', { orientation: 'horizontal' })
-      : rect(from.x - half, lower.y + lower.height - TILE, CORRIDOR, Math.max(TILE * 2, upper.y - lower.y - lower.height + TILE * 2), 'bridge', { orientation: 'vertical' })
+      ? rect(lower.x + lower.width - TILE, snapDownToTile(from.y - BRIDGE_THROAT / 2), Math.max(TILE * 6, upper.x - lower.x - lower.width + TILE * 2), BRIDGE_THROAT, 'bridge', { orientation: 'horizontal' })
+      : rect(snapDownToTile(from.x - BRIDGE_THROAT / 2), lower.y + lower.height - TILE, BRIDGE_THROAT, Math.max(TILE * 2, upper.y - lower.y - lower.height + TILE * 2), 'bridge', { orientation: 'vertical' })
     bridge.pathId = path.id; bridge.level = path.level
+    bridge.walkable = horizontal
+      ? rect(bridge.x, path.y, bridge.width, path.height, 'bridge-clearance')
+      : rect(path.x, bridge.y, path.width, bridge.height, 'bridge-clearance')
     const waterGap = horizontal ? upper.x - lower.x - lower.width : upper.y - lower.y - lower.height
-    if (waterGap > 0) bridges.push(bridge)
-    carve(path, 'bridge', path.level, true)
+    if (path.connectionKind === 'bridge') {
+      bridge.variant = Math.floor(random() * 3)
+      bridge.structure = random() < 0.45 ? 'arch' : 'flat'
+      bridges.push(bridge)
+      carve(bridge, 'bridge', path.level, true)
+    } else {
+      carve(path, 'floor', path.level, true)
+    }
   }
 
   for (const room of rooms.filter(r => r.theme === 'flooded')) {
@@ -233,49 +276,105 @@ function build(seed, floor, attempt) {
   g.spawnPoints = rooms.map(room => ({ ...room.center }))
   g.chests = [{ ...rooms[chestRoom].center }]
 
-  // A floor is a physical terrace: upper rows descend south by one level.
-  // Same-level spans are bridges; only elevation changes receive stairs.
+  // Only level changes receive stairs. Same-level spans are already carved as
+  // bridges, doors, or ordinary open paths above.
   for (const path of paths) {
     const a = rooms[path.from], b = rooms[path.to]
-    if (a.level === b.level) continue
+    if (path.connectionKind !== 'stairs') continue
     const high = a.level > b.level ? a : b, low = high === a ? b : a
+    const horizontal = path.direction.axis === 'horizontal'
+    const highBeforeLow = horizontal ? high.center.x < low.center.x : high.center.y < low.center.y
+    const orientation = horizontal ? (highBeforeLow ? 'right' : 'left') : (highBeforeLow ? 'down' : 'up')
+    const edgeX = horizontal ? (highBeforeLow ? high.x + high.width - TILE : high.x) : high.x
+    const edgeY = horizontal ? high.y : (highBeforeLow ? high.y + high.height - TILE : high.y)
     const stair = {
-      x: high.center.x, y: high.y + high.height - TILE / 2,
-      width: 96, height: 48, orientation: 'down', pathId: path.id,
+      x: horizontal ? edgeX + (highBeforeLow ? TILE / 2 : -TILE / 2) : high.center.x,
+      y: horizontal ? high.center.y : edgeY + (highBeforeLow ? TILE / 2 : -TILE / 2),
+      width: horizontal ? 48 : 96, height: horizontal ? 96 : 48, orientation, pathId: path.id,
       highLevel: high.level, lowLevel: low.level,
     }
     g.stairs.push(stair)
-    // Reserve the transition in the navigation model. Its lip is the only
-    // opening in this terrace face; no sideways access through a vertical drop.
-    const left = stair.x - 48, edgeY = high.y + high.height - TILE
-    for (const [x, width] of [[high.x, left - high.x], [stair.x + 48, high.x + high.width - stair.x - 48]]) {
-      if (width > 0) g.solids.push(rect(x, edgeY, width, TILE, 'elevation'))
+    const opening = horizontal
+      ? { y: stair.y - 48, height: 96 }
+      : { x: stair.x - 48, width: 96 }
+    if (horizontal) {
+      const barrierX = edgeX
+      for (const [y, height] of [[high.y, opening.y - high.y], [opening.y + opening.height, high.y + high.height - opening.y - opening.height]]) {
+        if (height > 0) g.solids.push(rect(barrierX, y, TILE, height, 'elevation'))
+      }
+    } else {
+      for (const [x, width] of [[high.x, opening.x - high.x], [opening.x + opening.width, high.x + high.width - opening.x - opening.width]]) {
+        if (width > 0) g.solids.push(rect(x, edgeY, width, TILE, 'elevation'))
+      }
     }
-    g.elevations.push({ roomId: high.id, x: high.x, y: edgeY, width: high.width, height: 32, opening: { x: left, width: 96 }, highLevel: high.level, lowLevel: low.level })
-    for (let y = (stair.y - 24) / TILE; y < (stair.y + 24) / TILE; y++) {
-      for (let x = (stair.x - 48) / TILE; x < (stair.x + 48) / TILE; x++) {
+    g.elevations.push({ roomId: high.id, x: horizontal ? edgeX : high.x, y: horizontal ? high.y : edgeY,
+      width: horizontal ? TILE : high.width, height: horizontal ? high.height : TILE, opening: horizontal ? opening : { x: opening.x, width: opening.width },
+      highLevel: high.level, lowLevel: low.level, orientation, pathId: path.id })
+    for (let y = (stair.y - stair.height / 2) / TILE; y < (stair.y + stair.height / 2) / TILE; y++) {
+      for (let x = (stair.x - stair.width / 2) / TILE; x < (stair.x + stair.width / 2) / TILE; x++) {
         const cell = cells[y * COLS + x]
         if (cell) cell.transition = { high: high.level, low: low.level, pathId: path.id }
       }
     }
   }
 
+  const connectionByRoomSide = new Map(rooms.map(room => [room.id, new Map()]))
+  for (const path of paths) {
+    connectionByRoomSide.get(path.from).set(path.direction.fromSide, path)
+    connectionByRoomSide.get(path.to).set(path.direction.toSide, path)
+  }
+  const wallByRoomSide = new Map()
+  const wallSides = ['north', 'east', 'south', 'west']
+  const doorOrientation = { north: 'down', south: 'up', west: 'right', east: 'left' }
   for (const room of rooms) {
-    const northConnection = paths.some(p => {
-      const other = p.from === room.id ? rooms[p.to] : p.to === room.id ? rooms[p.from] : null
-      return other && other.center.x === room.center.x && other.center.y < room.center.y
-    })
-    // North-facing wall sections flank a real entrance, or enclose a room.
-    // Doors are closed alcoves in these walls, as in Walls2; they are never
-    // floating objects at east/west bridge ends or looping opening animations.
-    const wall = { id: `wall-${room.id}`, roomId: room.id, x: room.x, y: room.y - TILE, width: room.width, height: 48,
-      opening: northConnection ? { x: room.center.x - 48, width: 96 } : null }
-    g.walls.push(wall)
-    for (let x = room.x; x < room.x + room.width; x += TILE) {
-      if (wall.opening && x >= wall.opening.x && x < wall.opening.x + wall.opening.width) continue
-      g.solids.push(rect(x, room.y + TILE, TILE, TILE, 'wall'))
+    for (const side of wallSides) {
+      const horizontal = side === 'north' || side === 'south'
+      const path = connectionByRoomSide.get(room.id).get(side) ?? null
+      const wall = {
+        id: `wall-${room.id}-${side}`, roomId: room.id, side,
+        orientation: horizontal ? 'horizontal' : 'vertical',
+        x: horizontal ? room.x : side === 'west' ? room.x - TILE : room.x + room.width,
+        y: horizontal ? (side === 'north' ? room.y - TILE : room.y + room.height) : room.y,
+        width: horizontal ? room.width : 48,
+        height: horizontal ? 48 : room.height,
+        opening: path ? (horizontal ? { x: room.center.x - 48, width: 96, pathId: path.id } : { y: room.center.y - 48, height: 96, pathId: path.id }) : null,
+      }
+      g.walls.push(wall)
+      wallByRoomSide.set(`${room.id}:${side}`, wall)
+
+      const band = horizontal
+        ? { x: room.x, y: side === 'north' ? room.y - TILE : room.y + room.height, width: room.width, height: TILE }
+        : { x: side === 'west' ? room.x - TILE : room.x + room.width, y: room.y, width: TILE, height: room.height }
+      if (!wall.opening) {
+        g.solids.push({ ...band, kind: 'wall', wallId: wall.id })
+      } else if (horizontal) {
+        for (const [x, width] of [[band.x, wall.opening.x - band.x], [wall.opening.x + wall.opening.width, band.x + band.width - wall.opening.x - wall.opening.width]]) {
+          if (width > 0) g.solids.push({ ...band, x, width, wallId: wall.id })
+        }
+      } else {
+        for (const [y, height] of [[band.y, wall.opening.y - band.y], [wall.opening.y + wall.opening.height, band.y + band.height - wall.opening.y - wall.opening.height]]) {
+          if (height > 0) g.solids.push({ ...band, y, height, wallId: wall.id })
+        }
+      }
     }
-    if (!northConnection) g.doors.push({ x: room.center.x, y: room.y + 8, wallId: wall.id, orientation: 'down', role: 'alcove', motif: dungeon3Rules.assemblies.door, static: true })
+  }
+
+  for (const path of paths.filter(entry => entry.connectionKind === 'door')) {
+    const room = rooms[path.from], side = path.direction.fromSide, wall = wallByRoomSide.get(`${room.id}:${side}`)
+    if (!wall) continue
+    const horizontal = wall.orientation === 'horizontal'
+    const door = {
+      id: `door-${path.id}`, roomId: room.id, pathId: path.id, wallId: wall.id, side,
+      x: horizontal ? room.center.x : side === 'west' ? room.x + 8 : room.x + room.width - 8,
+      y: horizontal ? side === 'north' ? room.y + 8 : room.y + room.height - 8 : room.center.y,
+      orientation: doorOrientation[side], role: 'gate', opened: false,
+      motif: dungeon3Rules.assemblies.door, openMotif: dungeon3Rules.assemblies.doorOpen, static: true,
+    }
+    door.collision = horizontal
+      ? rect(door.x - 16, side === 'north' ? room.y : room.y + room.height - TILE * 2, 32, TILE * 2, 'door', { doorId: door.id, pathId: path.id })
+      : rect(side === 'west' ? room.x : room.x + room.width - TILE * 2, door.y - 16, TILE * 2, 32, 'door', { doorId: door.id, pathId: path.id })
+    g.doors.push(door)
+    g.solids.push({ ...door.collision })
   }
 
   dressThemedRooms(g, random)
@@ -288,6 +387,8 @@ function build(seed, floor, attempt) {
   const motifs = [
     ...dungeon3Rules.motifs.coffins.map(motif => ({ kind: 'coffin', motif })),
     ...dungeon3Rules.motifs.otherObjects.map(motif => ({ kind: 'object', motif })),
+    ...dungeon3Rules.motifs.candles.map(motif => ({ kind: 'candle', motif })),
+    ...dungeon3Rules.motifs.reliefs.map(motif => ({ kind: 'relief', motif })),
   ].filter(entry => entry.motif.width <= 6 && entry.motif.height <= 6)
   const byScale = {
     large: motifs.filter(entry => decorationScale(entry.motif) === 'large'),
@@ -337,6 +438,17 @@ function build(seed, floor, attempt) {
     g.torches.push(point(room.center.x, room.y + TILE * 2))
   }
 
+  // Make the newly recovered authored motifs visible in ordinary runs. Random
+  // dressing still supplies variety, but a theme is not considered used just
+  // because it happened to be selected by one seed out of many.
+  for (const kind of ['candle', 'relief']) {
+    if (g.decorations.some(decoration => decoration.kind === kind)) continue
+    const pool = motifs.filter(entry => entry.kind === kind)
+    for (const room of rooms) {
+      if (placeDecoration(room, pool, false, true)) break
+    }
+  }
+
   return g
 }
 
@@ -344,7 +456,8 @@ function validate(g) {
   if (layoutContractViolations(g).length) return false
   const anchors = [g.spawn, g.exit, g.rest, ...g.spawnPoints, ...g.chests]
   if (anchors.some(p => circleHitsSolid(p, RADIUS, g))) return false
-  const grid = buildNavGrid(g, { cellSize: TILE, actorRadius: RADIUS })
+  const routeGeometry = { ...g, solids: g.solids.filter(solid => solid.kind !== 'door'), doors: g.doors.map(door => ({ ...door, opened: true })) }
+  const grid = buildNavGrid(routeGeometry, { cellSize: TILE, actorRadius: RADIUS })
   // Find a route that remains safe throughout every trap phase. This changes
   // only the generation proof; traps stay traversable during actual gameplay.
   for (const cell of grid.cells.values()) if (g.traps.some(trap => pointInDamageArea(cell, trap))) cell.blocked = true
