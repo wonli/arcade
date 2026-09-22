@@ -7,6 +7,7 @@ import (
 	"github.com/wonli/arcade/game"
 	"github.com/wonli/arcade/game/chess"
 	"github.com/wonli/arcade/game/gomoku"
+	"github.com/wonli/arcade/game/policethief"
 	"github.com/wonli/arcade/room"
 )
 
@@ -15,8 +16,8 @@ func (s *Service) AddBot(roomID string, playerID game.PlayerID, difficulty ...st
 	if !ok {
 		return errors.New("room not found")
 	}
-	if r.GameName != "gomoku" && r.GameName != "chess" {
-		return errors.New("bot is only available for gomoku and chess")
+	if r.GameName != "gomoku" && r.GameName != "chess" && r.GameName != "policethief" {
+		return errors.New("bot is only available for gomoku, chess, and policethief")
 	}
 	if len(r.Players) != 1 || r.Players[0].ID != playerID {
 		return errors.New("bot can only be added by the first player to an empty seat")
@@ -33,7 +34,10 @@ func (s *Service) AddBot(roomID string, playerID game.PlayerID, difficulty ...st
 	if err := r.Join(room.Player{ID: botID, Name: "AQI BOT", Bot: true, BotDifficulty: level}); err != nil {
 		return err
 	}
-	return s.ready(r)
+	if err := s.ready(r); err != nil {
+		return err
+	}
+	return s.botMove(r)
 }
 
 func (s *Service) botMove(r *room.Room) error {
@@ -63,6 +67,20 @@ func (s *Service) botMove(r *room.Room) error {
 			return nil
 		}
 		payload, err := json.Marshal(move)
+		if err != nil {
+			return err
+		}
+		return r.Move(r.Players[1].ID, payload)
+	case policethief.State:
+		role := state.RoleOf(r.Players[1].ID)
+		if role == "" || state.Turn != role {
+			return nil
+		}
+		to, ok := policethief.ChooseBotMove(state, role)
+		if !ok {
+			return nil
+		}
+		payload, err := json.Marshal(policethief.Move{To: to})
 		if err != nil {
 			return err
 		}
