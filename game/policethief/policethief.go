@@ -203,72 +203,146 @@ func Opposite(role Role) Role {
 	return Police
 }
 
+type chaseState struct {
+	thief  Node
+	police Node
+	turn   Role
+}
+
+var capturePlies = solveCapturePlies()
+
+func solveCapturePlies() map[chaseState]int {
+	plies := make(map[chaseState]int, len(nodes)*len(nodes)*2)
+	turns := []Role{Thief, Police}
+
+	for {
+		changed := false
+		for _, thief := range nodes {
+			for _, police := range nodes {
+				if thief == police {
+					continue
+				}
+				for _, turn := range turns {
+					state := chaseState{thief: thief, police: police, turn: turn}
+					if _, known := plies[state]; known {
+						continue
+					}
+
+					if turn == Police {
+						best := -1
+						for _, next := range graph[police] {
+							if next == thief {
+								best = 1
+								break
+							}
+							if value, known := plies[chaseState{thief: thief, police: next, turn: Thief}]; known {
+								candidate := value + 1
+								if best == -1 || candidate < best {
+									best = candidate
+								}
+							}
+						}
+						if best != -1 {
+							plies[state] = best
+							changed = true
+						}
+						continue
+					}
+
+					options := thiefMoves(thief, police)
+					if len(options) == 0 {
+						plies[state] = 0
+						changed = true
+						continue
+					}
+					worst := 0
+					allKnown := true
+					for _, next := range options {
+						value, known := plies[chaseState{thief: next, police: police, turn: Police}]
+						if !known {
+							allKnown = false
+							break
+						}
+						if value+1 > worst {
+							worst = value + 1
+						}
+					}
+					if allKnown {
+						plies[state] = worst
+						changed = true
+					}
+				}
+			}
+		}
+		if !changed {
+			return plies
+		}
+	}
+}
+
+func thiefMoves(thief, police Node) []Node {
+	options := Connections(thief)
+	legal := options[:0]
+	for _, option := range options {
+		if option != police {
+			legal = append(legal, option)
+		}
+	}
+	return legal
+}
+
 func ChooseBotMove(state State, role Role) (Node, bool) {
 	if state.Status != game.StatusPlaying || state.Turn != role {
 		return "", false
 	}
-	from := state.Thief
-	target := state.Police
-	wantMax := true
+
 	if role == Police {
-		from = state.Police
-		target = state.Thief
-		wantMax = false
-	}
-	options := Connections(from)
-	if role == Thief {
-		filtered := options[:0]
+		options := Connections(state.Police)
+		bestValue := int(^uint(0) >> 1)
+		best := make([]Node, 0, len(options))
 		for _, option := range options {
-			if option != state.Police {
-				filtered = append(filtered, option)
+			if option == state.Thief {
+				return option, true
+			}
+			value, winning := capturePlies[chaseState{thief: state.Thief, police: option, turn: Thief}]
+			if !winning {
+				continue
+			}
+			if value < bestValue {
+				bestValue = value
+				best = []Node{option}
+			} else if value == bestValue {
+				best = append(best, option)
 			}
 		}
-		options = filtered
+		if len(best) > 0 {
+			return best[state.Moves%len(best)], true
+		}
+		if len(options) > 0 {
+			return options[state.Moves%len(options)], true
+		}
+		return "", false
 	}
+
+	options := thiefMoves(state.Thief, state.Police)
 	if len(options) == 0 {
 		return "", false
 	}
+	bestValue := -1
 	best := make([]Node, 0, len(options))
-	bestDistance := 0
-	for i, option := range options {
-		distance := shortestDistance(option, target)
-		if i == 0 || (wantMax && distance > bestDistance) || (!wantMax && distance < bestDistance) {
-			best = []Node{option}
-			bestDistance = distance
-			continue
+	for _, option := range options {
+		value, policeCanForceCapture := capturePlies[chaseState{thief: option, police: state.Police, turn: Police}]
+		if !policeCanForceCapture {
+			return option, true
 		}
-		if distance == bestDistance {
+		if value > bestValue {
+			bestValue = value
+			best = []Node{option}
+		} else if value == bestValue {
 			best = append(best, option)
 		}
 	}
 	return best[state.Moves%len(best)], true
-}
-
-func shortestDistance(from, to Node) int {
-	if from == to {
-		return 0
-	}
-	seen := map[Node]bool{from: true}
-	type item struct {
-		node Node
-		dist int
-	}
-	queue := []item{{node: from}}
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, next := range graph[current.node] {
-			if seen[next] {
-				continue
-			}
-			if next == to {
-				return current.dist + 1
-			}
-			seen[next] = true
-			queue = append(queue, item{node: next, dist: current.dist + 1})
-		}
-	}
-	return 1 << 20
 }
 
 func randomDistinctNodes() (Node, Node) {
