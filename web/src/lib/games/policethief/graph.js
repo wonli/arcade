@@ -33,6 +33,14 @@ export function legalDestinations(from) {
   return [...(connections.get(from) ?? [])]
 }
 
+export function legalMoves(state, role) {
+  if (!state) return []
+  const from = role === 'thief' ? state.thief : role === 'police' ? state.police : ''
+  const moves = legalDestinations(from)
+  if (role === 'thief') return moves.filter((node) => node !== state.police)
+  return moves
+}
+
 export function nodeById(id) {
   return NODES.find((node) => node.id === id) ?? null
 }
