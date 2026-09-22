@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { NODES, EDGES, connected, legalDestinations } from './graph.js'
+import { NODES, EDGES, connected, legalDestinations, legalMoves } from './graph.js'
 
 test('police thief board preserves the six-node paper graph', () => {
   assert.deepEqual(NODES.map(({ id }) => id), ['A', 'B', 'C', 'D', 'E', 'F'])
@@ -16,4 +16,10 @@ test('movement uses drawn edges rather than visual proximity', () => {
   assert.equal(connected('B', 'E'), true)
   assert.deepEqual(legalDestinations('B'), ['A', 'E'])
   assert.equal(connected('B', 'B'), false)
+})
+
+test('thief cannot choose the police node while police can capture the thief', () => {
+  const state = { thief: 'E', police: 'B' }
+  assert.deepEqual(legalMoves(state, 'thief'), ['C', 'F'])
+  assert.deepEqual(legalMoves(state, 'police'), ['A', 'E'])
 })
