@@ -101,3 +101,18 @@ func TestPoliceBotCapturesWhenThiefIsOneEdgeAway(t *testing.T) {
 		t.Fatalf("police bot should capture immediately, got %q ok=%v", to, ok)
 	}
 }
+
+func TestPoliceBotBreaksABECChaseLoop(t *testing.T) {
+	// Greedy shortest-path chasing loops here forever:
+	// T:A/P:C -> T:B/P:C -> T:B/P:E -> T:A/P:E -> T:A/P:C ...
+	// From T=A, P=E the police must deliberately move to F rather than chase
+	// locally through B/C; F cuts the cycle and preserves a forced capture.
+	state := State{Thief: A, Police: E, Turn: Police, Status: game.StatusPlaying, Moves: 3}
+	to, ok := ChooseBotMove(state, Police)
+	if !ok {
+		t.Fatal("police bot should have a move")
+	}
+	if to != F {
+		t.Fatalf("police bot must break the ABEC loop via F, got %q", to)
+	}
+}
