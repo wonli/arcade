@@ -40,24 +40,33 @@ func TestMoveRequiresAnActualDrawnConnection(t *testing.T) {
 	}
 }
 
-func TestTurnOrderAndPoliceCapture(t *testing.T) {
+func TestThiefCannotMoveOntoPolice(t *testing.T) {
+	g := newGame("thief-player", "police-player", func() (Node, Node) { return E, B })
+
+	if err := g.Move(game.Move{Player: "thief-player", Data: movePayload(B)}); err == nil {
+		t.Fatal("thief must not move onto the police node")
+	}
+	state := g.State().(State)
+	if state.Thief != E || state.Police != B || state.Turn != Thief || state.Moves != 0 || state.Status != game.StatusPlaying {
+		t.Fatalf("rejected thief move changed state: %#v", state)
+	}
+}
+
+func TestOnlyPoliceCanCapture(t *testing.T) {
 	g := newGame("thief-player", "police-player", func() (Node, Node) { return C, B })
 
 	if err := g.Move(game.Move{Player: "police-player", Data: movePayload(A)}); err == nil {
 		t.Fatal("police must not move before thief")
 	}
-	if err := g.Move(game.Move{Player: "thief-player", Data: movePayload(F)}); err != nil {
+	if err := g.Move(game.Move{Player: "thief-player", Data: movePayload(E)}); err != nil {
 		t.Fatalf("thief move failed: %v", err)
 	}
 	if err := g.Move(game.Move{Player: "police-player", Data: movePayload(E)}); err != nil {
-		t.Fatalf("police move failed: %v", err)
-	}
-	if err := g.Move(game.Move{Player: "thief-player", Data: movePayload(E)}); err != nil {
-		t.Fatalf("thief should be allowed to move onto police and be caught: %v", err)
+		t.Fatalf("police capture failed: %v", err)
 	}
 	state := g.State().(State)
-	if state.Status != game.StatusFinished || state.Winner != Police {
-		t.Fatalf("expected police capture, got status=%q winner=%q", state.Status, state.Winner)
+	if state.Status != game.StatusFinished || state.Winner != Police || state.Thief != E || state.Police != E {
+		t.Fatalf("expected police capture, got %#v", state)
 	}
 }
 
@@ -78,6 +87,9 @@ func TestBotMovesAreAlwaysConnected(t *testing.T) {
 		}
 		if !Connected(from, to) {
 			t.Fatalf("bot chose unconnected move %s -> %s", from, to)
+		}
+		if roles[i] == Thief && to == state.Police {
+			t.Fatalf("thief bot chose occupied police node %s", to)
 		}
 	}
 }
