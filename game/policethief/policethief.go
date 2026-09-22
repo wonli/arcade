@@ -146,6 +146,9 @@ func (g *Game) Move(m game.Move) error {
 	if !Connected(from, move.To) {
 		return errors.New("nodes are not connected")
 	}
+	if role == Thief && move.To == g.state.Police {
+		return errors.New("thief cannot move onto police")
+	}
 
 	if role == Thief {
 		g.state.Thief = move.To
@@ -155,7 +158,7 @@ func (g *Game) Move(m game.Move) error {
 	g.state.Moves++
 	g.state.Last = &LastMove{Role: role, From: from, To: move.To}
 
-	if g.state.Thief == g.state.Police {
+	if role == Police && g.state.Police == g.state.Thief {
 		g.state.Winner = Police
 		g.state.Status = game.StatusFinished
 		return nil
@@ -213,6 +216,15 @@ func ChooseBotMove(state State, role Role) (Node, bool) {
 		wantMax = false
 	}
 	options := Connections(from)
+	if role == Thief {
+		filtered := options[:0]
+		for _, option := range options {
+			if option != state.Police {
+				filtered = append(filtered, option)
+			}
+		}
+		options = filtered
+	}
 	if len(options) == 0 {
 		return "", false
 	}
