@@ -17,6 +17,10 @@ const (
 	Police Role = "police"
 )
 
+type Setup struct {
+	HostRole Role `json:"hostRole"`
+}
+
 type Node string
 
 const (
@@ -50,14 +54,14 @@ type LastMove struct {
 }
 
 type State struct {
-	Thief       Node          `json:"thief"`
-	Police      Node          `json:"police"`
-	Turn        Role          `json:"turn"`
-	Winner      Role          `json:"winner,omitempty"`
-	Status      game.Status   `json:"status"`
-	Moves       int           `json:"moves"`
-	Last        *LastMove     `json:"last,omitempty"`
-	ThiefPlayer game.PlayerID `json:"thiefPlayer"`
+	Thief        Node          `json:"thief"`
+	Police       Node          `json:"police"`
+	Turn         Role          `json:"turn"`
+	Winner       Role          `json:"winner,omitempty"`
+	Status       game.Status   `json:"status"`
+	Moves        int           `json:"moves"`
+	Last         *LastMove     `json:"last,omitempty"`
+	ThiefPlayer  game.PlayerID `json:"thiefPlayer"`
 	PolicePlayer game.PlayerID `json:"policePlayer"`
 }
 
@@ -96,9 +100,9 @@ func newGame(thiefPlayer, policePlayer game.PlayerID, spawn func() (Node, Node))
 	return g
 }
 
-func (g *Game) Name() string         { return "policethief" }
-func (g *Game) Status() game.Status  { return g.state.Status }
-func (g *Game) State() any           { return g.state }
+func (g *Game) Name() string        { return "policethief" }
+func (g *Game) Status() game.Status { return g.state.Status }
+func (g *Game) State() any          { return g.state }
 
 func (g *Game) Reset() {
 	thief, police := g.spawn()
