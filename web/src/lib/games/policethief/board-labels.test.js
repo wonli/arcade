@@ -36,3 +36,10 @@ test('board paths stay above decorative layers and remain clearly visible', () =
   assert.match(source, /\.node\{[^}]*z-index:5/)
   assert.match(source, /\.path-line\{stroke:#aab4bf;stroke-width:3;opacity:1\}/)
 })
+
+test('mobile board fills and centers within its parent without a heavy inner frame', () => {
+  assert.match(source, /\.path-board\{[^}]*margin-inline:auto;[^}]*box-sizing:border-box/)
+  assert.match(source, /@media\(max-width:650px\)[\s\S]*\.path-board\{width:100%\}/)
+  assert.match(source, /@media\(max-width:650px\)[\s\S]*\.board-surface,\.board-grid\{inset:2\.5%\}/)
+  assert.match(source, /@media\(max-width:650px\)[\s\S]*\.board-frame\{display:none\}/)
+})
