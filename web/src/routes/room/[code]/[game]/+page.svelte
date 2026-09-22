@@ -6,12 +6,15 @@
   import { createReplaySession } from '$lib/replay/session.js'
   import { replay as gomokuReplay } from '$lib/games/gomoku/replay.js'
   import { replay as chessReplay } from '$lib/games/chess/replay.js'
+  import { replay as policeThiefReplay } from '$lib/games/policethief/replay.js'
+  import { createPoliceThiefTranslator, policeThiefStatusKey } from '$lib/games/policethief/i18n.js'
   import { socket } from '$lib/ws/arcade'
   import TetrisBattle from '$lib/games/tetris/TetrisBattle.svelte'
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
   import DrawGuess from '$lib/games/drawguess/DrawGuess.svelte'
   import ChessBoard from '$lib/games/chess/ChessBoard.svelte'
   import GomokuBoard from '$lib/games/gomoku/GomokuBoard.svelte'
+  import PoliceThiefBoard from '$lib/games/policethief/PoliceThiefBoard.svelte'
 
   export let data
 
@@ -35,7 +38,7 @@
   let replayGame = ''
   let replayFinished = false
 
-  $: t = createTranslator(locale)
+  $: t = createPoliceThiefTranslator(locale, createTranslator(locale))
 
   function tone(frequency, duration, volume = .035, delay = 0) {
     if (typeof window === 'undefined') return
@@ -63,18 +66,31 @@
       else { tone(330, .1); tone(220, .18, .035, .09) }
       return
     }
+    if (gameName === 'policethief') {
+      if (myPoliceThiefRole() === 'police') { tone(440, .1); tone(660, .16, .035, .09) }
+      else { tone(330, .1); tone(220, .18, .035, .09) }
+      return
+    }
     if (winner === myStone(roomState)) { tone(440, .1); tone(660, .16, .035, .09) }
     else { tone(330, .1); tone(220, .18, .035, .09) }
   }
 
+  function replayAdapter(nextGame) {
+    if (nextGame === 'gomoku') return gomokuReplay
+    if (nextGame === 'chess') return chessReplay
+    if (nextGame === 'policethief') return policeThiefReplay
+    return null
+  }
+
   function setupRoomReplay(nextGame) {
-    if (nextGame !== 'gomoku' && nextGame !== 'chess') return
+    const adapter = replayAdapter(nextGame)
+    if (!adapter) return
     if (replaySession && replayGame === nextGame) return
     replaySession?.destroy()
     replayGame = nextGame
     replayFinished = false
     replaySession = createReplaySession({
-      adapter: nextGame === 'chess' ? chessReplay : gomokuReplay,
+      adapter,
       roomCode: () => room?.id ?? roomCode,
       room: () => room,
       identity,
@@ -83,7 +99,7 @@
   }
 
   function updateRoomReplay(previous) {
-    if (gameName !== 'gomoku' && gameName !== 'chess') return
+    if (!replayAdapter(gameName)) return
     setupRoomReplay(gameName)
     if (!gameState) return
     const started = gameState.status === 'playing' && previous?.status !== 'playing'
@@ -114,6 +130,10 @@
     if (gameName === 'chess' && gameState.status === 'finished' && previous.status !== 'finished') {
       playFinishSound(gameState.winner, snapshot)
     }
+    if (gameName === 'policethief') {
+      if (gameState.status === 'finished' && previous.status !== 'finished') playFinishSound(gameState.winner, snapshot)
+      else if ((gameState.moves ?? 0) > (previous.moves ?? 0)) playMoveSound()
+    }
   }
 
   function myStone(roomState) {
@@ -126,8 +146,31 @@
     return index === 0 ? 'white' : index === 1 ? 'black' : ''
   }
 
+  function myPoliceThiefRole(state = gameState) {
+    if (state?.thiefPlayer === identity.sessionId) return 'thief'
+    if (state?.policePlayer === identity.sessionId) return 'police'
+    if (room?.players?.[0]?.id === identity.sessionId && state?.hostRole) return state.hostRole
+    return ''
+  }
+
+  function policeThiefPlayer(role) {
+    const playerID = role === 'thief' ? gameState?.thiefPlayer : gameState?.policePlayer
+    if (playerID) return room?.players?.find((player) => player.id === playerID) ?? null
+    const hostRole = gameState?.hostRole
+    if (hostRole === role) return room?.players?.[0] ?? null
+    return null
+  }
+
+  function policeThiefBotRole(roomState, state = gameState) {
+    const bot = roomState?.players?.find((player) => player.bot)
+    if (!bot?.id) return ''
+    if (state?.thiefPlayer === bot.id) return 'thief'
+    if (state?.policePlayer === bot.id) return 'police'
+    return ''
+  }
+
   function canMove(roomState, state, x, y) { return !!state && state.status === 'playing' && myStone(roomState) === state.turn && state.board?.[y]?.[x] === 0 }
-  function canAddBot(roomState) { return (gameName === 'gomoku' || gameName === 'chess') && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
+  function canAddBot(roomState) { return (gameName === 'gomoku' || gameName === 'chess' || gameName === 'policethief') && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
   function isMultiplayer(roomState) { return roomState?.maxPlayers === 2 }
 
   function subscribeRoom() {
@@ -149,7 +192,12 @@
 
     if (roomCode === 'NEW') {
       const wantsChessBot = gameName === 'chess' && data?.players === 1
-      const snapshot = await socket.request('room.create', { game: gameName, name, players: wantsChessBot ? 2 : (data?.players ?? 2) })
+      const snapshot = await socket.request('room.create', {
+        game: gameName,
+        name,
+        players: wantsChessBot ? 2 : (data?.players ?? 2),
+        role: gameName === 'policethief' ? data?.role : undefined,
+      })
       applySnapshot(snapshot)
       roomCode = snapshot.id
       if (wantsChessBot) {
@@ -171,6 +219,11 @@
 
   async function moveStone(x, y) { if (!canMove(room, gameState, x, y)) return; error=''; try { applySnapshot(await socket.request('game.move',{roomId:roomCode,move:{x,y}})) } catch(err){ error=err.message } }
   async function moveChess(move) { error=''; try { applySnapshot(await socket.request('game.move',{roomId:roomCode,move})) } catch(err){ error=err.message } }
+  async function movePoliceThief(to) {
+    if (!gameState || gameState.status !== 'playing' || gameState.turn !== myPoliceThiefRole()) return
+    error = ''
+    try { applySnapshot(await socket.request('game.move', { roomId: roomCode, move: { to } })) } catch (err) { error = err.message }
+  }
   async function addBot() { error=''; try { applySnapshot(await socket.request('room.addBot',{roomId:roomCode,difficulty:botDifficulty})) } catch(err){ error=err.message } }
   async function rematch() { error=''; try { applySnapshot(await socket.request('room.rematch',{roomId:roomCode})) } catch(err){ error=err.message } }
   async function copyInvite() { await navigator.clipboard.writeText(`${location.origin}/room/${roomCode.toLowerCase()}/${gameName}`); copied=true; setTimeout(()=>copied=false,1200) }
@@ -199,11 +252,24 @@
     return state.check ? `${turn} · ${t('room.check')}` : turn
   }
 
+  function policeThiefLabel(roomState, state) {
+    const statusKey = policeThiefStatusKey({
+      status: state?.status,
+      turn: state?.turn,
+      localRole: myPoliceThiefRole(state),
+      botRole: policeThiefBotRole(roomState, state),
+      hasOpponent: !!roomState && roomState.players.length >= roomState.maxPlayers,
+    })
+    if (state?.status !== 'playing') return t(statusKey)
+    return `${t(statusKey)} · ${t(state.turn === 'police' ? 'policethief.policeTurn' : 'policethief.thiefTurn')}`
+  }
+
   function pageTitle(){
     if(gameName==='tetris')return t('game.tetris.name')
     if(gameName==='snake')return t('game.snake.name')
     if(gameName==='drawguess')return t('game.drawguess.name')
     if(gameName==='chess')return t('game.chess.name')
+    if(gameName==='policethief')return t('game.policethief.name')
     return t('game.gomoku.name')
   }
 
@@ -270,6 +336,36 @@
           {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
         </aside>
       </section>
+    {:else if gameName === 'policethief'}
+      <section class="match-head police-thief-head">
+        <div class="player-card active-player"><div class="role-token thief-token">T</div><div><span>{t('policethief.thief')}</span><strong>{policeThiefPlayer('thief')?.name ?? t('common.waiting')}</strong></div></div>
+        <div class="match-status"><span>{t('game.policethief.name').toUpperCase()}</span><h1>{policeThiefLabel(room,gameState)}</h1><p>{t('policethief.moves',{count:gameState?.moves??0})}</p></div>
+        <div class="player-card right"><div><span>{t('policethief.police')}</span><strong>{policeThiefPlayer('police')?.name ?? t('common.waiting')}</strong></div><div class="role-token police-token">P</div></div>
+      </section>
+      <section class="board-stage police-thief-stage">
+        <div class="police-thief-board-column">
+          {#if gameState?.thief && gameState?.police}
+            <PoliceThiefBoard
+              state={gameState}
+              interactive={true}
+              role={myPoliceThiefRole()}
+              onMove={movePoliceThief}
+              boardLabel={t('policethief.board')}
+              moveLabel={(node) => t('policethief.moveTo',{node})}
+              thiefLabel={t('policethief.thief')}
+              policeLabel={t('policethief.police')}
+            />
+          {/if}
+        </div>
+        <aside class="room-panel police-thief-panel">
+          <div class="code-display"><span>{roomCode.toLowerCase()}</span><small>{t('common.roomCode')}</small></div>
+          <button class="primary-button" onclick={copyInvite}>{copied?t('common.linkCopied'):t('common.copyInvite')}</button>
+          {#if canAddBot(room)}<button class="secondary-button" onclick={addBot}>{t('room.addBot')}</button>{/if}
+          {#if gameState?.status==='finished'&&myPoliceThiefRole()}<button class="secondary-button" onclick={rematch}>{t('common.playAgain')}</button>{/if}
+          {#if error}<div class="room-error">{error}</div>{/if}
+          {#if connection==='offline'}<button class="secondary-button" onclick={reconnect}>{t('common.reconnect')}</button>{/if}
+        </aside>
+      </section>
     {:else}
       <section class="match-head"><div class="player-card active-player"><div class="player-stone black"></div><div><span>{t('room.black')}</span><strong>{room?.players?.[0]?.name??name}</strong></div></div><div class="match-status"><span>{t('game.gomoku.name').toUpperCase()}</span><h1>{gameLabel(room,gameState)}</h1><p>{t('room.players',{count:room?.players?.length??0,max:room?.maxPlayers??2})}</p></div><div class="player-card right"><div><span>{t('room.white')}</span><strong>{room?.players?.[1]?.name??t('common.waiting')}</strong></div><div class="player-stone white"></div></div></section>
       <section class="board-stage"><div class="board-frame"><GomokuBoard state={gameState} interactive={true} canMove={(x,y)=>canMove(room,gameState,x,y)} onMove={moveStone} boardLabel={gomokuBoardLabel()} placeLabel={placeStoneLabel} /></div>
@@ -279,5 +375,5 @@
 </div>
 
 <style>
-  .standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}.chess-stage{align-items:start}.chess-board-column{min-width:0;width:100%}.chess-side{display:grid;place-items:center;width:42px;height:42px;border:1px solid #343a42;font-family:'Times New Roman',serif;font-size:32px}.white-side{background:#f3eddf;color:#17191c}.black-side{background:#17191c;color:#f3eddf}.difficulty-control{display:grid;gap:7px;margin-top:12px}.difficulty-control label{color:#727c87;font-size:9px;font-weight:900;letter-spacing:.14em}.difficulty-control select{height:44px;padding:0 10px;border:1px solid #3b424c;border-radius:0;background:#0b0d10;color:#f4f0e8;font:inherit;text-transform:uppercase}.chess-panel{position:sticky;top:92px}@media(max-width:900px){.chess-panel{position:static}}@media(max-width:640px){.chess-head .player-card strong{font-size:11px}.chess-side{width:34px;height:34px;font-size:26px}}
+  .standalone-error{width:min(100%,1180px);margin:16px auto 0}.reconnect{display:block;margin:14px auto 0}.chess-stage,.police-thief-stage{align-items:start}.chess-board-column,.police-thief-board-column{min-width:0;width:100%;display:grid;place-items:center}.chess-side{display:grid;place-items:center;width:42px;height:42px;border:1px solid #343a42;font-family:'Times New Roman',serif;font-size:32px}.white-side{background:#f3eddf;color:#17191c}.black-side{background:#17191c;color:#f3eddf}.role-token{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;font:950 13px ui-monospace,SFMono-Regular,Menlo,monospace;box-sizing:border-box}.thief-token{background:#c1ff56;color:#0b0d10;border:3px solid #0b0d10}.police-token{background:#f4f0e8;color:#0b0d10;border:3px solid #77818b}.difficulty-control{display:grid;gap:7px;margin-top:12px}.difficulty-control label{color:#727c87;font-size:9px;font-weight:900;letter-spacing:.14em}.difficulty-control select{height:44px;padding:0 10px;border:1px solid #3b424c;border-radius:0;background:#0b0d10;color:#f4f0e8;font:inherit;text-transform:uppercase}.chess-panel,.police-thief-panel{position:sticky;top:92px}@media(max-width:900px){.chess-panel,.police-thief-panel{position:static}}@media(max-width:640px){.chess-head .player-card strong,.police-thief-head .player-card strong{font-size:11px}.chess-side,.role-token{width:34px;height:34px}.chess-side{font-size:26px}.role-token{font-size:11px}}
 </style>

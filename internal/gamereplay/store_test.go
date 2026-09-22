@@ -46,6 +46,25 @@ func TestStoreSaveLoadAndReplaceKeepsOneReplay(t *testing.T) {
 	for _, path := range matches { if _, err := os.Stat(path); err != nil { t.Fatal(err) } }
 }
 
+func TestStoreAllowsPoliceThiefReplay(t *testing.T) {
+	store := NewStore(t.TempDir())
+	data := []byte(`{"frames":[{"state":{"thief":"A","police":"E"}}]}`)
+	meta, err := store.Save("policethief", validInput(data))
+	if err != nil {
+		t.Fatalf("policethief replay should be accepted: %v", err)
+	}
+	if meta.Game != "policethief" {
+		t.Fatalf("unexpected replay game: %q", meta.Game)
+	}
+	loaded, got, err := store.Load("policethief")
+	if err != nil {
+		t.Fatalf("policethief replay should load: %v", err)
+	}
+	if loaded.Game != "policethief" || string(got) != string(data) {
+		t.Fatalf("loaded=%#v data=%q", loaded, got)
+	}
+}
+
 func TestStoreValidatesReplayEnvelope(t *testing.T) {
 	store := NewStore(t.TempDir())
 	data := []byte("replay")

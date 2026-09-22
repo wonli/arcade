@@ -7,6 +7,8 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   let description
   if (game === 'gomoku' || game === 'snake' || game === 'drawguess') {
     description = t(`game.${game}.description`)
+  } else if (game === 'policethief') {
+    description = t(players === 1 ? 'game.policethief.descriptionBot' : 'game.policethief.descriptionOnline')
   } else if (game === 'chess') {
     description = t(
       players === 1 ? 'game.chess.descriptionBot' : 'game.chess.descriptionOnline',
@@ -23,6 +25,7 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   else if (game === 'snake') createLabel = t('create.snake')
   else if (game === 'drawguess') createLabel = t('create.drawguess')
   else if (game === 'gomoku') createLabel = t(players === 1 ? 'room.playBot' : 'create.gomoku')
+  else if (game === 'policethief') createLabel = t(players === 1 ? 'create.policethiefBot' : 'create.policethiefOnline')
   else if (game === 'chess') createLabel = players === 1
     ? t('create.chessBot', { difficulty: difficultyLabel(chessDifficulty, locale) })
     : t('create.chessOnline')
@@ -32,6 +35,7 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   if (game === 'dungeon') helper = t(players === 1 ? 'helper.dungeonSolo' : 'helper.dungeonOnline')
   else if (game === 'snake') helper = t('helper.snake')
   else if (game === 'drawguess') helper = t('helper.drawguess')
+  else if (game === 'policethief') helper = t(players === 1 ? 'helper.policethiefBot' : 'helper.policethiefOnline')
   else if (game === 'chess') helper = t(players === 1 ? 'helper.chessBot' : 'helper.chessOnline')
   else helper = t(players === 2 ? 'helper.twoPlayers' : 'helper.solo')
 

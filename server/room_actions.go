@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/wonli/aqi/ws"
+	"github.com/wonli/arcade/game/policethief"
 )
 
 type roomRequest struct {
@@ -18,6 +19,7 @@ type createRoomRequest struct {
 	Game    string `json:"game"`
 	Name    string `json:"name"`
 	Players int    `json:"players"`
+	Role    string `json:"role,omitempty"`
 }
 
 type roomCreatePlan struct {
@@ -29,7 +31,7 @@ func planRoomCreate(gameName string, players int) roomCreatePlan {
 	if players == 0 {
 		players = 2
 	}
-	if gameName == "gomoku" && players == 1 {
+	if (gameName == "gomoku" || gameName == "policethief") && players == 1 {
 		return roomCreatePlan{players: 2, addBot: true}
 	}
 	return roomCreatePlan{players: players}
@@ -75,6 +77,9 @@ func (a *Actions) createRoom(c *ws.Context) {
 		r, createErr := a.service.Create(req.Game, plan.players)
 		err = createErr
 		if r != nil {
+			if req.Game == "policethief" {
+				r.SetRuntimeState(policethief.Setup{HostRole: policethief.NormalizeRole(req.Role)})
+			}
 			roomValue = r
 			roomID = r.ID
 		}

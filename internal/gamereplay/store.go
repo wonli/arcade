@@ -24,7 +24,7 @@ var (
 	ErrNotFound = errors.New("game replay not found")
 	ErrLeaseBusy = errors.New("game replay lease busy")
 	allowedGames = map[string]struct{}{
-		"gomoku": {}, "chess": {}, "tetris": {}, "snake": {}, "drawguess": {}, "dungeon": {},
+		"gomoku": {}, "chess": {}, "tetris": {}, "snake": {}, "drawguess": {}, "dungeon": {}, "policethief": {},
 	}
 )
 
@@ -262,14 +262,7 @@ func (s *Store) ReleaseLease(game, token string) bool {
 	s.leaseMu.Lock()
 	defer s.leaseMu.Unlock()
 	entry, ok := s.leases[game]
-	if !ok {
-		return false
-	}
-	if !entry.ExpiresAt.After(s.now().UTC()) {
-		delete(s.leases, game)
-		return false
-	}
-	if entry.Token != token {
+	if !ok || entry.Token != token {
 		return false
 	}
 	delete(s.leases, game)
@@ -277,31 +270,14 @@ func (s *Store) ReleaseLease(game, token string) bool {
 }
 
 func validateSaveInput(input SaveInput) error {
-	if input.Version <= 0 {
-		return errors.New("replay version must be positive")
-	}
-	if input.DurationMS < 1 || input.DurationMS > maxDurationMS {
-		return fmt.Errorf("replay duration must be between 1 and %d ms", maxDurationMS)
-	}
-	if input.Players < 0 || input.Players > 8 {
-		return errors.New("players must be between 0 and 8")
-	}
-	if len(input.Data) == 0 {
-		return errors.New("replay data is required")
-	}
-	if len(input.Data) > MaxReplayBytes {
-		return fmt.Errorf("replay data exceeds %d bytes", MaxReplayBytes)
-	}
+	if input.Version <= 0 { return errors.New("replay version must be positive") }
+	if input.DurationMS <= 0 || input.DurationMS > maxDurationMS { return errors.New("replay duration is invalid") }
+	if input.Players <= 0 || input.Players > 8 { return errors.New("replay player count is invalid") }
+	if len(input.Data) == 0 || len(input.Data) > MaxReplayBytes { return errors.New("replay payload size is invalid") }
 	hash := strings.ToLower(strings.TrimSpace(input.Hash))
-	if len(hash) != sha256.Size*2 {
-		return errors.New("replay hash must be sha256 hex")
-	}
-	if _, err := hex.DecodeString(hash); err != nil {
-		return errors.New("replay hash must be sha256 hex")
-	}
-	if sha256Hex(input.Data) != hash {
-		return errors.New("replay hash mismatch")
-	}
+	if len(hash) != sha256.Size*2 { return errors.New("replay hash is invalid") }
+	if _, err := hex.DecodeString(hash); err != nil { return errors.New("replay hash is invalid") }
+	if sha256Hex(input.Data) != hash { return errors.New("replay hash mismatch") }
 	return nil
 }
 
@@ -313,40 +289,19 @@ func sha256Hex(data []byte) string {
 func randomToken() (string, error) {
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("generate replay lease token: %w", err)
+		return "", err
 	}
 	return hex.EncodeToString(buf), nil
 }
 
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".replay-*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	remove := true
-	defer func() {
-		_ = tmp.Close()
-		if remove {
-			_ = os.Remove(name)
-		}
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		return err
-	}
-	remove = false
-	return nil
+func atomicWrite(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil { return err }
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(perm); err != nil { tmp.Close(); return err }
+	if _, err := tmp.Write(data); err != nil { tmp.Close(); return err }
+	if err := tmp.Sync(); err != nil { tmp.Close(); return err }
+	if err := tmp.Close(); err != nil { return err }
+	return os.Rename(tmpPath, path)
 }

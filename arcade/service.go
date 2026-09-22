@@ -103,7 +103,7 @@ func (s *Service) Rematch(roomID string, playerID game.PlayerID) error {
 	}
 	g.Reset()
 	r.SetStatus(room.StatusPlaying)
-	return nil
+	return s.botMove(r)
 }
 
 func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
