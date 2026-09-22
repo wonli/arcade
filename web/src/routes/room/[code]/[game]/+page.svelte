@@ -340,6 +340,8 @@
               onMove={movePoliceThief}
               boardLabel={t('policethief.board')}
               moveLabel={(node) => t('policethief.moveTo',{node})}
+              thiefLabel={t('policethief.thief')}
+              policeLabel={t('policethief.police')}
             />
           {/if}
         </div>
