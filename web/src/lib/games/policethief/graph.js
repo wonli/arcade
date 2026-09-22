@@ -1,5 +1,5 @@
 export const NODES = Object.freeze([
-  Object.freeze({ id: 'A', x: 50, y: 10 }),
+  Object.freeze({ id: 'A', x: 50, y: 15 }),
   Object.freeze({ id: 'B', x: 20, y: 40 }),
   Object.freeze({ id: 'C', x: 50, y: 40 }),
   Object.freeze({ id: 'D', x: 80, y: 40 }),
