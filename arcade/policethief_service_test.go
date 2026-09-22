@@ -76,38 +76,86 @@ func TestPoliceThiefRematchLetsThiefBotOpenAgain(t *testing.T) {
 	}
 }
 
+type chaseStep struct {
+	role policethief.Role
+	to   policethief.Node
+}
+
+type chaseState struct {
+	thief  policethief.Node
+	police policethief.Node
+	turn   policethief.Role
+}
+
 func finishPoliceThief(t *testing.T, r interface {
 	Game() game.Game
 	Move(game.PlayerID, json.RawMessage) error
 }) {
 	t.Helper()
-	for steps := 0; steps < 4; steps++ {
-		state := r.Game().State().(policethief.State)
-		if state.Status == game.StatusFinished {
-			return
+	state := r.Game().State().(policethief.State)
+	steps := shortestCooperativeCapture(state)
+	if len(steps) == 0 {
+		t.Fatalf("no legal capture path from thief=%s police=%s turn=%s", state.Thief, state.Police, state.Turn)
+	}
+	for _, step := range steps {
+		state = r.Game().State().(policethief.State)
+		player := state.ThiefPlayer
+		if step.role == policethief.Police {
+			player = state.PolicePlayer
 		}
-		role := state.Turn
-		from, target, player := state.Thief, state.Police, state.ThiefPlayer
-		if role == policethief.Police {
-			from, target, player = state.Police, state.Thief, state.PolicePlayer
-		}
-		to := nodeToward(from, target)
-		payload, err := json.Marshal(policethief.Move{To: to})
+		payload, err := json.Marshal(policethief.Move{To: step.to})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := r.Move(player, payload); err != nil {
-			t.Fatalf("finish move %s -> %s failed: %v", from, to, err)
+			t.Fatalf("finish move %s -> %s failed: %v", step.role, step.to, err)
 		}
 	}
-	t.Fatal("expected police thief game to finish")
+	if r.Game().Status() != game.StatusFinished {
+		t.Fatal("expected police thief game to finish")
+	}
 }
 
-func nodeToward(from, target policethief.Node) policethief.Node {
-	for _, next := range policethief.Connections(from) {
-		if next == target || policethief.Connected(next, target) {
-			return next
+func shortestCooperativeCapture(state policethief.State) []chaseStep {
+	start := chaseState{thief: state.Thief, police: state.Police, turn: state.Turn}
+	type pathState struct {
+		state chaseState
+		path  []chaseStep
+	}
+	queue := []pathState{{state: start}}
+	seen := map[chaseState]bool{start: true}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current.state.turn == policethief.Thief {
+			for _, to := range policethief.Connections(current.state.thief) {
+				if to == current.state.police {
+					continue
+				}
+				next := chaseState{thief: to, police: current.state.police, turn: policethief.Police}
+				if seen[next] {
+					continue
+				}
+				seen[next] = true
+				path := append(append([]chaseStep(nil), current.path...), chaseStep{role: policethief.Thief, to: to})
+				queue = append(queue, pathState{state: next, path: path})
+			}
+			continue
+		}
+
+		for _, to := range policethief.Connections(current.state.police) {
+			path := append(append([]chaseStep(nil), current.path...), chaseStep{role: policethief.Police, to: to})
+			if to == current.state.thief {
+				return path
+			}
+			next := chaseState{thief: current.state.thief, police: to, turn: policethief.Thief}
+			if seen[next] {
+				continue
+			}
+			seen[next] = true
+			queue = append(queue, pathState{state: next, path: path})
 		}
 	}
-	return policethief.Connections(from)[0]
+	return nil
 }
