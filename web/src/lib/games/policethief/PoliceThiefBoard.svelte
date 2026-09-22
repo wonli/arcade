@@ -67,7 +67,7 @@
 <style>
   .path-board{position:relative;width:min(72vmin,680px);aspect-ratio:1/1;max-width:100%;overflow:hidden;background:#0d1014;border:1px solid #272c33;box-shadow:0 26px 80px rgba(0,0,0,.26)}
   .path-board:before{content:'';position:absolute;inset:7%;border:1px solid #181d23;pointer-events:none}
-  .paths{position:absolute;inset:7%;width:86%;height:86%;overflow:visible}
+  .paths{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
   .paths line{stroke:#59616b;stroke-width:1.15;vector-effect:non-scaling-stroke;stroke-linecap:square}
   .node{position:absolute;width:62px;height:62px;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;display:grid;place-items:center;cursor:default}
   .node-core{position:absolute;width:18px;height:18px;border:2px solid #69727d;border-radius:50%;background:#0d1014;box-sizing:border-box;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
