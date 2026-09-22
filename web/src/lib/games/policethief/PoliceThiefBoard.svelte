@@ -93,18 +93,18 @@
   .path-board:before{content:'';position:absolute;z-index:0;inset:0;background:radial-gradient(circle at 50% 42%,rgba(193,255,86,.045),transparent 48%);pointer-events:none}
   .board-surface{position:absolute;z-index:1;inset:6.5%;background:#111820;border:1px solid #28323c;box-shadow:inset 0 0 0 1px rgba(255,255,255,.018),inset 0 18px 54px rgba(255,255,255,.012),0 16px 42px rgba(0,0,0,.16);pointer-events:none}
   .board-grid{position:absolute;z-index:2;inset:6.5%;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to bottom,transparent 2%,#000 22%,#000 78%,transparent 98%);pointer-events:none}
-  .board-frame{position:absolute;z-index:4;inset:4.5%;pointer-events:none}
+  .board-frame{position:absolute;z-index:3;inset:4.5%;pointer-events:none}
   .board-frame i{position:absolute;width:24px;height:24px;border-color:#606a75;opacity:.48}
   .board-frame i:nth-child(1){left:0;top:0;border-left:2px solid;border-top:2px solid}
   .board-frame i:nth-child(2){right:0;top:0;border-right:2px solid;border-top:2px solid}
   .board-frame i:nth-child(3){left:0;bottom:0;border-left:2px solid;border-bottom:2px solid}
   .board-frame i:nth-child(4){right:0;bottom:0;border-right:2px solid;border-bottom:2px solid}
-  .paths{position:absolute;z-index:3;inset:0;width:100%;height:100%;overflow:visible}
+  .paths{position:absolute;z-index:4;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
   .paths line{vector-effect:non-scaling-stroke;stroke-linecap:round;transition:stroke .18s ease,opacity .18s ease}
-  .path-halo{stroke:#c1ff56;stroke-width:8;opacity:.025}
-  .path-line{stroke:#77828d;stroke-width:2.3;opacity:.9}
+  .path-halo{stroke:#c1ff56;stroke-width:8;opacity:.045}
+  .path-line{stroke:#aab4bf;stroke-width:3;opacity:1}
   .path-halo.last-path{opacity:.12}
-  .path-line.last-path{stroke:#b8c2cd;opacity:1}
+  .path-line.last-path{stroke:#d6dde4;opacity:1}
   .node{position:absolute;z-index:5;width:112px;height:104px;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;display:grid;place-items:center;cursor:default;overflow:visible}
   .node-target{position:absolute;width:54px;height:54px;border:1px solid rgba(123,134,146,.13);border-radius:50%;transform:scale(.72);opacity:0;transition:opacity .15s ease,transform .15s ease,border-color .15s ease,box-shadow .15s ease}
   .node-core{position:absolute;width:26px;height:26px;border:2px solid #7c8792;border-radius:50%;background:#0c1117;box-sizing:border-box;box-shadow:0 0 0 5px #111820,0 5px 14px rgba(0,0,0,.34);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
