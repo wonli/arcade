@@ -29,3 +29,10 @@ test('board node circles are large enough to read at desktop and mobile sizes', 
   assert.match(source, /\.node-core\{[^}]*width:26px;height:26px/)
   assert.match(source, /@media\(max-width:650px\)[\s\S]*\.node-core\{width:22px;height:22px\}/)
 })
+
+test('board paths stay above decorative layers and remain clearly visible', () => {
+  assert.match(source, /\.board-frame\{[^}]*z-index:3/)
+  assert.match(source, /\.paths\{[^}]*z-index:4/)
+  assert.match(source, /\.node\{[^}]*z-index:5/)
+  assert.match(source, /\.path-line\{stroke:#aab4bf;stroke-width:3;opacity:1\}/)
+})
