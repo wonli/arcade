@@ -4,12 +4,14 @@ import { launcher as tetrisLauncher } from './tetris/launcher.js'
 import { launcher as snakeLauncher } from './snake/launcher.js'
 import { launcher as drawguessLauncher } from './drawguess/launcher.js'
 import { launcher as dungeonLauncher } from './dungeon/launcher.js'
+import { launcher as policethiefLauncher } from './policethief/launcher.js'
 import { replay as gomokuReplay } from './gomoku/replay.js'
 import { replay as chessReplay } from './chess/replay.js'
 import { replay as tetrisReplay } from './tetris/replay.js'
 import { replay as snakeReplay } from './snake/replay.js'
 import { replay as drawguessReplay } from './drawguess/replay.js'
 import { replay as dungeonReplay } from './dungeon/replay.js'
+import { replay as policethiefReplay } from './policethief/replay.js'
 
 const EMPTY_LAUNCHER = Object.freeze({
   id: '',
@@ -25,6 +27,7 @@ export const GAME_ENTRIES = Object.freeze([
   Object.freeze({ id: 'snake', launcher: snakeLauncher, replay: snakeReplay }),
   Object.freeze({ id: 'drawguess', launcher: drawguessLauncher, replay: drawguessReplay }),
   Object.freeze({ id: 'dungeon', launcher: dungeonLauncher, replay: dungeonReplay }),
+  Object.freeze({ id: 'policethief', launcher: policethiefLauncher, replay: policethiefReplay }),
 ])
 
 export const GAME_IDS = Object.freeze(GAME_ENTRIES.map(({ id }) => id))
