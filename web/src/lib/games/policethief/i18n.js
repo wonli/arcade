@@ -72,3 +72,19 @@ export function createPoliceThiefTranslator(locale = 'en', fallback = (key) => k
     return fallback(key, vars)
   }
 }
+
+export function policeThiefStatusKey({
+  status = '',
+  turn = '',
+  localRole = '',
+  botRole = '',
+  hasOpponent = false,
+} = {}) {
+  if (status === 'finished') return localRole === 'police' ? 'policethief.youCaught' : 'policethief.caught'
+  if (status === 'playing') {
+    if (localRole && turn === localRole) return 'policethief.yourTurn'
+    if (botRole && turn === botRole) return 'room.botTurn'
+    return 'policethief.opponentTurn'
+  }
+  return hasOpponent ? 'room.preparing' : 'policethief.waiting'
+}

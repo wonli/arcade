@@ -7,7 +7,7 @@
   import { replay as gomokuReplay } from '$lib/games/gomoku/replay.js'
   import { replay as chessReplay } from '$lib/games/chess/replay.js'
   import { replay as policeThiefReplay } from '$lib/games/policethief/replay.js'
-  import { createPoliceThiefTranslator } from '$lib/games/policethief/i18n.js'
+  import { createPoliceThiefTranslator, policeThiefStatusKey } from '$lib/games/policethief/i18n.js'
   import { socket } from '$lib/ws/arcade'
   import TetrisBattle from '$lib/games/tetris/TetrisBattle.svelte'
   import SnakeArena from '$lib/games/snake/SnakeArena.svelte'
@@ -161,6 +161,14 @@
     return null
   }
 
+  function policeThiefBotRole(roomState, state = gameState) {
+    const bot = roomState?.players?.find((player) => player.bot)
+    if (!bot?.id) return ''
+    if (state?.thiefPlayer === bot.id) return 'thief'
+    if (state?.policePlayer === bot.id) return 'police'
+    return ''
+  }
+
   function canMove(roomState, state, x, y) { return !!state && state.status === 'playing' && myStone(roomState) === state.turn && state.board?.[y]?.[x] === 0 }
   function canAddBot(roomState) { return (gameName === 'gomoku' || gameName === 'chess' || gameName === 'policethief') && roomState?.maxPlayers === 2 && roomState?.players?.length === 1 && roomState.players[0]?.id === identity.sessionId }
   function isMultiplayer(roomState) { return roomState?.maxPlayers === 2 }
@@ -245,11 +253,15 @@
   }
 
   function policeThiefLabel(roomState, state) {
-    if (!roomState || roomState.players.length < roomState.maxPlayers) return t('policethief.waiting')
-    if (!state?.status) return t('room.preparing')
-    if (state.status === 'finished') return myPoliceThiefRole(state) === 'police' ? t('policethief.youCaught') : t('policethief.caught')
-    const turn = state.turn === myPoliceThiefRole(state) ? t('policethief.yourTurn') : t('policethief.opponentTurn')
-    return `${turn} · ${t(state.turn === 'police' ? 'policethief.policeTurn' : 'policethief.thiefTurn')}`
+    const statusKey = policeThiefStatusKey({
+      status: state?.status,
+      turn: state?.turn,
+      localRole: myPoliceThiefRole(state),
+      botRole: policeThiefBotRole(roomState, state),
+      hasOpponent: !!roomState && roomState.players.length >= roomState.maxPlayers,
+    })
+    if (state?.status !== 'playing') return t(statusKey)
+    return `${t(statusKey)} · ${t(state.turn === 'police' ? 'policethief.policeTurn' : 'policethief.thiefTurn')}`
   }
 
   function pageTitle(){
