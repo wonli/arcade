@@ -89,7 +89,7 @@
 </div>
 
 <style>
-  .path-board{position:relative;isolation:isolate;width:min(72vmin,680px);aspect-ratio:1/1;max-width:100%;overflow:hidden;background:#080b0f;border:1px solid #2b3139;box-shadow:0 28px 90px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.018)}
+  .path-board{position:relative;isolation:isolate;width:min(72vmin,680px);aspect-ratio:1/1;max-width:100%;margin-inline:auto;box-sizing:border-box;overflow:hidden;background:#080b0f;border:1px solid #2b3139;box-shadow:0 28px 90px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.018)}
   .path-board:before{content:'';position:absolute;z-index:0;inset:0;background:radial-gradient(circle at 50% 42%,rgba(193,255,86,.045),transparent 48%);pointer-events:none}
   .board-surface{position:absolute;z-index:1;inset:6.5%;background:#111820;border:1px solid #28323c;box-shadow:inset 0 0 0 1px rgba(255,255,255,.018),inset 0 18px 54px rgba(255,255,255,.012),0 16px 42px rgba(0,0,0,.16);pointer-events:none}
   .board-grid{position:absolute;z-index:2;inset:6.5%;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to bottom,transparent 2%,#000 22%,#000 78%,transparent 98%);pointer-events:none}
@@ -131,7 +131,9 @@
   .captured.thief-piece{transform:translate(-24px,12px) scale(.78)}
   .captured.police-piece{transform:translate(24px,-12px) scale(.82)}
   @media(max-width:650px){
-    .path-board{width:min(92vw,560px)}
+    .path-board{width:100%}
+    .board-surface,.board-grid{inset:2.5%}
+    .board-frame{display:none}
     .node{width:92px;height:90px}
     .node-id{top:61px}
     .piece{width:66px;min-height:68px}
