@@ -118,6 +118,15 @@ var gameCatalog = map[string]gameSpec{
 		},
 		onJoin: startRoomWhenFull,
 	},
+	"tank": {
+		validateBounds: func(minPlayers, maxPlayers int) error {
+			if minPlayers != 2 || maxPlayers != 2 {
+				return errors.New("tank requires two players")
+			}
+			return nil
+		},
+		onJoin: noRoomStart,
+	},
 	"snake": {
 		validateBounds: func(minPlayers, maxPlayers int) error {
 			if minPlayers != 1 || maxPlayers != 8 {
