@@ -1,10 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createTranslator } from '../i18n.js'
+import { createPoliceThiefTranslator } from './policethief/i18n.js'
+import { createXiangqiTranslator } from './xiangqi/i18n.js'
 import { GAME_IDS, getLauncherMetadata } from './launcher-registry.js'
 
+const expectedGames = ['gomoku', 'chess', 'xiangqi', 'tetris', 'snake', 'drawguess', 'dungeon', 'policethief']
+
+function translator(locale) {
+  return createXiangqiTranslator(locale, createPoliceThiefTranslator(locale, createTranslator(locale)))
+}
+
 test('launcher registry returns metadata for every known game', () => {
-  assert.deepEqual(GAME_IDS, ['gomoku', 'chess', 'tetris', 'snake', 'drawguess', 'dungeon'])
+  assert.deepEqual(GAME_IDS, expectedGames)
   for (const id of GAME_IDS) {
     const metadata = getLauncherMetadata(id)
     assert.equal(metadata.id, id)
@@ -34,7 +42,7 @@ test('launcher registry preserves keyboard display tokens', () => {
 
 test('all launcher copy resolves in English and Chinese', () => {
   for (const locale of ['en', 'zh-CN']) {
-    const t = createTranslator(locale)
+    const t = translator(locale)
     for (const id of GAME_IDS) {
       const metadata = getLauncherMetadata(id)
       const keys = [

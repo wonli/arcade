@@ -1,5 +1,6 @@
 import { launcher as gomokuLauncher } from './gomoku/launcher.js'
 import { launcher as chessLauncher } from './chess/launcher.js'
+import { launcher as xiangqiLauncher } from './xiangqi/launcher.js'
 import { launcher as tetrisLauncher } from './tetris/launcher.js'
 import { launcher as snakeLauncher } from './snake/launcher.js'
 import { launcher as drawguessLauncher } from './drawguess/launcher.js'
@@ -23,6 +24,7 @@ const EMPTY_LAUNCHER = Object.freeze({
 export const GAME_ENTRIES = Object.freeze([
   Object.freeze({ id: 'gomoku', launcher: gomokuLauncher, replay: gomokuReplay }),
   Object.freeze({ id: 'chess', launcher: chessLauncher, replay: chessReplay }),
+  Object.freeze({ id: 'xiangqi', launcher: xiangqiLauncher, replay: null }),
   Object.freeze({ id: 'tetris', launcher: tetrisLauncher, replay: tetrisReplay }),
   Object.freeze({ id: 'snake', launcher: snakeLauncher, replay: snakeReplay }),
   Object.freeze({ id: 'drawguess', launcher: drawguessLauncher, replay: drawguessReplay }),

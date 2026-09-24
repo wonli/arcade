@@ -19,6 +19,13 @@ func TestPlanRoomCreatePoliceThiefBot(t *testing.T) {
 	}
 }
 
+func TestPlanRoomCreateXiangqiBot(t *testing.T) {
+	plan := planRoomCreate("xiangqi", 1)
+	if plan.players != 2 || !plan.addBot {
+		t.Fatalf("xiangqi players=1 should create two seats plus bot: %+v", plan)
+	}
+}
+
 func TestPlanRoomCreateKeepsTwoPlayerGomoku(t *testing.T) {
 	plan := planRoomCreate("gomoku", 2)
 	if plan.players != 2 || plan.addBot {
@@ -30,6 +37,13 @@ func TestPlanRoomCreateKeepsTwoPlayerPoliceThief(t *testing.T) {
 	plan := planRoomCreate("policethief", 2)
 	if plan.players != 2 || plan.addBot {
 		t.Fatalf("two-player policethief changed unexpectedly: %+v", plan)
+	}
+}
+
+func TestPlanRoomCreateKeepsTwoPlayerXiangqi(t *testing.T) {
+	plan := planRoomCreate("xiangqi", 2)
+	if plan.players != 2 || plan.addBot {
+		t.Fatalf("two-player xiangqi changed unexpectedly: %+v", plan)
 	}
 }
 

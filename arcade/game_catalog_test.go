@@ -3,7 +3,7 @@ package arcade
 import "testing"
 
 func TestGameCatalogContainsCurrentGames(t *testing.T) {
-	want := []string{"gomoku", "chess", "tetris", "snake", "drawguess", "dungeon", "policethief"}
+	want := []string{"gomoku", "chess", "xiangqi", "tetris", "snake", "drawguess", "dungeon", "policethief"}
 	for _, name := range want {
 		if _, ok := lookupGameSpec(name); !ok {
 			t.Fatalf("lookupGameSpec(%q) missing", name)
@@ -25,6 +25,8 @@ func TestGameCatalogPreservesPlayerBounds(t *testing.T) {
 		{name: "gomoku", minPlayers: 1, maxPlayers: 1, wantErr: true},
 		{name: "chess", minPlayers: 2, maxPlayers: 2},
 		{name: "chess", minPlayers: 1, maxPlayers: 2, wantErr: true},
+		{name: "xiangqi", minPlayers: 2, maxPlayers: 2},
+		{name: "xiangqi", minPlayers: 1, maxPlayers: 1, wantErr: true},
 		{name: "tetris", minPlayers: 1, maxPlayers: 1},
 		{name: "tetris", minPlayers: 2, maxPlayers: 2},
 		{name: "tetris", minPlayers: 1, maxPlayers: 2, wantErr: true},

@@ -31,7 +31,7 @@ func planRoomCreate(gameName string, players int) roomCreatePlan {
 	if players == 0 {
 		players = 2
 	}
-	if (gameName == "gomoku" || gameName == "policethief") && players == 1 {
+	if (gameName == "gomoku" || gameName == "policethief" || gameName == "xiangqi") && players == 1 {
 		return roomCreatePlan{players: 2, addBot: true}
 	}
 	return roomCreatePlan{players: players}
@@ -100,7 +100,9 @@ func (a *Actions) createRoom(c *ws.Context) {
 	}
 	topic := roomTopic(roomID)
 	c.Sub(topic)
+	a.syncXiangqiTurnClock(roomID)
 	state := roomValue.Snapshot()
+	a.decorateXiangqiSnapshot(roomID, state)
 	c.Send(state)
 	c.Pub(topic, state)
 }
@@ -124,7 +126,9 @@ func (a *Actions) joinRoom(c *ws.Context) {
 	r, _ := a.service.Get(req.RoomID)
 	topic := roomTopic(req.RoomID)
 	c.Sub(topic)
+	a.syncXiangqiTurnClock(req.RoomID)
 	state := r.Snapshot()
+	a.decorateXiangqiSnapshot(req.RoomID, state)
 	c.Send(state)
 	c.Pub(topic, state)
 }
@@ -141,7 +145,10 @@ func (a *Actions) roomState(c *ws.Context) {
 		c.SendCode(404, "room not found")
 		return
 	}
-	c.Send(r.Snapshot())
+	a.syncXiangqiTurnClock(req.RoomID)
+	state := r.Snapshot()
+	a.decorateXiangqiSnapshot(req.RoomID, state)
+	c.Send(state)
 }
 
 func (a *Actions) addBot(c *ws.Context) {
@@ -199,9 +206,40 @@ func (a *Actions) move(c *ws.Context) {
 		return
 	}
 	req.RoomID = strings.ToUpper(strings.TrimSpace(req.RoomID))
-	if err := a.service.Move(req.RoomID, playerID, req.Move); err != nil {
+	if err := a.service.MovePlayer(req.RoomID, playerID, req.Move); err != nil {
 		c.SendCode(400, err.Error())
 		return
 	}
+
+	// Publish the accepted player move before starting any bot work. The room
+	// snapshot is authoritative; a slow bot must not hide a committed move.
 	a.sendRoom(c, req.RoomID)
+
+	if r, ok := a.service.Get(req.RoomID); ok && r.GameName == "xiangqi" {
+		go a.runBotAndPublish(req.RoomID)
+		return
+	}
+
+	moved, err := a.service.RunBot(req.RoomID)
+	if err != nil || !moved {
+		return
+	}
+	if r, ok := a.service.Get(req.RoomID); ok {
+		c.Pub(roomTopic(req.RoomID), r.Snapshot())
+	}
+}
+
+func (a *Actions) runBotAndPublish(roomID string) {
+	moved, err := a.service.RunBot(roomID)
+	if err != nil || !moved {
+		return
+	}
+	r, ok := a.service.Get(roomID)
+	if !ok {
+		return
+	}
+	a.syncXiangqiTurnClock(roomID)
+	state := r.Snapshot()
+	a.decorateXiangqiSnapshot(roomID, state)
+	ws.Pub(roomTopic(roomID), state)
 }

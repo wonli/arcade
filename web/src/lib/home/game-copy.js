@@ -9,6 +9,8 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
     description = t(`game.${game}.description`)
   } else if (game === 'policethief') {
     description = t(players === 1 ? 'game.policethief.descriptionBot' : 'game.policethief.descriptionOnline')
+  } else if (game === 'xiangqi') {
+    description = t(players === 1 ? 'game.xiangqi.descriptionBot' : 'game.xiangqi.descriptionOnline')
   } else if (game === 'chess') {
     description = t(
       players === 1 ? 'game.chess.descriptionBot' : 'game.chess.descriptionOnline',
@@ -26,6 +28,7 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   else if (game === 'drawguess') createLabel = t('create.drawguess')
   else if (game === 'gomoku') createLabel = t(players === 1 ? 'room.playBot' : 'create.gomoku')
   else if (game === 'policethief') createLabel = t(players === 1 ? 'create.policethiefBot' : 'create.policethiefOnline')
+  else if (game === 'xiangqi') createLabel = t(players === 1 ? 'create.xiangqiBot' : 'create.xiangqiOnline')
   else if (game === 'chess') createLabel = players === 1
     ? t('create.chessBot', { difficulty: difficultyLabel(chessDifficulty, locale) })
     : t('create.chessOnline')
@@ -36,6 +39,7 @@ export function gameCopy({ game, players, chessDifficulty, locale = 'en' }, t) {
   else if (game === 'snake') helper = t('helper.snake')
   else if (game === 'drawguess') helper = t('helper.drawguess')
   else if (game === 'policethief') helper = t(players === 1 ? 'helper.policethiefBot' : 'helper.policethiefOnline')
+  else if (game === 'xiangqi') helper = t(players === 1 ? 'helper.xiangqiBot' : 'helper.xiangqiOnline')
   else if (game === 'chess') helper = t(players === 1 ? 'helper.chessBot' : 'helper.chessOnline')
   else helper = t(players === 2 ? 'helper.twoPlayers' : 'helper.solo')
 

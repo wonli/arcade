@@ -97,24 +97,41 @@ func (s *Service) Rematch(roomID string, playerID game.PlayerID) error {
 	if !r.HasPlayer(playerID) {
 		return errors.New("player is not in room")
 	}
-	g := r.Game()
-	if g == nil || g.Status() != game.StatusFinished {
-		return errors.New("game is not finished")
+	if err := r.UpdateGame(func(g game.Game) error {
+		if g.Status() != game.StatusFinished {
+			return errors.New("game is not finished")
+		}
+		g.Reset()
+		return nil
+	}); err != nil {
+		return err
 	}
-	g.Reset()
-	r.SetStatus(room.StatusPlaying)
-	return s.botMove(r)
+	_, err := s.botMove(r)
+	return err
 }
 
-func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
+func (s *Service) MovePlayer(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
 	r, ok := s.rooms.Get(roomID)
 	if !ok {
 		return errors.New("room not found")
 	}
-	if err := r.Move(playerID, payload); err != nil {
-		return err
+	return r.Move(playerID, payload)
+}
+
+func (s *Service) RunBot(roomID string) (bool, error) {
+	r, ok := s.rooms.Get(roomID)
+	if !ok {
+		return false, errors.New("room not found")
 	}
 	return s.botMove(r)
+}
+
+func (s *Service) Move(roomID string, playerID game.PlayerID, payload json.RawMessage) error {
+	if err := s.MovePlayer(roomID, playerID, payload); err != nil {
+		return err
+	}
+	_, err := s.RunBot(roomID)
+	return err
 }
 
 func (s *Service) ready(r *room.Room) error {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { launcher as gomokuLauncher } from './gomoku/launcher.js'
 import { launcher as chessLauncher } from './chess/launcher.js'
+import { launcher as xiangqiLauncher } from './xiangqi/launcher.js'
 import { launcher as tetrisLauncher } from './tetris/launcher.js'
 import { launcher as snakeLauncher } from './snake/launcher.js'
 import { launcher as drawguessLauncher } from './drawguess/launcher.js'
@@ -26,6 +27,7 @@ import {
 const expected = [
   ['gomoku', gomokuLauncher, gomokuReplay],
   ['chess', chessLauncher, chessReplay],
+  ['xiangqi', xiangqiLauncher, null],
   ['tetris', tetrisLauncher, tetrisReplay],
   ['snake', snakeLauncher, snakeReplay],
   ['drawguess', drawguessLauncher, drawguessReplay],

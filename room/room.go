@@ -128,6 +128,22 @@ func (r *Room) Game() game.Game {
 	return r.game
 }
 
+// UpdateGame serializes non-move game mutations with moves and snapshots.
+// Room status follows the authoritative game status after a successful update.
+func (r *Room) UpdateGame(update func(game.Game) error) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.game == nil {
+		return errors.New("game has not started")
+	}
+	if err := update(r.game); err != nil {
+		return err
+	}
+	r.syncGameStatusLocked()
+	return nil
+}
+
 func (r *Room) Move(player game.PlayerID, data json.RawMessage) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -136,11 +152,29 @@ func (r *Room) Move(player game.PlayerID, data json.RawMessage) error {
 		return errors.New("game has not started")
 	}
 	for _, p := range r.Players {
-		if p.ID == player {
-			return r.game.Move(game.Move{Player: player, Data: data})
+		if p.ID != player {
+			continue
 		}
+		if err := r.game.Move(game.Move{Player: player, Data: data}); err != nil {
+			return err
+		}
+		r.syncGameStatusLocked()
+		return nil
 	}
 	return errors.New("player is not in room")
+}
+
+func (r *Room) syncGameStatusLocked() {
+	if r.game == nil {
+		return
+	}
+	if r.game.Status() == game.StatusFinished {
+		r.Status = StatusFinished
+		return
+	}
+	if r.Status != StatusWaiting {
+		r.Status = StatusPlaying
+	}
 }
 
 func (r *Room) Snapshot() map[string]any {

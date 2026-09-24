@@ -4,10 +4,12 @@
   import GamePreview from '$lib/components/GamePreview.svelte'
   import LauncherHelp from '$lib/components/LauncherHelp.svelte'
   import { gameCopy, difficultyLabel } from '$lib/home/game-copy.js'
+  import { defaultPlayersForGame } from '$lib/home/game-setup.js'
   import { GAME_ENTRIES, getLauncherMetadata } from '$lib/games/registry.js'
   import { createPoliceThiefTranslator } from '$lib/games/policethief/i18n.js'
   import { buildPoliceThiefRoomPath } from '$lib/games/policethief/setup.js'
   import { DEFAULT_SNAKE_SPEED, snakeSpeedLabel } from '$lib/games/snake/speed.js'
+  import { createXiangqiTranslator } from '$lib/games/xiangqi/i18n.js'
   import { createTranslator } from '$lib/i18n.js'
   import { setAppLocale, subscribeLocale } from '$lib/locale.js'
 
@@ -20,7 +22,7 @@
   let locale = $state('en')
   let unsubscribeLocale = () => {}
 
-  const t = $derived(createPoliceThiefTranslator(locale, createTranslator(locale)))
+  const t = $derived(createXiangqiTranslator(locale, createPoliceThiefTranslator(locale, createTranslator(locale))))
   const copy = $derived(gameCopy({ game, players, chessDifficulty, locale }, t))
   const launcherMetadata = $derived(getLauncherMetadata(game))
 
@@ -28,8 +30,7 @@
 
   function selectGame(value) {
     game = value
-    if (game === 'gomoku') players = 2
-    if (game === 'chess' || game === 'dungeon' || game === 'policethief') players = 1
+    players = defaultPlayersForGame(game)
   }
 
   function createRoom() {
@@ -111,7 +112,7 @@
             <div class="setup-block">
               <div class="section-label">{t('home.setup')}</div>
 
-              {#if (game !== 'gomoku' || players === 2) && (game !== 'chess' || players === 2) && (game !== 'dungeon' || players === 2) && (game !== 'policethief' || players === 2)}
+              {#if (game !== 'gomoku' || players === 2) && (game !== 'chess' || players === 2) && (game !== 'xiangqi' || players === 2) && (game !== 'dungeon' || players === 2) && (game !== 'policethief' || players === 2)}
                 <div class="join">
                   <input bind:value={roomCode} maxlength="6" autocomplete="off" placeholder={t('home.roomCode')} aria-label={t('home.roomCode')} onkeydown={(event) => event.key === 'Enter' && joinRoom()} />
                   <button onclick={joinRoom}>{t('home.joinButton')}</button>
@@ -127,10 +128,10 @@
               {/if}
 
               <div class="setup-controls">
-                {#if game === 'gomoku' || game === 'tetris' || game === 'chess' || game === 'dungeon' || game === 'policethief'}
+                {#if game === 'gomoku' || game === 'tetris' || game === 'chess' || game === 'xiangqi' || game === 'dungeon' || game === 'policethief'}
                   <div class="mode-picker" aria-label="Player mode">
-                    <button class:active={players === 1} onclick={() => (players = 1)}><strong>{game === 'chess' || game === 'gomoku' || game === 'policethief' ? t('home.players.bot') : t('home.players.one')}</strong><small>{t('home.startInstantly')}</small></button>
-                    <button class:active={players === 2} onclick={() => (players = 2)}><strong>{t('home.players.two')}</strong><small>{game === 'chess' ? t('home.onlineRoom') : t('home.inviteFriend')}</small></button>
+                    <button class:active={players === 1} onclick={() => (players = 1)}><strong>{game === 'chess' || game === 'xiangqi' || game === 'gomoku' || game === 'policethief' ? t('home.players.bot') : t('home.players.one')}</strong><small>{t('home.startInstantly')}</small></button>
+                    <button class:active={players === 2} onclick={() => (players = 2)}><strong>{t('home.players.two')}</strong><small>{game === 'chess' || game === 'xiangqi' ? t('home.onlineRoom') : t('home.inviteFriend')}</small></button>
                   </div>
                 {:else}
                   <div class="mode-summary">

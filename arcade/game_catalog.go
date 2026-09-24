@@ -6,6 +6,7 @@ import (
 	"github.com/wonli/arcade/game/chess"
 	"github.com/wonli/arcade/game/gomoku"
 	"github.com/wonli/arcade/game/policethief"
+	"github.com/wonli/arcade/game/xiangqi"
 	"github.com/wonli/arcade/room"
 )
 
@@ -50,6 +51,25 @@ var gameCatalog = map[string]gameSpec{
 				return errors.New("chess requires two players")
 			}
 			r.Ready(chess.New(ids[0], ids[1]))
+			return nil
+		},
+	},
+	"xiangqi": {
+		validateBounds: func(minPlayers, maxPlayers int) error {
+			if minPlayers != 2 || maxPlayers != 2 {
+				return errors.New("xiangqi requires two players")
+			}
+			return nil
+		},
+		onJoin: func(r *room.Room) error {
+			ids := r.PlayerIDs()
+			if r.Started() || len(ids) != r.MaxPlayers {
+				return nil
+			}
+			if len(ids) != 2 {
+				return errors.New("xiangqi requires two players")
+			}
+			r.Ready(xiangqi.New(ids[0], ids[1]))
 			return nil
 		},
 	},

@@ -2,15 +2,26 @@ package server
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/wonli/aqi/ws"
 	"github.com/wonli/arcade/arcade"
 	"github.com/wonli/arcade/game"
 )
 
-type Actions struct{ service *arcade.Service }
+type Actions struct {
+	service *arcade.Service
 
-func NewActions(service *arcade.Service) *Actions { return &Actions{service: service} }
+	xiangqiClockMu sync.Mutex
+	xiangqiClocks  map[string]*xiangqiTurnClock
+}
+
+func NewActions(service *arcade.Service) *Actions {
+	return &Actions{
+		service:       service,
+		xiangqiClocks: make(map[string]*xiangqiTurnClock),
+	}
+}
 
 func (a *Actions) Register(router ws.IRouter) {
 	router.Add("arcade.login", a.login)
@@ -58,7 +69,9 @@ func (a *Actions) sendRoom(c *ws.Context, roomID string) {
 		c.SendCode(404, "room not found")
 		return
 	}
+	a.syncXiangqiTurnClock(roomID)
 	state := r.Snapshot()
+	a.decorateXiangqiSnapshot(roomID, state)
 	c.Send(state)
 	c.Pub(roomTopic(roomID), state)
 }
