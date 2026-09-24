@@ -18,12 +18,21 @@ function readText(files, path) {
   return new TextDecoder().decode(bytes)
 }
 
+function unpackTankBundle(bytes) {
+  const files = unzipSync(bytes)
+  const manifest = JSON.parse(readText(files, ASSET_MANIFEST_PATH))
+  if (!manifest?.assets || typeof manifest.assets !== 'object') throw new Error('Tank asset manifest is invalid')
+  for (const path of Object.values(manifest.assets)) {
+    if (!files[entryPath(path)]) throw new Error(`Tank bundle is missing ${path}`)
+  }
+  return { files, manifest }
+}
+
 export function extractTankBundle(bytes, {
   createObjectURL = (blob) => URL.createObjectURL(blob),
   revokeObjectURL = (url) => URL.revokeObjectURL(url),
 } = {}) {
-  const files = unzipSync(bytes)
-  const manifest = JSON.parse(readText(files, ASSET_MANIFEST_PATH))
+  const { files, manifest } = unpackTankBundle(bytes)
   const objectUrls = []
   const resolved = new Map()
 
@@ -91,9 +100,14 @@ async function readCachedOrDownloadedZip(runtime, fetchImpl, cacheStorage, onPro
       const cache = await cacheStorage.open(cacheName)
       const cached = await cache.match(runtime.zip)
       if (cached) {
-        const bytes = await readResponseBytes(cached, onProgress, 'cache')
-        await removeOldTankCaches(cacheStorage, cacheName).catch(() => {})
-        return bytes
+        try {
+          const bytes = await readResponseBytes(cached, onProgress, 'cache')
+          unpackTankBundle(bytes)
+          await removeOldTankCaches(cacheStorage, cacheName).catch(() => {})
+          return bytes
+        } catch {
+          await cacheStorage.delete(cacheName).catch(() => {})
+        }
       }
     } catch {
       // CacheStorage can exist but be unavailable in private/embedded contexts.
@@ -104,6 +118,7 @@ async function readCachedOrDownloadedZip(runtime, fetchImpl, cacheStorage, onPro
   if (!response.ok) throw new Error(`Tank asset package request failed: ${response.status}`)
   const cacheCopy = response.clone?.()
   const bytes = await readResponseBytes(response, onProgress, 'download')
+  unpackTankBundle(bytes)
   if (cacheStorage && cacheCopy) {
     try {
       const cache = await cacheStorage.open(cacheName)
