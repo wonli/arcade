@@ -19,6 +19,9 @@ type Service struct {
 	snakes      map[string]*snakeRuntime
 	snakeSpeeds map[string]int
 
+	tankMu sync.Mutex
+	tanks  map[string]*tankRuntime
+
 	drawMu   sync.Mutex
 	draws    map[string]*drawGuessRuntime
 	drawTick time.Duration
@@ -30,6 +33,7 @@ func NewService() *Service {
 		sessionStates: NewSessionStateStore(),
 		snakes:        make(map[string]*snakeRuntime),
 		snakeSpeeds:   make(map[string]int),
+		tanks:         make(map[string]*tankRuntime),
 		draws:         make(map[string]*drawGuessRuntime),
 		drawTick:      250 * time.Millisecond,
 	}
