@@ -3,6 +3,8 @@
   import { getIdentity, defaultName } from '$lib/identity.js'
   import { createTranslator } from '$lib/i18n.js'
   import { subscribeLocale } from '$lib/locale.js'
+  import { createReplaySession } from '$lib/replay/session.js'
+  import { replay as xiangqiReplay } from '$lib/games/xiangqi/replay.js'
   import { createXiangqiTranslator } from '$lib/games/xiangqi/i18n.js'
   import { shouldApplyXiangqiSnapshot } from '$lib/games/xiangqi/client-state.js'
   import { buildXiangqiCreateRequest } from '$lib/games/xiangqi/setup.js'
@@ -26,6 +28,8 @@
   let unsubscribeLocale = () => {}
   let clockNow = Date.now()
   let clockTimer = null
+  let replaySession = null
+  let replayFinished = false
 
   $: t = createXiangqiTranslator(locale, createTranslator(locale))
   $: myIndex = room?.players?.findIndex((player) => player.id === identity.sessionId) ?? -1
@@ -34,12 +38,42 @@
     ? Math.max(0, Math.ceil((room.turnDeadlineUnixMs - clockNow) / 1000))
     : null
 
+  function setupRoomReplay() {
+    if (replaySession) return
+    replaySession = createReplaySession({
+      adapter: xiangqiReplay,
+      roomCode: () => room?.id ?? roomCode,
+      room: () => room,
+      identity,
+      socket,
+    })
+  }
+
+  function updateRoomReplay(previous) {
+    if (!gameState) return
+    setupRoomReplay()
+    const started = gameState.status === 'playing' && previous?.status !== 'playing'
+    const finished = gameState.status === 'finished' && previous?.status !== 'finished'
+    if (started) {
+      replayFinished = false
+      void replaySession?.restart(gameState)
+    } else if (gameState.status === 'playing') {
+      replaySession?.record(gameState)
+    }
+    if (finished && !replayFinished) {
+      replayFinished = true
+      void replaySession?.finish(gameState)
+    }
+  }
+
   function applySnapshot(snapshot) {
     if (!snapshot || snapshot.type) return
     const nextState = snapshot.state ?? null
     if (room?.id === snapshot.id && !shouldApplyXiangqiSnapshot(gameState, nextState)) return
+    const previous = gameState
     room = snapshot
     gameState = nextState
+    updateRoomReplay(previous)
   }
 
   function subscribeRoom() {
@@ -142,6 +176,8 @@
     })
     return () => {
       if (clockTimer) clearInterval(clockTimer)
+      replaySession?.destroy()
+      replaySession = null
       unsubscribeRoom()
       unsubscribeConnection()
       unsubscribeLocale()

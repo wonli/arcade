@@ -85,3 +85,33 @@ func TestRoutesUploadMetadataAndDataRoundTrip(t *testing.T) {
 		t.Fatalf("data status=%d content-type=%q body=%q", data.Code, data.Header().Get("Content-Type"), data.Body.Bytes())
 	}
 }
+
+func TestRoutesXiangqiUploadRoundTrip(t *testing.T) {
+	store := NewStore(t.TempDir())
+	lease, err := store.AcquireLease("xiangqi", "room-x:host-x")
+	if err != nil {
+		t.Fatalf("acquire xiangqi replay lease: %v", err)
+	}
+
+	payload := []byte(`{"frames":[{"t":0,"state":{"turn":"red"}}]}`)
+	handler := replayRouter(store)
+	upload := httptest.NewRecorder()
+	handler.ServeHTTP(upload, replayUploadRequest("xiangqi", lease.Token, payload, 1200, 2))
+	if upload.Code != http.StatusOK {
+		t.Fatalf("upload status=%d body=%s", upload.Code, upload.Body.String())
+	}
+
+	var meta map[string]any
+	if err := json.Unmarshal(upload.Body.Bytes(), &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta["game"] != "xiangqi" {
+		t.Fatalf("metadata=%#v", meta)
+	}
+
+	data := httptest.NewRecorder()
+	handler.ServeHTTP(data, httptest.NewRequest(http.MethodGet, "/api/game-replays/xiangqi/data", nil))
+	if data.Code != http.StatusOK || !bytes.Equal(data.Body.Bytes(), payload) {
+		t.Fatalf("data status=%d body=%q", data.Code, data.Body.Bytes())
+	}
+}

@@ -24,7 +24,7 @@ var (
 	ErrNotFound = errors.New("game replay not found")
 	ErrLeaseBusy = errors.New("game replay lease busy")
 	allowedGames = map[string]struct{}{
-		"gomoku": {}, "chess": {}, "tetris": {}, "snake": {}, "drawguess": {}, "dungeon": {}, "policethief": {},
+		"gomoku": {}, "chess": {}, "xiangqi": {}, "tetris": {}, "snake": {}, "drawguess": {}, "dungeon": {}, "policethief": {},
 	}
 )
 

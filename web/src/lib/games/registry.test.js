@@ -11,6 +11,7 @@ import { launcher as dungeonLauncher } from './dungeon/launcher.js'
 import { launcher as policethiefLauncher } from './policethief/launcher.js'
 import { replay as gomokuReplay } from './gomoku/replay.js'
 import { replay as chessReplay } from './chess/replay.js'
+import { replay as xiangqiReplay } from './xiangqi/replay.js'
 import { replay as tetrisReplay } from './tetris/replay.js'
 import { replay as snakeReplay } from './snake/replay.js'
 import { replay as drawguessReplay } from './drawguess/replay.js'
@@ -27,7 +28,7 @@ import {
 const expected = [
   ['gomoku', gomokuLauncher, gomokuReplay],
   ['chess', chessLauncher, chessReplay],
-  ['xiangqi', xiangqiLauncher, null],
+  ['xiangqi', xiangqiLauncher, xiangqiReplay],
   ['tetris', tetrisLauncher, tetrisReplay],
   ['snake', snakeLauncher, snakeReplay],
   ['drawguess', drawguessLauncher, drawguessReplay],
