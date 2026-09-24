@@ -78,10 +78,8 @@ func (s *Service) startTankRuntime(r *room.Room, publish TankPublisher) error {
 	s.tanks[r.ID] = runtime
 	s.tankMu.Unlock()
 
-	state := runtime.game.State()
-	r.SetRuntimeState(state)
+	r.SetRuntimeState(runtime.game.State())
 	r.SetStatus(room.StatusPlaying)
-	if publish != nil { publish(r.ID, state) }
 	go s.runTank(r, runtime)
 	return nil
 }
