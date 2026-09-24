@@ -18,6 +18,17 @@ function bundleBytes() {
   })
 }
 
+function byteResponse(bytes, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    headers: { get: () => String(bytes.byteLength) },
+    body: null,
+    async arrayBuffer() { return bytes.slice().buffer },
+    clone() { return byteResponse(bytes, { ok, status }) },
+  }
+}
+
 test('extractTankBundle resolves packaged assets to object URLs', () => {
   const created = []
   const revoked = []
@@ -65,4 +76,32 @@ test('loadTankAssetBundle never falls back to individual remote asset requests',
     '/assets/tank/runtime-manifest.json',
     '/assets/tank/tank-assets-abc.zip',
   ])
+})
+
+test('corrupted cached package is evicted and replaced by the complete zip', async () => {
+  const calls = []
+  const deleted = []
+  const cached = byteResponse(new Uint8Array([0, 1, 2, 3]))
+  const good = bundleBytes()
+  const cache = {
+    async match() { return cached },
+    async put() {},
+  }
+  const cacheStorage = {
+    async open() { return cache },
+    async keys() { return ['tank-assets-abc'] },
+    async delete(name) { deleted.push(name); return true },
+  }
+  const fetchImpl = async (url) => {
+    calls.push(String(url))
+    if (String(url).endsWith('runtime-manifest.json')) {
+      return { ok: true, async json() { return { version: 'abc', zip: '/assets/tank/tank-assets-abc.zip' } } }
+    }
+    return byteResponse(good)
+  }
+
+  const bundle = await loadTankAssetBundle({ fetchImpl, cacheStorage })
+  bundle.dispose()
+  assert.deepEqual(calls, ['/assets/tank/runtime-manifest.json', '/assets/tank/tank-assets-abc.zip'])
+  assert.deepEqual(deleted, ['tank-assets-abc'])
 })
