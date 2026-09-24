@@ -29,7 +29,7 @@ LDFLAGS := -X '$(FLAGS_PKG).BuildDate=$(BUILD_DATE)' \
 
 GO_FLAGS := -trimpath -tags netgo -ldflags "$(LDFLAGS)"
 
-.PHONY: help setup deps web-deps frontend web-dev backend dev build darwin linux windows ali start test clean dungeon-assets game-assets
+.PHONY: help setup deps web-deps frontend web-dev backend dev build darwin linux windows ali start test clean dungeon-assets tank-assets game-assets
 
 help:
 	@echo "AQI Arcade"
@@ -59,7 +59,10 @@ dungeon-assets: web-deps
 	node ./scripts/prepare-dungeon-assets.mjs
 	node ./scripts/prepare-dungeon-runtime-bundle.mjs
 
-game-assets: dungeon-assets
+tank-assets: web-deps
+	node ./scripts/prepare-tank-assets.mjs
+
+game-assets: dungeon-assets tank-assets
 
 frontend: game-assets
 	cd $(WEB_DIR) && $(NPM) run build
