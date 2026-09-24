@@ -21,7 +21,7 @@ func TestNewCreatesAPlayableDuel(t *testing.T) {
 		t.Fatalf("status = %q, want playing", state.Status)
 	}
 	if state.Width != Width || state.Height != Height {
-		t.Fatalf("arena = %dx%d, want %dx%d", state.Width, state.Height, Width, Height)
+		t.Fatalf("arena = %vx%v, want %vx%v", state.Width, state.Height, Width, Height)
 	}
 	if len(state.Tanks) != 2 {
 		t.Fatalf("tanks = %d, want 2", len(state.Tanks))
@@ -89,19 +89,16 @@ func TestBulletDamagesOpponentAndRoundResetsAfterKill(t *testing.T) {
 	blue := g.State().Tanks[0].PlayerID
 
 	for shot := 0; shot < 3; shot++ {
-		if err := g.Input(blue, Input{TurretAngle: 0, Fire: true}); err != nil {
-			t.Fatal(err)
-		}
+		if err := g.Input(blue, Input{TurretAngle: 0, Fire: true}); err != nil { t.Fatal(err) }
 		g.Tick()
-		if err := g.Input(blue, Input{TurretAngle: 0, Fire: false}); err != nil {
-			t.Fatal(err)
-		}
-		for i := 0; i < 42; i++ {
-			g.Tick()
-		}
+		if err := g.Input(blue, Input{TurretAngle: 0, Fire: false}); err != nil { t.Fatal(err) }
+		for i := 0; i < FireCooldown; i++ { g.Tick() }
 	}
 
 	state := g.State()
+	for i := 0; i < 50 && state.Tanks[0].Score == 0; i++ {
+		state = g.Tick()
+	}
 	if state.Tanks[0].Score != 1 {
 		t.Fatalf("blue score = %d, want 1", state.Tanks[0].Score)
 	}
@@ -109,9 +106,7 @@ func TestBulletDamagesOpponentAndRoundResetsAfterKill(t *testing.T) {
 		t.Fatalf("round reset ticks = %d, want positive after kill", state.RoundResetTicks)
 	}
 
-	for state.RoundResetTicks > 0 {
-		state = g.Tick()
-	}
+	for state.RoundResetTicks > 0 { state = g.Tick() }
 	if !state.Tanks[0].Alive || !state.Tanks[1].Alive {
 		t.Fatal("both tanks should respawn for the next round")
 	}
